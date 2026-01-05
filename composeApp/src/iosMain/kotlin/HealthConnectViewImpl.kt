@@ -68,18 +68,6 @@ fun HealthConnectViewImpl(healthKitService: HealthKitService) {
                     SummaryCard(card)
                 }
             }
-
-            Spacer(Modifier.height(32.dp))
-            Text("Insights", style = MaterialTheme.typography.h6)
-            Spacer(Modifier.height(8.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                elevation = 4.dp
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("You slept ${healthData.value?.sleepDurationMinutes ?: 0} minutes last night! Keep up the good work.", fontSize = 16.sp)
-                }
-            }
         }
     }
 }

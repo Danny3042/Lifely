@@ -3,9 +3,8 @@ package model
 import components.ChatUiState
 import components.ModelChatMessage
 import components.MutableChatUiState
-import components.UserChatMessage
-import components.MessageStatus
 import dev.shreyaspatil.ai.client.generativeai.type.content
+import dev.shreyaspatil.ai.client.generativeai.type.Content
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.catch
@@ -19,24 +18,17 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import service.GenerativeAiService
 import utils.getUUIDString
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import components.saveChatState
 import components.loadChatState
 
-class ChatViewModel(aiService: GenerativeAiService) {
+class ChatViewModel(private val aiService: GenerativeAiService) {
     private val coroutineScope = MainScope()
 
-    private val chat = aiService.startChat(
+    // make the chat session mutable so we can reset for a new conversation
+    private var chat = aiService.startChat(
         history = listOf(
             content(role = "user") { text("Hello AI.") },
             content(role = "model") { text("Great to meet you. What would you like to know?") },
@@ -111,7 +103,7 @@ class ChatViewModel(aiService: GenerativeAiService) {
                 _uiState.addMessage(modelMessage)
                 _uiState.markUserMessageSent(tempId)
                 // consumption is done by LoadingText via Flow subscription; completion handled in model flow operators
-            } catch (e: Throwable) {
+            } catch (_: Throwable) {
                 _uiState.markUserMessageFailed(tempId)
             } finally {
                 // remove attachment store to free memory if present
@@ -142,6 +134,37 @@ class ChatViewModel(aiService: GenerativeAiService) {
             }
             attachmentStore.remove(tempId)
             _uiState.markUserMessageFailed(tempId)
+        }
+    }
+
+    /**
+     * Start a fresh chat: cancel active jobs, clear UI state and persistence, and recreate the chat session.
+     */
+    fun newChat() {
+        coroutineScope.launch {
+            // cancel active streaming jobs
+            jobsMutex.withLock {
+                for (j in activeJobs.values) j.cancel()
+                activeJobs.clear()
+            }
+
+            // clear attachments
+            attachmentStore.clear()
+
+            // clear ui messages
+            _uiState.clearAllMessages()
+
+            // persist empty state
+            saveScope.launch {
+                try { saveChatState(emptyList()) } catch (_: Throwable) {}
+            }
+
+            // recreate chat session (start fresh)
+            try {
+                chat = aiService.startChat(history = emptyList<Content>())
+            } catch (_: Throwable) {
+                // ignore; chat will remain as previous if restart fails
+            }
         }
     }
 

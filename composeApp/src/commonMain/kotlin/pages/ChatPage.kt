@@ -9,22 +9,25 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.material3.Button
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -37,6 +40,10 @@ import utils.isAndroid
 import components.ModelChatMessage
 import tts.getTtsService
 import tts.TtsSettings
+import platform.registerComposeNewChatListener
+import platform.PlatformBridge
+import kotlinx.coroutines.flow.collectLatest
+import androidx.compose.runtime.snapshotFlow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,10 +53,26 @@ fun ChatScreen(
     val chatUiState = chatViewModel.uiState
 
     val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    // Register a platform listener so native hosts (iOS FAB) can trigger new chat.
+    DisposableEffect(Unit) {
+        val unregister = registerComposeNewChatListener {
+            // Ensure this runs on the main coroutine scope
+            coroutineScope.launch { chatViewModel.newChat() }
+        }
+        onDispose { unregister() }
+    }
+
     val listState = rememberLazyListState()
-    var showNewMessageChip by remember { mutableStateOf(false) }
+    // removed unused showNewMessageChip state (not used currently)
     val messages = chatUiState.messages
-    // Use shared TTS setting
+    // Observe platform safe area bottom (iOS) so FAB can be offset dynamically above the home indicator/tab bar
+    var platformBottomInset by remember { mutableStateOf(0.0) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { PlatformBridge.safeAreaBottom }.collectLatest { value ->
+            platformBottomInset = value
+        }
+    }
 
     // When messages change, auto-scroll only if the user is already near the bottom.
     LaunchedEffect(messages.size, TtsSettings.enabled) {
@@ -62,10 +85,6 @@ fun ChatScreen(
         if (shouldAuto) {
             // scroll to the latest message
             coroutineScope.launch { listState.animateScrollToItem(lastIndex) }
-            showNewMessageChip = false
-        } else {
-            // show new message affordance
-            showNewMessageChip = true
         }
 
         // Speak latest model message when TTS is enabled
@@ -79,6 +98,7 @@ fun ChatScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             if (isAndroid()) {
                 TopAppBar(
@@ -90,6 +110,7 @@ fun ChatScreen(
                             modifier = Modifier.padding(4.dp)
                         )
                     },
+                    // removed external New chat action - new chat is now in the message input
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         titleContentColor = MaterialTheme.colorScheme.onPrimary,
@@ -126,36 +147,36 @@ fun ChatScreen(
                     .align(Alignment.BottomCenter)
             ) {
                 // TTS toggle moved into the message input box (MessageInput.trailings)
-                // Show a small button when new messages arrive and user is scrolled up
-                if (showNewMessageChip) {
-                    Button(
-                        onClick = {
-                            coroutineScope.launch {
-                                val last = chatUiState.messages.size - 1
-                                if (last >= 0) listState.animateScrollToItem(last)
-                                showNewMessageChip = false
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text("New messages", color = MaterialTheme.colorScheme.onPrimary)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
+                // New chat is provided inside the MessageInput now
                 MessageInput(
-                    enabled = chatUiState.canSendMessage,
-                    onSendMessage = { inputText, image ->
-                        chatViewModel.sendMessage(inputText, image)
-                        // After sending, attempt to scroll to latest (the LaunchedEffect above will also handle this).
-                        coroutineScope.launch {
+                     enabled = chatUiState.canSendMessage,
+                     onSendMessage = { inputText, image ->
+                         chatViewModel.sendMessage(inputText, image)
+                         // After sending, attempt to scroll to latest (the LaunchedEffect above will also handle this).
+                         coroutineScope.launch {
                             val last = chatUiState.messages.size
                             if (last > 0) listState.animateScrollToItem(last - 1)
                         }
-                    },
-                    modifier = Modifier
-                )
+                     },
+                     modifier = Modifier,
+                     snackbarHostState = snackbarHostState,
+                     onNewChat = { chatViewModel.newChat() },
+                 )
                 Spacer(modifier = Modifier.height(56.dp)) // Height of your bottom nav bar
             }
-        }
-    }
-}
+            // Floating action button for New Chat anchored above the input on the bottom end
+            FloatingActionButton(
+                onClick = {
+                    chatViewModel.newChat()
+                    coroutineScope.launch { snackbarHostState.showSnackbar("New chat started") }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = (100.dp + platformBottomInset.toFloat().dp)),
+                containerColor = MaterialTheme.colorScheme.primary,
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "New chat")
+            }
+         }
+     }
+ }

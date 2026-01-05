@@ -252,6 +252,7 @@ struct ContentView: View {
     @State private var isSignedIn: Bool = Auth.auth().currentUser != nil
     @State private var composeHidesTabBar: Bool = false
     @State private var composeHidesNavigationBar: Bool = false
+    @State private var safeAreaBottom: CGFloat = 0
 
     var body: some View {
         ZStack {
@@ -328,7 +329,7 @@ struct ContentView: View {
                         .foregroundColor(.white)
                         .cornerRadius(8)
                         .padding()
-                        .padding(.bottom, 60)
+                        .padding(.bottom, 100 + safeAreaBottom)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -399,55 +400,45 @@ struct ContentView: View {
 
             NotificationCenter.default.addObserver(forName: Notification.Name("ComposeReady"), object: nil, queue: .main) { _ in
                 ComposeViewController.ensureSharedVisible()
-            }
+                // If Compose became ready and there is a pending charts request, open charts now
+                let pendingAfterReady = UserDefaults.standard.bool(forKey: "OpenNativeChartsPending")
+                if pendingAfterReady {
+                    print("ContentView: ComposeReady detected and pending OpenNativeCharts -> opening charts")
+                    showChartsSheet = true
+                    UserDefaults.standard.set(false, forKey: "OpenNativeChartsPending")
+                }
+             }
 
-            // Listen for route changes from Compose to hide native tab bar for login screens
-            NotificationCenter.default.addObserver(forName: Notification.Name("ComposeRouteChanged"), object: nil, queue: .main) { note in
-                if let route = note.userInfo?["route"] as? String {
-                    let shouldHide = ["Login", "SignUp", "ResetPassword"].contains(route)
-                    print("ContentView: ComposeRouteChanged -> route=\(route) shouldHideTab=\(shouldHide)")
-                    composeHidesTabBar = shouldHide
-                    composeHidesNavigationBar = shouldHide
-                    setNativeTabBarHidden(shouldHide)
+            // Listen for native-host FAB tap to request a new chat (this will be posted by the FAB below)
+            NotificationCenter.default.addObserver(forName: Notification.Name("ComposeRequestNewChat"), object: nil, queue: .main) { _ in
+                // Forward to Compose via AuthManager or PlatformBridge - we use AuthManager helper
+                AuthManager.shared.requestNavigateTo(route: "HeroScreen")
+                // Also request Compose to recreate a new chat by notifying PlatformBridge if available
+                PlatformBridge.shared.requestedRoute = "newChat"
+                PlatformBridge.shared.requestedRouteSignal = PlatformBridge.shared.requestedRouteSignal + 1
+            }
+            // Observe safe area changes posted by ComposeViewController.updateUIViewController
+            NotificationCenter.default.addObserver(forName: Notification.Name("SafeAreaInsetsChanged"), object: nil, queue: .main) { note in
+                if let userInfo = note.userInfo as? [String: Any], let bottom = userInfo["bottom"] as? Double {
+                    safeAreaBottom = CGFloat(bottom)
                 }
             }
-
-            // Listen for Compose crashes/errors
-            NotificationCenter.default.addObserver(forName: Notification.Name("ComposeError"), object: nil, queue: .main) { note in
-                if let error = note.userInfo?["error"] as? String {
-                    print("⚠️ Compose Error: \(error)")
-                    if let details = note.userInfo?["details"] as? String {
-                        print("⚠️ Details: \(details)")
-                    }
-                    // Show error to user
-                    settings.snackbarMessage = "Something went wrong. Please try again."
-                    settings.showSnackbar = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                        settings.showSnackbar = false
-                    }
-                }
-            }
-
-            // Listen for native Charts open request from Kotlin/Compose (PlatformBridge -> PlatformIos)
+            // Observe requests from Kotlin to open native Charts
             NotificationCenter.default.addObserver(forName: Notification.Name("OpenNativeCharts"), object: nil, queue: .main) { _ in
+                print("ContentView: received OpenNativeCharts notification")
+                // Show the native Charts sheet
                 showChartsSheet = true
-                // ensure compose VC is visible in case it's needed for shared host
-                ComposeViewController.ensureSharedVisible()
+                // Clear persistent pending flag
+                UserDefaults.standard.set(false, forKey: "OpenNativeChartsPending")
             }
-
-            // Listen for image pick requests from Compose (Kotlin)
-            NotificationCenter.default.addObserver(forName: Notification.Name("RequestImagePick"), object: nil, queue: .main) { _ in
-                showImagePicker = true
+            // If the notification was posted before the observer was installed, check persistent flag
+            let pending = UserDefaults.standard.bool(forKey: "OpenNativeChartsPending")
+            if pending {
+                print("ContentView: found pending OpenNativeCharts flag -> opening charts")
+                showChartsSheet = true
+                UserDefaults.standard.set(false, forKey: "OpenNativeChartsPending")
             }
-
-            // Listen for dark mode updates from Compose and apply native style & appearances
-            NotificationCenter.default.addObserver(forName: Notification.Name("ComposeDarkModeChanged"), object: nil, queue: .main) { note in
-                guard let userInfo = note.userInfo as? [String: Any] else { return }
-                let dark = userInfo["dark"] as? Bool
-                let useSystem = userInfo["useSystem"] as? Bool ?? true
-                applyNativeInterfaceStyle(dark: dark, useSystem: useSystem)
-            }
-        }
+         }
         .onDisappear {
             if let h = authHandle {
                 Auth.auth().removeStateDidChangeListener(h)
@@ -899,5 +890,19 @@ struct ChartView: View {
 }
 #endif
 // --- End embedded Chart support ---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

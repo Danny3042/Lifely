@@ -14,18 +14,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,13 +45,16 @@ import keyboardUtil.hideKeyboard
 import keyboardUtil.onDoneHideKeyboardAction
 import tts.TtsSettings
 import tts.getTtsService
+import kotlinx.coroutines.launch
 import java.io.InputStream
 
 @Composable
 actual fun MessageInput(
     enabled: Boolean,
     onSendMessage: (prompt: String, image: ByteArray?) -> Unit,
-    modifier: Modifier
+    modifier: Modifier,
+    snackbarHostState: SnackbarHostState?,
+    onNewChat: (() -> Unit)?
 ) {
     var userMessage by rememberSaveable { mutableStateOf("") }
     var selectedImage by remember { mutableStateOf<ByteArray?>(null) }
@@ -123,16 +129,22 @@ actual fun MessageInput(
                     },
                     trailingIcon = {
                         Row {
-                            // TTS toggle button
+                            // TTS toggle button (shows crossed icon when disabled)
+                            val localScope = rememberCoroutineScope()
                             IconButton(onClick = {
                                 TtsSettings.enabled = !TtsSettings.enabled
                                 if (!TtsSettings.enabled) try { getTtsService().stop() } catch (_: Throwable) {}
+                                // show snackbar directly if host provided
+                                snackbarHostState?.let { host ->
+                                    val msg = if (TtsSettings.enabled) "TTS enabled" else "TTS disabled"
+                                    localScope.launch { host.showSnackbar(msg) }
+                                }
                             }) {
-                                Icon(
-                                    imageVector = if (TtsSettings.enabled) Icons.Default.AutoAwesome else Icons.Default.AutoAwesome,
-                                    contentDescription = "Toggle TTS",
-                                )
+                                val ic = if (TtsSettings.enabled) Icons.Filled.VolumeUp else Icons.Filled.VolumeOff
+                                Icon(ic, contentDescription = if (TtsSettings.enabled) "TTS enabled" else "TTS disabled")
                             }
+
+                            // onNewChat is intentionally handled outside the input (FAB in ChatScreen)
 
                             IconButton(
                                 enabled = enabled,

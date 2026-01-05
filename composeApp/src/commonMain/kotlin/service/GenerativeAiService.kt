@@ -36,6 +36,23 @@ class GenerativeAiService(
         )
         return response.text
     }
+
+    /**
+     * Rewrite arbitrary text to a friendlier, concise form using the generative model.
+     * Returns rewritten text on success or null on failure / if model is disabled.
+     */
+    suspend fun rewriteText(text: String): String? {
+        if (!enabled) return null
+        try {
+            val prompt = "Rewrite the following user message to be concise, friendly, and appropriate for a health & meditation app. Keep meaning and intent intact. Return only the rewritten text: \"$text\""
+            val response = visionModel.generateContent(
+                prompt = prompt,
+            )
+            return response.text?.trim()
+        } catch (e: Exception) {
+            return null
+        }
+    }
     companion object {
         @Suppress("ktlint:standard:property-naming")
         // Use BuildKonfig (set at build time). Do not call JVM-specific APIs in commonMain.

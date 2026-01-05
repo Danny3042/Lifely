@@ -10,7 +10,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material3.ElevatedCard
@@ -42,6 +43,11 @@ import platform.Foundation.NSOperationQueue
 import platform.posix.memcpy
 import tts.TtsSettings
 import tts.getTtsService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.SnackbarHostState
 
 @OptIn(ExperimentalForeignApi::class)
 private fun nsDataToByteArray(nsData: NSData): ByteArray {
@@ -61,7 +67,9 @@ private fun nsDataToByteArray(nsData: NSData): ByteArray {
 actual fun MessageInput(
     enabled: Boolean,
     onSendMessage: (prompt: String, image: ByteArray?) -> Unit,
-    modifier: Modifier
+    modifier: Modifier,
+    snackbarHostState: SnackbarHostState?,
+    onNewChat: (() -> Unit)?
 ) {
     var userMessage by rememberSaveable { mutableStateOf("") }
     var selectedImage by remember { mutableStateOf<ByteArray?>(null) }
@@ -137,11 +145,17 @@ actual fun MessageInput(
                     },
                     trailingIcon = {
                         Row {
+                            val localScope = rememberCoroutineScope()
                             IconButton(onClick = {
                                 TtsSettings.enabled = !TtsSettings.enabled
                                 if (!TtsSettings.enabled) try { getTtsService().stop() } catch (_: Throwable) {}
+                                snackbarHostState?.let { host ->
+                                    val msg = if (TtsSettings.enabled) "TTS enabled" else "TTS disabled"
+                                    localScope.launch { host.showSnackbar(msg) }
+                                }
                             }) {
-                                Icon(Icons.Default.AutoAwesome, "Toggle TTS")
+                                val ic = if (TtsSettings.enabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff
+                                Icon(ic, if (TtsSettings.enabled) "TTS enabled" else "TTS disabled")
                             }
 
                             IconButton(

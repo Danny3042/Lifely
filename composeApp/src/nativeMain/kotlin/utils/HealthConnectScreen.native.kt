@@ -128,26 +128,6 @@ actual fun HealthConnectScreen(healthKitService: HealthKitService) {
                     }
                 }
             }
-
-            Spacer(Modifier.height(24.dp))
-
-            // Insights section
-            Text("Insights", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(8.dp))
-
-            // Habit Insights - derive simple insights from healthData if available
-            HabitInsights(healthData = composeHealthData)
-
-            Spacer(Modifier.height(16.dp))
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("You slept ${composeHealthData?.sleepDurationMinutes ?: 0} minutes last night! Keep up the good work.", fontSize = 16.sp)
-                }
-            }
         }
     }
 }
@@ -179,39 +159,6 @@ fun ShortcutCard(data: ShortcutData, onClick: () -> Unit) {
     }
 }
 
-// Habit insights
-
-@Composable
-fun HabitInsights(healthData: ComposeAppHealthData?) {
-    // ComposeAppHealthData is the health data type containing step count, calories, sleep, and habit streak
-    Column {
-        // Example derived insights - use real fields if available
-        val steps = healthData?.stepCount ?: 0
-        val calories = healthData?.calories ?: 0
-        val sleepMinutes = healthData?.sleepDurationMinutes ?: 0
-
-        HabitInsightItem("Average steps today", steps.toString())
-        HabitInsightItem("Calories burned", calories.toString())
-        HabitInsightItem("Sleep last night", formatDuration(sleepMinutes))
-
-        // Placeholder for habit-specific insights (e.g., streaks)
-        HabitInsightItem("Current habit streak", healthData?.habitStreak?.toString() ?: "0")
-    }
-}
-
-@Composable
-fun HabitInsightItem(title: String, value: String) {
-    Row(modifier = Modifier
-        .fillMaxWidth()
-        .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.fillMaxWidth()) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(value, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-        }
-    }
-}
 
 data class SummaryCardData(
     val title: String,

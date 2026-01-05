@@ -8,7 +8,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -167,7 +166,6 @@ actual fun HealthConnectScreen(healthKitService: HealthKitService) {
                             items(
                                 listOf(
                                     ShortcutData("Charts", Icons.Filled.PieChart, Color(0xFF607D8B)),
-                                    ShortcutData("Insights", Icons.Filled.PieChart, Color(0xFF795548)),
                                     ShortcutData("Habits", Icons.Filled.PieChart, Color(0xFF3F51B5))
                                 )
                             ) { shortcut ->
@@ -185,25 +183,8 @@ actual fun HealthConnectScreen(healthKitService: HealthKitService) {
 
                         Spacer(Modifier.height(24.dp))
 
-                        // Insights section
-                        Text("Insights", style = MaterialTheme.typography.titleMedium)
-                        Spacer(Modifier.height(8.dp))
-
-                        // For charts we will show session durations (meditation durations) from InsightsViewModel later
-                        HabitInsights(stepsString = steps, caloriesString = "0", sleepString = sleepDuration, streak = "0")
-
-                        Spacer(Modifier.height(16.dp))
-
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                        ) {
-                            Column(Modifier.padding(16.dp)) {
-                                Text("You slept $sleepDuration last night! Keep up the good work.", fontSize = 16.sp)
-                            }
-                        }
-                    }
+                        // Insights section removed per request
+                     }
 
                     if (showHealthConnectInstallPopup) {
                         AlertDialog(
@@ -266,36 +247,6 @@ fun ShortcutCard(data: ShortcutData, onClick: () -> Unit) {
     }
 }
 
-// Habit insights
-
-@Composable
-fun HabitInsights(stepsString: String, caloriesString: String, sleepString: String, streak: String) {
-    Column {
-        val steps = stepsString.toIntOrNull() ?: 0
-        val calories = caloriesString.toIntOrNull() ?: 0
-        val sleepMinutes = sleepString.toIntOrNull() ?: 0
-
-        HabitInsightItem("Average steps today", steps.toString())
-        HabitInsightItem("Calories burned", calories.toString())
-        HabitInsightItem("Sleep last night", formatDuration(sleepMinutes.toString()))
-
-        HabitInsightItem("Current habit streak", streak)
-    }
-}
-
-@Composable
-fun HabitInsightItem(title: String, value: String) {
-    Row(modifier = Modifier
-        .fillMaxWidth()
-        .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.fillMaxWidth()) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(value, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-        }
-    }
-}
 
 data class SummaryCardData(
     val title: String,

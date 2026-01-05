@@ -39,6 +39,7 @@ import platform.Foundation.NSDictionary
 import platform.Foundation.NSNotification
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSOperationQueue
+import platform.Foundation.NSUserDefaults
 import platform.PlatformBridge
 import com.mmk.kmpnotifier.notification.NotifierManager
 import com.mmk.kmpnotifier.notification.configuration.NotificationPlatformConfiguration
@@ -191,6 +192,7 @@ actual fun PlatformApp() {
                 // If route requests the ChartsPage on iOS, ask native Swift to open the native Charts view
                 try {
                     if (route == ChartsPageScreen) {
+                        println("PlatformIos: Charts requested from Compose -> posting OpenNativeCharts")
                         NSOperationQueue.mainQueue.addOperationWithBlock {
                             NSNotificationCenter.defaultCenter.postNotificationName(
                                 aName = "OpenNativeCharts",
@@ -199,19 +201,29 @@ actual fun PlatformApp() {
                             )
                         }
 
+                        // Also set a persistent flag so Swift can pick it up if it missed the notification
+                        try {
+                            NSUserDefaults.standardUserDefaults.setBool(true, forKey = "OpenNativeChartsPending")
+                        } catch (e: Throwable) {
+                            println("PlatformIos: failed to set OpenNativeChartsPending flag: ${e.message}")
+                        }
+
                         // Publish sample chart data immediately so native Swift Charts can display something
                         try {
                             ChartBridge.publishSample()
                         } catch (e: Throwable) {
+                            println("PlatformIos: ChartBridge.publishSample failed: ${e.message}")
                         }
 
                         // Clear the requestedRoute so it can be requested again later
                         PlatformBridge.requestedRoute = null
                     } else {
+                        println("PlatformIos: route requested -> $route")
                         pendingRoute = route
                         PlatformBridge.requestedRoute = null
                     }
                 } catch (e: Throwable) {
+                    println("PlatformIos: failed handling requestedRoute: ${e.message}")
                 }
             }
         }

@@ -70,4 +70,8 @@ class MutableChatUiState : ChatUiState {
             messages[lastIdx] = newMessage
         }
     }
+
+    fun clearAllMessages() {
+        messages.clear()
+    }
 }
