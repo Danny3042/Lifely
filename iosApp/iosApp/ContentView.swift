@@ -51,6 +51,7 @@ struct SharedComposeHost: View {
     var body: some View {
         GeometryReader { geometry in
             ComposeViewController(onClose: nil)
+                .frame(width: geometry.size.width, height: geometry.size.height)
                 .onAppear {
                     // Only register observer once globally
                     if !observerAdded {
@@ -185,6 +186,9 @@ struct ComposeViewController: UIViewControllerRepresentable {
         ComposeViewController.isCreating = true
         let composeVC = MainViewControllerKt.MainViewController()
         composeVC.view.backgroundColor = .clear
+        
+        // Enable user interaction for scrolling
+        composeVC.view.isUserInteractionEnabled = true
         
         // Store as singleton
         ComposeViewController.sharedComposeVC = composeVC
