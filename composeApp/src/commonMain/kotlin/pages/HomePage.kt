@@ -1,14 +1,25 @@
 package pages
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import screens.HealthConnectScreen
 import utils.HealthConnectChecker
 import utils.HealthKitService
+import utils.RealTimeGreeting
 import utils.isAndroid
 
 const val HomePageScreen = "HomePage"
@@ -31,9 +42,13 @@ fun HomePage(healthKitService: HealthKitService) {
     }
 
     val healthConnectAvailability = HealthConnectChecker.checkHealthConnectAvailability()
-    if (isAndroid() && isAuthorizedResult?.getOrNull() != true) {
-        HealthConnectScreen(healthKitService)
-    } else {
-        HealthConnectScreen(healthKitService)
+
+    Column {
+        // Health connect content (includes greeting inside the content area on each platform)
+        if (isAndroid() && isAuthorizedResult?.getOrNull() != true) {
+            HealthConnectScreen(healthKitService)
+        } else {
+            HealthConnectScreen(healthKitService)
+        }
     }
 }

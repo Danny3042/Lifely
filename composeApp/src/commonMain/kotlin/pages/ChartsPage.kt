@@ -14,23 +14,35 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
 import androidx.lifecycle.viewmodel.compose.viewModel
 import utils.SimpleLineChart
 import utils.InsightsViewModel
+import utils.isAndroid
 
 const val ChartsPageScreen = "ChartsPage"
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChartsPage(
     modifier: Modifier = Modifier,
-    insightsViewModel: InsightsViewModel = viewModel()
+    insightsViewModelParam: InsightsViewModel? = null,
+    navController: NavHostController? = null
 ) {
+    val insightsViewModel: InsightsViewModel = insightsViewModelParam ?: if (isAndroid()) viewModel() else InsightsViewModel()
+
     val sessionsPerDay by insightsViewModel.sessionsPerDay
 
     // compute totals per day for the last 7 days (index 0 = Monday in existing code)
@@ -42,7 +54,19 @@ fun ChartsPage(
 
     Surface(modifier = modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Key metrics", style = MaterialTheme.typography.titleLarge)
+            // On Android show a TopAppBar with a native back button when navController is provided
+            if (isAndroid() && navController != null) {
+                TopAppBar(
+                    title = { Text("Key metrics", style = MaterialTheme.typography.titleLarge) },
+                    navigationIcon = {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                )
+            } else {
+                Text("Key metrics", style = MaterialTheme.typography.titleLarge)
+            }
 
             // Small metric cards in a horizontal row (like Fitbit)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 12.dp)) {

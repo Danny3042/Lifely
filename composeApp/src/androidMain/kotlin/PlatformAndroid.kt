@@ -14,7 +14,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -33,6 +32,7 @@ import pages.Timer
 import pages.TimerScreenContent
 import platform.PlatformBridge
 import kotlinx.coroutines.flow.collectLatest
+import androidx.compose.runtime.snapshotFlow
 import sub_pages.AboutPage
 import sub_pages.AboutPageScreen
 import sub_pages.CompletedHabitsPage
@@ -119,7 +119,7 @@ actual fun PlatformApp() {
             }
             composable(InsightsPageScreen) { InsightsPage(insightsViewModel = viewModel()) }
             // New charts page
-            composable(ChartsPageScreen) { ChartsPage() }
+            composable(ChartsPageScreen) { ChartsPage(navController = navController) }
         }
     }
 }

@@ -14,10 +14,6 @@ class InsightsViewModel : ViewModel() {
     private val _sessionsPerDay = mutableStateOf(List(7) { emptyList<Session>() })
     val sessionsPerDay: State<List<List<Session>>> = _sessionsPerDay
 
-    init {
-        // Publish initial totals so native charts display existing data on startup
-        publishTotalsToPlatform()
-    }
 
     fun addSession(session: Session) {
         val currentDayIndex = getTodayIndex()

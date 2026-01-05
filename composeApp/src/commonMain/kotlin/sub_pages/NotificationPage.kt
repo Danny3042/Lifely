@@ -19,6 +19,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import platform.rememberSafeAreaInsets
 import androidx.navigation.NavController
 import utils.isAndroid
 
@@ -33,7 +34,12 @@ fun NotificationPage(navController: NavController) {
             .background(MaterialTheme.colorScheme.background)
     ) {
         val scrollState = rememberScrollState()
-        Column(modifier = Modifier.verticalScroll(scrollState)) {
+        val safeInsets = rememberSafeAreaInsets()
+        Column(
+            modifier = Modifier
+                .verticalScroll(scrollState)
+                .padding(safeInsets)
+        ) {
             if (isAndroid()) {
                 TopAppBar(
                     title = { Text("Notifications") },

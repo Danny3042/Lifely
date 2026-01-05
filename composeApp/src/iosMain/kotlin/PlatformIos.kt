@@ -142,6 +142,16 @@ actual fun PlatformApp() {
         }
     }
 
+    LaunchedEffect(Unit) {
+        try {
+            println("PlatformIos: initializing NotifierManager for iOS")
+            NotifierManager.initialize(NotificationPlatformConfiguration.Ios())
+            println("PlatformIos: NotifierManager initialized")
+        } catch (e: Throwable) {
+            println("PlatformIos: NotifierManager.initialize failed: ${e.message}")
+        }
+    }
+
     // pending route set by native observer; Compose will navigate when this changes
     var pendingRoute by remember { mutableStateOf<String?>(null) }
 

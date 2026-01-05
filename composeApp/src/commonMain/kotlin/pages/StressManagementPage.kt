@@ -23,6 +23,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,13 +38,14 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import keyboardUtil.hideKeyboard
 import keyboardUtil.onDoneHideKeyboardAction
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import service.GenerativeAiService
 import sub_pages.MEDITATION_PAGE_ROUTE
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
+import platform.PlatformBridge
+import utils.isAndroid
 
 const val STRESS_MANAGEMENT_PAGE_ROUTE = "stress_management"
 @Composable
@@ -53,27 +55,89 @@ fun StressManagementPage(navController: NavController) {
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var userActivity by remember { mutableStateOf("") }
+    // New state to request navigation to meditation safely from composition
+    var navigateToMeditation by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
 
     fun generateTipAndAddActivity() {
-        if (userActivity.isBlank()) return
-        hideKeyboard()
-        if (userActivity.trim().equals("meditate", ignoreCase = true)) {
-            navController.navigate(MEDITATION_PAGE_ROUTE) // Replace with your actual MeditationPage route
-            return
+        try {
+            if (userActivity.isBlank()) return
+            // hideKeyboard may throw on some platforms; protect it
+            runCatching { hideKeyboard() }.onFailure { println("StressManagementPage: hideKeyboard failed: ${it.message}") }
+
+            if (userActivity.trim().equals("meditate", ignoreCase = true)) {
+                println("StressManagementPage: user requested meditation navigation (input='meditate')")
+                // Request navigation via Compose state to avoid calling navController.navigate directly
+                navigateToMeditation = true
+                return
+            }
+            scope.launch {
+                isLoading = true
+                error = null
+                try {
+                    aiTip = GenerativeAiService.instance.getSuggestions(
+                        listOf("Give me a practical succinct tip for managing stress with: $userActivity")
+                    )
+                    userActivity = ""
+                } catch (e: Exception) {
+                    error = e.message
+                    println("StressManagementPage: GenerativeAiService error: ${e.message}")
+                } finally {
+                    isLoading = false
+                }
+            }
+        } catch (e: Throwable) {
+            println("StressManagementPage: unexpected error in generateTipAndAddActivity: ${e.message}")
         }
-        scope.launch {
-            isLoading = true
-            error = null
+    }
+
+    // Perform the navigation as a side-effect when requested
+    LaunchedEffect(navigateToMeditation) {
+        if (navigateToMeditation) {
+            // Log current navController state for debugging
             try {
-                aiTip = GenerativeAiService.instance.getSuggestions(
-                    listOf("Give me a practical succinct tip for managing stress with: $userActivity")
-                )
-                userActivity = ""
-            } catch (e: Exception) {
-                error = e.message
+                val current = try { navController.currentDestination?.route } catch (e: Throwable) { null }
+                println("StressManagementPage: navigating to meditation. currentDestination=$current currentBackStackEntry=${navController.currentBackStackEntry}")
+
+                // Use the remembered coroutine scope to call navigate on the proper context
+                scope.launch {
+                    try {
+                        // Small delay to avoid navigation race conditions on iOS
+                        delay(100)
+
+                        // Avoid navigating if already at the route
+                        val nowDest = try { navController.currentDestination?.route } catch (e: Throwable) { null }
+
+                        if (nowDest == MEDITATION_PAGE_ROUTE) {
+                            println("StressManagementPage: already at meditation route; skipping navigate")
+                        } else if (!isAndroid()) {
+                            // On iOS, avoid direct navController navigation — delegate to PlatformBridge
+                            println("StressManagementPage: running on iOS; delegating meditation navigation to PlatformBridge")
+                            try {
+                                PlatformBridge.requestedRoute = MEDITATION_PAGE_ROUTE
+                                PlatformBridge.requestedRouteSignal = PlatformBridge.requestedRouteSignal + 1
+                                println("StressManagementPage: PlatformBridge.requestedRoute set to $MEDITATION_PAGE_ROUTE")
+                            } catch (e: Throwable) {
+                                println("StressManagementPage: failed to set PlatformBridge.requestedRoute: ${e.message}")
+                                e.printStackTrace()
+                            }
+                        } else {
+                            navController.navigate(MEDITATION_PAGE_ROUTE) {
+                                launchSingleTop = true
+                            }
+                            println("StressManagementPage: navigate to meditation succeeded")
+                        }
+                    } catch (e: Throwable) {
+                        println("StressManagementPage: failed to navigate to meditation: ${e.message}")
+                        e.printStackTrace()
+                    }
+                }
+            } catch (e: Throwable) {
+                println("StressManagementPage: LaunchedEffect navigation wrapper failed: ${e.message}")
+                e.printStackTrace()
             } finally {
-                isLoading = false
+                // Ensure flag cleared so it can be retried
+                navigateToMeditation = false
             }
         }
     }
@@ -85,7 +149,6 @@ fun StressManagementPage(navController: NavController) {
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        val keyboardController = LocalSoftwareKeyboardController.current
 
         Icon(
             painter = rememberVectorPainter(Icons.Default.SelfImprovement),
@@ -125,7 +188,11 @@ fun StressManagementPage(navController: NavController) {
             }),
             trailingIcon = {
                 IconButton(
-                    onClick = { hideKeyboard(); generateTipAndAddActivity() },
+                    onClick = {
+                        println("StressManagementPage: Send icon clicked. userActivity='$userActivity'")
+                        runCatching { hideKeyboard() }.onFailure { println("StressManagementPage: hideKeyboard failed on send icon: ${it.message}") }
+                        generateTipAndAddActivity()
+                    },
                     enabled = userActivity.isNotBlank() && !isLoading
                 ) {
                     Icon(
@@ -154,7 +221,11 @@ fun StressManagementPage(navController: NavController) {
         }
         Spacer(modifier = Modifier.height(8.dp))
         Button(
-            onClick = { hideKeyboard(); generateTipAndAddActivity() },
+            onClick = {
+                println("StressManagementPage: Button clicked. userActivity='$userActivity'")
+                runCatching { hideKeyboard() }.onFailure { println("StressManagementPage: hideKeyboard failed on button: ${it.message}") }
+                generateTipAndAddActivity()
+            },
             enabled = userActivity.isNotBlank() && !isLoading
         ) {
             Text("Get AI Tip & Add Activity")

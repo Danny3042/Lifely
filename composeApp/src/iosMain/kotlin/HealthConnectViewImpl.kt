@@ -36,8 +36,7 @@ fun HealthConnectViewImpl(healthKitService: HealthKitService) {
 
     MaterialTheme {
         Column(modifier = Modifier.padding(24.dp)) {
-            Text("Good Morning!", style = MaterialTheme.typography.h5)
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
 
             LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(

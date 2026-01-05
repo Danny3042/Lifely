@@ -24,22 +24,28 @@ final class SharedComposeHolder {
     }()
 }
 
-// Attacher that creates a dedicated window and hosts the shared Compose VC so it persists.
 final class ComposeHostAttacher {
     static let shared = ComposeHostAttacher()
     private(set) var attached: Bool = false
-    private weak var hostContainer: UIViewController? = nil
+    // Keep a strong reference to the host window so it doesn't get released immediately
+    private var hostWindow: UIWindow? = nil
 
     func attachIfNeeded() {
         DispatchQueue.main.async {
             guard !self.attached else { return }
-            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let window = scene.windows.first,
-                  let root = window.rootViewController else {
-                print("ComposeHostAttacher: cannot find root view controller to attach")
+            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else {
+                print("ComposeHostAttacher: no window scene available")
                 return
             }
 
+            // Create a dedicated window for Compose so it's not affected by SwiftUI layout changes
+            let window = UIWindow(windowScene: scene)
+            window.frame = scene.coordinateSpace.bounds
+            window.backgroundColor = .clear
+            // Place below normal to let SwiftUI overlays (tab bar, alerts) remain interactive above it
+            window.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.normal.rawValue - 1)
+
+            // Attach the shared VC directly as the window's rootViewController so it fills the window exactly
             let shared = SharedComposeHolder.sharedVC
 
             // Detach from any previous parent
@@ -49,67 +55,97 @@ final class ComposeHostAttacher {
                 shared.removeFromParent()
             }
 
-            // Attach to the root view controller and insert at back so SwiftUI content overlays it
-            root.addChild(shared)
+            window.rootViewController = shared
+            // Ensure the view fills the window
             shared.view.translatesAutoresizingMaskIntoConstraints = false
-            root.view.insertSubview(shared.view, at: 0)
-            NSLayoutConstraint.activate([
-                shared.view.topAnchor.constraint(equalTo: root.view.topAnchor),
-                shared.view.bottomAnchor.constraint(equalTo: root.view.safeAreaLayoutGuide.bottomAnchor),
-                shared.view.leadingAnchor.constraint(equalTo: root.view.leadingAnchor),
-                shared.view.trailingAnchor.constraint(equalTo: root.view.trailingAnchor)
-            ])
-            shared.didMove(toParent: root)
+            if let rootView = window.rootViewController?.view {
+                NSLayoutConstraint.activate([
+                    shared.view.topAnchor.constraint(equalTo: rootView.topAnchor),
+                    shared.view.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
+                    shared.view.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
+                    shared.view.trailingAnchor.constraint(equalTo: rootView.trailingAnchor)
+                ])
+            }
 
-            self.hostContainer = root
-            self.attached = true
-            print("ComposeHostAttacher: attached shared Compose VC to root view (index 0)")
+            // Neutralize safe area on the shared view so Compose layout doesn't get pushed down by insets
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                let safe = window.safeAreaInsets
+                print("ComposeHostAttacher: window.safeAreaInsets=\(safe)")
+                // Prevent the view from adding its own layout margins from safe area
+                shared.view.insetsLayoutMarginsFromSafeArea = false
+                // Apply negative extra safe area to cancel system insets
+                shared.additionalSafeAreaInsets = UIEdgeInsets(top: -safe.top, left: 0, bottom: -safe.bottom, right: 0)
+                print("ComposeHostAttacher: applied additionalSafeAreaInsets=\(shared.additionalSafeAreaInsets)")
+            }
 
-            // DEBUG: add a small, removable overlay label so we can visually confirm attachment
+             // Show the window (don't make key)
+             window.isHidden = false
+             // Note: makeKeyAndVisible would steal key window; avoid it in release scenarios
+             // window.makeKeyAndVisible()
+
+            // Diagnostic prints to help understand layout/safe area offsets
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                let safe = window.safeAreaInsets
+                print("ComposeHostAttacher.attached -> window.frame=\(window.frame) safeAreaInsets=\(safe) sharedFrame=\(shared.view.frame)")
+            }
+
+             self.hostWindow = window
+             self.attached = true
+            print("ComposeHostAttacher: attached shared Compose VC to dedicated window, windowLevel=\(window.windowLevel.rawValue)")
+
             #if DEBUG
+            // Visible debug indicator
             let debugLabel = UILabel()
-            debugLabel.text = "ComposeHost attached"
+            debugLabel.text = "ComposeHostWindow"
             debugLabel.font = UIFont.systemFont(ofSize: 10)
             debugLabel.textColor = UIColor.white
             debugLabel.backgroundColor = UIColor.black.withAlphaComponent(0.35)
             debugLabel.translatesAutoresizingMaskIntoConstraints = false
-            root.view.addSubview(debugLabel)
+            shared.view.addSubview(debugLabel)
             NSLayoutConstraint.activate([
-                debugLabel.leadingAnchor.constraint(equalTo: root.view.leadingAnchor, constant: 8),
-                debugLabel.topAnchor.constraint(equalTo: root.view.topAnchor, constant: 44)
+                debugLabel.leadingAnchor.constraint(equalTo: shared.view.leadingAnchor, constant: 8),
+                debugLabel.topAnchor.constraint(equalTo: shared.view.topAnchor, constant: 44)
             ])
-            root.view.bringSubviewToFront(debugLabel)
+            shared.view.bringSubviewToFront(debugLabel)
             #endif
 
-             // Monitor and reattach if detached
-             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                 self.monitorAndReattach(times: 30, interval: 0.15)
-             }
-         }
-     }
+            // Start monitor loop
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.monitorAndReattach(times: 40, interval: 0.15)
+            }
+        }
+    }
 
     private func reattachIfNeeded() {
         DispatchQueue.main.async {
-            guard let root = self.hostContainer ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first?.windows.first?.rootViewController else { return }
+            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
+            if self.hostWindow == nil {
+                // Recreate the window host if missing
+                self.attached = false
+                self.attachIfNeeded()
+                return
+            }
             let shared = SharedComposeHolder.sharedVC
             if shared.view.superview == nil || shared.parent == nil {
-                print("ComposeHostAttacher: reattaching shared VC to root view")
-                if let prev = shared.parent {
-                    shared.willMove(toParent: nil)
-                    shared.view.removeFromSuperview()
-                    shared.removeFromParent()
+                if let window = self.hostWindow {
+                    print("ComposeHostAttacher: reattaching shared VC into host window")
+                    // set shared as rootViewController again
+                    window.rootViewController = shared
+                    // ensure constraints
+                    shared.view.translatesAutoresizingMaskIntoConstraints = false
+                    if let rootView = window.rootViewController?.view {
+                        NSLayoutConstraint.activate([
+                            shared.view.topAnchor.constraint(equalTo: rootView.topAnchor),
+                            shared.view.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
+                            shared.view.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
+                            shared.view.trailingAnchor.constraint(equalTo: rootView.trailingAnchor)
+                        ])
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            let safe = window.safeAreaInsets
+                            print("ComposeHostAttacher.reattach -> window.frame=\(window.frame) safeAreaInsets=\(safe) sharedFrame=\(shared.view.frame)")
+                        }
+                    }
                 }
-                root.addChild(shared)
-                shared.view.translatesAutoresizingMaskIntoConstraints = false
-                root.view.insertSubview(shared.view, at: 0)
-                NSLayoutConstraint.activate([
-                    shared.view.topAnchor.constraint(equalTo: root.view.topAnchor),
-                    shared.view.bottomAnchor.constraint(equalTo: root.view.safeAreaLayoutGuide.bottomAnchor),
-                    shared.view.leadingAnchor.constraint(equalTo: root.view.leadingAnchor),
-                    shared.view.trailingAnchor.constraint(equalTo: root.view.trailingAnchor)
-                ])
-                shared.didMove(toParent: root)
-                print("ComposeHostAttacher: reattached shared VC to root view")
             }
         }
     }
@@ -119,7 +155,7 @@ final class ComposeHostAttacher {
         DispatchQueue.main.asyncAfter(deadline: .now() + interval) {
             let shared = SharedComposeHolder.sharedVC
             let hasSuperview = shared.view.superview != nil
-            print("ComposeHostAttacher.monitor -> hasSuperview=\(hasSuperview) parent=\(String(describing: shared.parent))")
+            print("ComposeHostAttacher.monitor -> hasSuperview=\(hasSuperview) parent=\(String(describing: shared.parent)) hostWindow=\(String(describing: self.hostWindow)) sharedFrame=\(shared.view.frame)")
             if !hasSuperview {
                 self.reattachIfNeeded()
             }

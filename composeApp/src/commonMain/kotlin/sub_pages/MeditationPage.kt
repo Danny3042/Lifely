@@ -35,6 +35,7 @@ import utils.Session
 import androidx.lifecycle.viewmodel.compose.viewModel
 import utils.InsightsViewModel
 import kotlinx.datetime.toLocalDateTime
+import utils.isAndroid
 
 const val MEDITATION_PAGE_ROUTE = "meditation"
 @OptIn(ExperimentalAnimationApi::class)
@@ -42,13 +43,24 @@ const val MEDITATION_PAGE_ROUTE = "meditation"
 fun MeditationPage(
     onBack: (() -> Unit)? = null,
     onNavigateToInsights: (() -> Unit)? = null,
-    insightsViewModel: InsightsViewModel = viewModel()
+    insightsViewModelParam: InsightsViewModel? = null
 ) {
+    // Use provided view model if given; otherwise use platform-appropriate creation.
+    val insightsViewModel: InsightsViewModel = insightsViewModelParam ?: if (isAndroid()) {
+        viewModel()
+    } else {
+        // On iOS, avoid ViewModelProvider; instantiate directly
+        InsightsViewModel()
+    }
+
     var totalTime by remember { mutableStateOf(5 * 60) }
     var timeLeft by remember { mutableStateOf(totalTime) }
     val progress = timeLeft / totalTime.toFloat()
     var isRunning by remember { mutableStateOf(false) }
-    val notifier = remember { NotifierManager.getLocalNotifier() }
+    // NotifierManager may not be initialized yet on iOS startup; obtain safely.
+    val notifier = remember {
+        runCatching { NotifierManager.getLocalNotifier() }.getOrNull()
+    }
     var showEditDialog by remember { mutableStateOf(false) }
 
     val primary = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
@@ -69,7 +81,7 @@ fun MeditationPage(
                     duration = totalTime / 60
                 )
             )
-            notifier.notify(
+            notifier?.notify(
                 title = "Meditation Timer Finished",
                 body = "Your meditation session has ended. Take a moment to reflect.",
             )
@@ -199,6 +211,7 @@ fun MeditationPage(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = rememberRipple(bounded = true, color = MaterialTheme.colorScheme.primary)
                         ),
+
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,

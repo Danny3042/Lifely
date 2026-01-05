@@ -2,6 +2,7 @@ import UIKit
 import SwiftUI
 import ComposeApp
 import FirebaseAuth
+import HealthKit
 #if canImport(Charts)
 import Charts
 #endif
@@ -58,7 +59,7 @@ struct SharedComposeHost: View {
                     // Only register observer once globally
                     if !observerAdded {
                         observerAdded = true
-                        
+
                         // Listen for ComposeReady
                         NotificationCenter.default.addObserver(
                             forName: composeReadyNotification,
@@ -72,7 +73,7 @@ struct SharedComposeHost: View {
                                 lastRequestedRoute = nil
                             }
                         }
-                        
+
                         // Listen for route changes from Compose
                         NotificationCenter.default.addObserver(
                             forName: Notification.Name("ComposeRouteChanged"),
@@ -82,10 +83,10 @@ struct SharedComposeHost: View {
                             if let route = notification.userInfo?["route"] as? String {
                                 print("SharedComposeHost: Route changed to: \(route)")
                                 currentRoute = route
-                                
+
                                 // Show back button for sub-pages
                                 let mainRoutes = ["HomePage", "HabitCoachingPage", "ChatScreen", "meditation", "profile", "HeroScreen", "Login", "SignUp", "ResetPassword"]
-                                
+
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                     showBackButton = !mainRoutes.contains(route)
                                 }
@@ -122,13 +123,13 @@ struct SharedComposeHost: View {
             }
         }
     }
-    
+
     private func handleBackButton() {
         print("SharedComposeHost: Back button tapped")
         // Add haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
         impactFeedback.impactOccurred()
-        
+
         // Post notification to Compose to handle back navigation
         NotificationCenter.default.post(
             name: Notification.Name("ComposeBackPressed"),
@@ -260,6 +261,9 @@ struct ContentView: View {
     @StateObject private var settings = AppSettings()
     @State private var authHandle: AuthStateDidChangeListenerHandle? = nil
     @State private var showChartsSheet: Bool = false
+    @State private var isSignedIn: Bool = Auth.auth().currentUser != nil
+    @State private var composeHidesTabBar: Bool = false
+    @State private var composeHidesNavigationBar: Bool = false
 
     var body: some View {
         ZStack {
@@ -270,50 +274,55 @@ struct ContentView: View {
                         .ignoresSafeArea(.all, edges: [.top, .bottom])
                         .navigationTitle("Home")
                         .navigationBarTitleDisplayMode(.large)
+                        .navigationBarHidden(composeHidesNavigationBar)
                 }
                 .tabItem {
                     Label("Home", systemImage: "house")
                 }
                 .tag(0)
-                
+
                 NavigationView {
                     SharedComposeHost(selectedTab: $selectedTab)
                         .ignoresSafeArea(.all, edges: [.top, .bottom])
                         .navigationTitle("Habits")
                         .navigationBarTitleDisplayMode(.large)
+                        .navigationBarHidden(composeHidesNavigationBar)
                 }
                 .tabItem {
                     Label("Habits", systemImage: "checkmark.circle")
                 }
                 .tag(1)
-                
+
                 NavigationView {
                     SharedComposeHost(selectedTab: $selectedTab)
                         .ignoresSafeArea(.all, edges: [.top, .bottom])
                         .navigationTitle("Chat")
                         .navigationBarTitleDisplayMode(.large)
+                        .navigationBarHidden(composeHidesNavigationBar)
                 }
                 .tabItem {
                     Label("Chat", systemImage: "message")
                 }
                 .tag(2)
-                
+
                 NavigationView {
                     SharedComposeHost(selectedTab: $selectedTab)
                         .ignoresSafeArea(.all, edges: [.top, .bottom])
                         .navigationTitle("Meditate")
                         .navigationBarTitleDisplayMode(.large)
+                        .navigationBarHidden(composeHidesNavigationBar)
                 }
                 .tabItem {
                     Label("Meditate", systemImage: "apple.meditate.circle.fill")
                 }
                 .tag(3)
-                
+
                 NavigationView {
                     SharedComposeHost(selectedTab: $selectedTab)
                         .ignoresSafeArea(.all, edges: [.top, .bottom])
                         .navigationTitle("Profile")
                         .navigationBarTitleDisplayMode(.large)
+                        .navigationBarHidden(composeHidesNavigationBar)
                 }
                 .tabItem {
                     Label("Profile", systemImage: "person")
@@ -380,6 +389,15 @@ struct ContentView: View {
                 }
             }
 
+            // Register Firebase auth state listener to show/hide sign-in UI
+            if authHandle == nil {
+                authHandle = Auth.auth().addStateDidChangeListener { _, user in
+                    DispatchQueue.main.async {
+                        isSignedIn = (user != nil)
+                    }
+                }
+            }
+
             // Ensure Compose shared VC is visible when Compose reports navigation changes or is ready
             NotificationCenter.default.addObserver(forName: Notification.Name("ComposeNavigationChanged"), object: nil, queue: .main) { note in
                 print("ContentView: ComposeNavigationChanged received - ensuring Compose VC visible")
@@ -389,6 +407,33 @@ struct ContentView: View {
             NotificationCenter.default.addObserver(forName: Notification.Name("ComposeReady"), object: nil, queue: .main) { _ in
                 print("ContentView: ComposeReady received - ensuring Compose VC visible")
                 ComposeViewController.ensureSharedVisible()
+            }
+
+            // Listen for route changes from Compose to hide native tab bar for login screens
+            NotificationCenter.default.addObserver(forName: Notification.Name("ComposeRouteChanged"), object: nil, queue: .main) { note in
+                if let route = note.userInfo?["route"] as? String {
+                    let shouldHide = ["Login", "SignUp", "ResetPassword"].contains(route)
+                    print("ContentView: ComposeRouteChanged -> route=\(route) shouldHideTab=\(shouldHide)")
+                    composeHidesTabBar = shouldHide
+                    composeHidesNavigationBar = shouldHide
+                    setNativeTabBarHidden(shouldHide)
+                }
+            }
+
+            // Listen for Compose crashes/errors
+            NotificationCenter.default.addObserver(forName: Notification.Name("ComposeError"), object: nil, queue: .main) { note in
+                if let error = note.userInfo?["error"] as? String {
+                    print("⚠️ Compose Error: \(error)")
+                    if let details = note.userInfo?["details"] as? String {
+                        print("⚠️ Details: \(details)")
+                    }
+                    // Show error to user
+                    settings.snackbarMessage = "Something went wrong. Please try again."
+                    settings.showSnackbar = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        settings.showSnackbar = false
+                    }
+                }
             }
 
             // Listen for native Charts open request from Kotlin/Compose (PlatformBridge -> PlatformIos)
@@ -412,6 +457,25 @@ struct ContentView: View {
             if let h = authHandle {
                 Auth.auth().removeStateDidChangeListener(h)
                 authHandle = nil
+            }
+        }
+    }
+
+    // Hide/show UITabBar instances found in the app windows.
+    private func setNativeTabBarHidden(_ hidden: Bool) {
+        DispatchQueue.main.async {
+            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
+            for window in scene.windows {
+                // traverse subviews to find UITabBar instances
+                func traverse(_ view: UIView) {
+                    if let tb = view as? UITabBar {
+                        tb.isHidden = hidden
+                    }
+                    for sub in view.subviews {
+                        traverse(sub)
+                    }
+                }
+                traverse(window)
             }
         }
     }
@@ -439,6 +503,7 @@ struct ChartPoint: Identifiable {
 class ChartDataModel: ObservableObject {
     @Published var points: [ChartPoint] = []
     private var observer: NSObjectProtocol? = nil
+    private let healthStore = HKHealthStore()
 
     init() {
         self.points = Self.sampleData()
@@ -455,10 +520,75 @@ class ChartDataModel: ObservableObject {
                 print("ChartDataModel: unsupported payload: \(String(describing: note.userInfo))")
             }
         }
+
+        // Load real HealthKit data
+        loadHealthKitData()
     }
 
     deinit {
         if let obs = observer { NotificationCenter.default.removeObserver(obs) }
+    }
+
+    func loadHealthKitData() {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            print("HealthKit not available")
+            return
+        }
+
+        guard let mindfulType = HKObjectType.categoryType(forIdentifier: .mindfulSession) else {
+            print("Mindful session type not available")
+            return
+        }
+
+        let typesToRead: Set<HKObjectType> = [mindfulType]
+
+        healthStore.requestAuthorization(toShare: nil, read: typesToRead) { [weak self] success, error in
+            if success {
+                self?.fetchMindfulnessData()
+            } else {
+                print("HealthKit authorization failed: \(error?.localizedDescription ?? "unknown error")")
+            }
+        }
+    }
+
+    private func fetchMindfulnessData() {
+        guard let mindfulType = HKObjectType.categoryType(forIdentifier: .mindfulSession) else { return }
+
+        let calendar = Calendar.current
+        let now = Date()
+        guard let startDate = calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: now)) else { return }
+
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: now, options: .strictStartDate)
+
+        let query = HKSampleQuery(sampleType: mindfulType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]) { [weak self] _, samples, error in
+            guard let self = self, let samples = samples as? [HKCategorySample], error == nil else {
+                print("Error fetching mindfulness data: \(error?.localizedDescription ?? "unknown")")
+                return
+            }
+
+            // Group samples by day and sum the durations
+            var dailyMinutes: [Date: Double] = [:]
+            for sample in samples {
+                let dayStart = calendar.startOfDay(for: sample.startDate)
+                let duration = sample.endDate.timeIntervalSince(sample.startDate) / 60.0 // Convert to minutes
+                dailyMinutes[dayStart, default: 0] += duration
+            }
+
+            // Create chart points for the last 7 days (even if no data for some days)
+            var newPoints: [ChartPoint] = []
+            for i in 0..<7 {
+                if let day = calendar.date(byAdding: .day, value: -6 + i, to: calendar.startOfDay(for: now)) {
+                    let minutes = dailyMinutes[day] ?? 0
+                    newPoints.append(ChartPoint(date: day, value: minutes))
+                }
+            }
+
+            DispatchQueue.main.async {
+                self.points = newPoints
+            }
+        }
+
+        healthStore.execute(query)
     }
 
     private func update(fromMaps maps: [[String: Any]]) {
@@ -555,9 +685,14 @@ struct ChartView: View {
                         .font(.title2)
                         .bold()
                     Spacer()
-                    Button(action: { /* See all action */ }) {
-                        Text("See all")
-                            .font(.subheadline)
+                    Button(action: {
+                        model.loadHealthKitData()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.clockwise")
+                            Text("Refresh")
+                        }
+                        .font(.subheadline)
                     }
                 }
                 .padding(.horizontal)
@@ -565,9 +700,9 @@ struct ChartView: View {
                 // Small metric cards
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
-                        MetricSmallCard(title: "Meditation", value: model.points.map { $0.value }.reduce(0, +).formatted(.number.precision(.fractionLength(0))))
-                        MetricSmallCard(title: "Sessions", value: String(model.points.count))
-                        MetricSmallCard(title: "Avg min", value: averageString())
+                        MetricSmallCard(title: "Meditation", value: totalMinutesString() + " min")
+                        MetricSmallCard(title: "Sessions", value: String(model.points.filter { $0.value > 0 }.count))
+                        MetricSmallCard(title: "Avg min", value: averageString() + " min")
                     }
                     .padding(.horizontal)
                 }
@@ -583,8 +718,13 @@ struct ChartView: View {
         }
     }
 
+    private func totalMinutesString() -> String {
+        let total = model.points.map { $0.value }.reduce(0, +)
+        return String(Int(total))
+    }
+
     private func averageString() -> String {
-        let vals = model.points.map { $0.value }
+        let vals = model.points.filter { $0.value > 0 }.map { $0.value }
         guard !vals.isEmpty else { return "0" }
         let avg = vals.reduce(0, +) / Double(vals.count)
         return String(Int(avg))
@@ -627,14 +767,47 @@ private struct MetricDetailCard: View {
                     Text(subtitle).font(.subheadline).foregroundColor(.secondary)
                 }
                 Spacer()
-                Text(totalString()).font(.title).bold()
+                Text(totalString() + " min").font(.title).bold()
             }
+
+            let hasAnyData = points.contains { $0.value > 0 }
 
             if points.isEmpty {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color(UIColor.systemGray6))
                     .frame(height: 160)
-                    .overlay(Text("No data").foregroundColor(.secondary))
+                    .overlay(
+                        VStack(spacing: 8) {
+                            Image(systemName: "chart.bar.xaxis")
+                                .font(.system(size: 40))
+                                .foregroundColor(.secondary)
+                            Text("No data available")
+                                .foregroundColor(.secondary)
+                            Text("Pull to refresh after recording meditation sessions")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                        }
+                    )
+            } else if !hasAnyData {
+                Chart {
+                    ForEach(points) { p in
+                        BarMark(x: .value("Date", p.date), y: .value("Value", 0))
+                            .foregroundStyle(Color(UIColor.systemGray5))
+                            .cornerRadius(6)
+                    }
+                }
+                .chartXAxis { AxisMarks(values: .automatic) { _ in AxisValueLabel(format: .dateTime.weekday(.abbreviated)) } }
+                .chartYAxis { AxisMarks(position: .leading) }
+                .frame(height: 180)
+                .overlay(
+                    VStack {
+                        Text("No meditation sessions recorded")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                )
             } else {
                 Chart {
                     ForEach(points) { p in

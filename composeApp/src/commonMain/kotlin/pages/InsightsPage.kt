@@ -1,4 +1,3 @@
-
 package pages
 
 import androidx.compose.animation.AnimatedVisibility
@@ -41,6 +40,7 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.todayIn
 import utils.InsightsViewModel
+import utils.isAndroid
 
 const val InsightsPageScreen = "Insights"
 
@@ -52,8 +52,10 @@ fun getStartOfWeek(today: LocalDate): LocalDate {
 @Composable
 fun InsightsPage(
     modifier: Modifier = Modifier,
-    insightsViewModel: InsightsViewModel = viewModel()
+    insightsViewModel: InsightsViewModel? = null
 ) {
+    val insightsViewModel: InsightsViewModel = insightsViewModel ?: if (isAndroid()) viewModel() else InsightsViewModel()
+
     val sessionsPerDay by insightsViewModel.sessionsPerDay
     val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
     val startOfWeek = getStartOfWeek(today)

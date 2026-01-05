@@ -32,6 +32,79 @@ struct iOSApp: App {
             UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
         }
         
+        // Observe Compose dark-mode changes so native bars can match the Compose theme
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("ComposeDarkModeChanged"), object: nil, queue: .main) { notification in
+            let userInfo = notification.userInfo
+            let dark = (userInfo?["dark"] as? Bool) ?? false
+            let useSystem = (userInfo?["useSystem"] as? Bool) ?? true
+
+            // Prepare new appearances based on flags
+            let newNavAppearance = UINavigationBarAppearance()
+            let newTabAppearance = UITabBarAppearance()
+
+            if useSystem {
+                // Let the system decide (follow device appearance)
+                newNavAppearance.configureWithDefaultBackground()
+                newTabAppearance.configureWithDefaultBackground()
+                UINavigationBar.appearance().tintColor = nil
+                UITabBar.appearance().tintColor = nil
+                UITabBar.appearance().unselectedItemTintColor = nil
+            } else if dark {
+                // Force dark styling for bars
+                newNavAppearance.configureWithOpaqueBackground()
+                newNavAppearance.backgroundColor = UIColor { trait in
+                    return .black
+                }
+                newNavAppearance.titleTextAttributes = [.foregroundColor: UIColor.white]
+                newNavAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+
+                newTabAppearance.configureWithOpaqueBackground()
+                newTabAppearance.backgroundColor = UIColor.black
+                UITabBar.appearance().tintColor = UIColor.systemBlue
+                UITabBar.appearance().unselectedItemTintColor = UIColor.lightGray
+            } else {
+                // Force light styling for bars
+                newNavAppearance.configureWithOpaqueBackground()
+                newNavAppearance.backgroundColor = UIColor.white
+                newNavAppearance.titleTextAttributes = [.foregroundColor: UIColor.black]
+                newNavAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor.black]
+
+                newTabAppearance.configureWithOpaqueBackground()
+                newTabAppearance.backgroundColor = UIColor.white
+                UITabBar.appearance().tintColor = UIColor.systemBlue
+                UITabBar.appearance().unselectedItemTintColor = UIColor.gray
+            }
+
+            // Apply the computed appearances
+            UINavigationBar.appearance().standardAppearance = newNavAppearance
+            UINavigationBar.appearance().compactAppearance = newNavAppearance
+            UINavigationBar.appearance().scrollEdgeAppearance = newNavAppearance
+
+            UITabBar.appearance().standardAppearance = newTabAppearance
+            if #available(iOS 15.0, *) {
+                UITabBar.appearance().scrollEdgeAppearance = newTabAppearance
+            }
+
+            // Determine the override user interface style for windows
+            let overrideStyle: UIUserInterfaceStyle = {
+                if useSystem { return .unspecified }
+                return dark ? .dark : .light
+            }()
+
+            // Force the system to update existing bars and window interface style
+            DispatchQueue.main.async {
+                for scene in UIApplication.shared.connectedScenes {
+                    if let ws = scene as? UIWindowScene {
+                        for w in ws.windows {
+                            w.overrideUserInterfaceStyle = overrideStyle
+                            w.rootViewController?.setNeedsStatusBarAppearanceUpdate()
+                            w.rootViewController?.view.setNeedsLayout()
+                        }
+                    }
+                }
+            }
+        }
+
         logInitialEvent()
     }
     

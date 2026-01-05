@@ -18,7 +18,7 @@ object ChartBridge {
             NSNotificationCenter.defaultCenter.postNotificationName(
                 aName = "ChartDataUpdated",
                 `object` = null,
-                userInfo = userInfo as Map<Any?, *>
+                userInfo = userInfo
             )
         }
     }

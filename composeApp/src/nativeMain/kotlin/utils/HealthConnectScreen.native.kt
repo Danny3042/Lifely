@@ -70,7 +70,7 @@ actual fun HealthConnectScreen(healthKitService: HealthKitService) {
             .padding(insets)
             .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            // Reuse the shared RealTimeGreeting composable for consistent header
+            // Show the shared RealTimeGreeting inside the content area (this ensures a single large greeting)
             RealTimeGreeting()
             Spacer(Modifier.height(16.dp))
 
