@@ -3,6 +3,7 @@ import SwiftUI
 import ComposeApp
 import FirebaseAuth
 import HealthKit
+import PhotosUI
 #if canImport(Charts)
 import Charts
 #endif
@@ -243,6 +244,8 @@ struct ComposeViewController: UIViewControllerRepresentable {
 /// Root SwiftUI view that uses native TabView with Compose content
 struct ContentView: View {
     @State private var selectedTab: Int = 0
+    @State private var showImagePicker: Bool = false
+    @State private var selectedImage: UIImage? = nil
     @StateObject private var settings = AppSettings()
     @State private var authHandle: AuthStateDidChangeListenerHandle? = nil
     @State private var showChartsSheet: Bool = false
@@ -331,6 +334,14 @@ struct ContentView: View {
             }
         }
         .ignoresSafeArea(.all)
+        .sheet(isPresented: $showImagePicker) {
+            ImagePicker(selectedImage: $selectedImage, onImageSelected: { image in
+                if let image = image {
+                    handleImageSelected(image)
+                }
+                showImagePicker = false
+            })
+        }
         .sheet(isPresented: $showChartsSheet) {
             NavigationView {
                 Group {
@@ -424,6 +435,11 @@ struct ContentView: View {
                 ComposeViewController.ensureSharedVisible()
             }
 
+            // Listen for image pick requests from Compose (Kotlin)
+            NotificationCenter.default.addObserver(forName: Notification.Name("RequestImagePick"), object: nil, queue: .main) { _ in
+                showImagePicker = true
+            }
+
             // Listen for dark mode updates from Compose and apply native style & appearances
             NotificationCenter.default.addObserver(forName: Notification.Name("ComposeDarkModeChanged"), object: nil, queue: .main) { note in
                 guard let userInfo = note.userInfo as? [String: Any] else { return }
@@ -458,6 +474,26 @@ struct ContentView: View {
             }
         }
     }
+    
+    // Handle selected image and send to Compose
+    private func handleImageSelected(_ image: UIImage) {
+        // Convert UIImage to base64 string
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            print("Failed to convert image to data")
+            return
+        }
+        
+        let base64String = imageData.base64EncodedString()
+        
+        // Send to Compose via notification
+        NotificationCenter.default.post(
+            name: Notification.Name("ImageSelected"),
+            object: nil,
+            userInfo: ["imageBase64": base64String]
+        )
+        
+        print("✅ Image selected and sent to Compose (base64 length: \(base64String.count))")
+    }
 }
 
 // VisualEffectBlur helper to get native blur background (uses UIVisualEffectView)
@@ -469,6 +505,49 @@ struct VisualEffectBlur: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIVisualEffectView, context: Context) {}
+}
+
+// ImagePicker wrapper for UIImagePickerController
+struct ImagePicker: UIViewControllerRepresentable {
+    @Binding var selectedImage: UIImage?
+    let onImageSelected: (UIImage?) -> Void
+    
+    class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        let parent: ImagePicker
+        
+        init(_ parent: ImagePicker) {
+            self.parent = parent
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let image = info[.originalImage] as? UIImage {
+                parent.selectedImage = image
+                parent.onImageSelected(image)
+            } else {
+                parent.onImageSelected(nil)
+            }
+            picker.dismiss(animated: true)
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.onImageSelected(nil)
+            picker.dismiss(animated: true)
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        picker.sourceType = .photoLibrary
+        picker.allowsEditing = false
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
 }
 
 // --- Begin embedded Chart support (moved here so ContentView can always reference ChartView) ---
@@ -820,3 +899,5 @@ struct ChartView: View {
 }
 #endif
 // --- End embedded Chart support ---
+
+

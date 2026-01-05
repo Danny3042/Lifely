@@ -26,12 +26,23 @@ sealed interface ChatMessage {
 }
 
 /**
+ * Message send status for optimistic UI
+ */
+enum class MessageStatus {
+    PENDING,
+    SENT,
+    FAILED
+}
+
+/**
  * User prompt message model
  */
 @Immutable
 data class UserChatMessage(
     val text: String,
     override val id: String = "user-${getUUIDString()}",
+    val status: MessageStatus = MessageStatus.SENT,
+    val imageBytes: ByteArray? = null,
 ) : ChatMessage
 
 /**

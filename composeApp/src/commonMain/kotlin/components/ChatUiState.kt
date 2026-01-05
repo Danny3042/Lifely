@@ -27,6 +27,33 @@ class MutableChatUiState : ChatUiState {
         messages.add(message)
     }
 
+    fun addPendingUserMessage(text: String, tempId: String) {
+        messages.add(UserChatMessage(text = text, id = tempId, status = MessageStatus.PENDING))
+    }
+
+    fun markUserMessageSent(tempId: String, serverId: String? = null) {
+        val idx = messages.indexOfFirst { it is UserChatMessage && it.id == tempId }
+        if (idx >= 0) {
+            val old = messages[idx] as UserChatMessage
+            messages[idx] = old.copy(status = MessageStatus.SENT, id = serverId ?: old.id)
+        }
+    }
+
+    fun markUserMessageFailed(tempId: String) {
+        val idx = messages.indexOfFirst { it is UserChatMessage && it.id == tempId }
+        if (idx >= 0) {
+            val old = messages[idx] as UserChatMessage
+            messages[idx] = old.copy(status = MessageStatus.FAILED)
+        }
+    }
+
+    fun removeMessage(id: String) {
+        val idx = messages.indexOfFirst { it.id == id }
+        if (idx >= 0) messages.removeAt(idx)
+    }
+
+    fun getMessageById(id: String): ChatMessage? = messages.find { it.id == id }
+
     fun setLastModelMessageAsLoaded(text: String) {
         updateLastModelMessage { ModelChatMessage.LoadedModelMessage(text) }
     }
@@ -36,11 +63,11 @@ class MutableChatUiState : ChatUiState {
     }
 
     private fun updateLastModelMessage(block: (ModelChatMessage) -> ChatMessage) {
-        val lastMessage = messages.lastOrNull() as? ModelChatMessage
-        lastMessage?.let {
-            val newMessage = block(it)
-            messages.removeAt(0)
-            messages.add(newMessage)
+        val lastIdx = messages.indexOfLast { it is ModelChatMessage }
+        if (lastIdx >= 0) {
+            val lastMessage = messages[lastIdx] as ModelChatMessage
+            val newMessage = block(lastMessage)
+            messages[lastIdx] = newMessage
         }
     }
 }
