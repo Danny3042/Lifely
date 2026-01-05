@@ -18,8 +18,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import platform.rememberSafeAreaInsets
@@ -40,42 +38,45 @@ fun AboutPage(navController: NavController, versionNumber: String) {
                 "Compose multiplatform is a toolkit for building UI for both iOS and Android."
             ),
         )
-        val scrollState = rememberScrollState()
 
-        Column(
+        // Use a single LazyColumn and place any headers as item { } before the feature items.
+        LazyColumn(
             modifier = Modifier
-                .verticalScroll(scrollState)
-                .padding(rememberSafeAreaInsets())
+                .fillMaxSize()
+                .padding(rememberSafeAreaInsets()),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // Optional top app bar for Android
             if (isAndroid()) {
-                TopAppBar(
-                    title = { Text(text = "About") },
-                    navigationIcon = {
-                        IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    }
-                )
-            }
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
                 item {
-                    Card(modifier = Modifier.padding(10.dp)) {
-                        Text(
-                            text = "Version: $versionNumber",
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(10.dp)
-                        )
-                    }
-                }
-                items(features) { feature ->
-                    Card(modifier = Modifier.padding(10.dp)) {
-                        Column {
-                            Text(feature.title, modifier = Modifier.padding(10.dp))
-                            Text(feature.description, modifier = Modifier.padding(10.dp))
+                    TopAppBar(
+                        title = { Text(text = "About") },
+                        navigationIcon = {
+                            IconButton(onClick = { navController.popBackStack() }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
                         }
+                    )
+                }
+            }
+
+            // Version card as a header item
+            item {
+                Card(modifier = Modifier.padding(10.dp)) {
+                    Text(
+                        text = "Version: $versionNumber",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(10.dp)
+                    )
+                }
+            }
+
+            // Feature items
+            items(features) { feature ->
+                Card(modifier = Modifier.padding(10.dp)) {
+                    Column {
+                        Text(feature.title, modifier = Modifier.padding(10.dp))
+                        Text(feature.description, modifier = Modifier.padding(10.dp))
                     }
                 }
             }

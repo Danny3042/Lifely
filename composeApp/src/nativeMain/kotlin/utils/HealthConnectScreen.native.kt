@@ -64,15 +64,24 @@ actual fun HealthConnectScreen(healthKitService: HealthKitService) {
     }
 
     MaterialTheme {
+        // Pull safe area insets. Cap the top inset so we don't create a large gap under the
+        // native large title — use a small top padding up to a maximum (8.dp) so the greeting
+        // sits closer to the navigation bar.
         val insets = rememberSafeAreaInsetsWithTabBar()
+        val startInset = insets.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
+        val endInset = insets.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
+        val bottomInset = insets.calculateBottomPadding()
+        val rawTop = insets.calculateTopPadding()
+        val defaultFallbackTop = 20.dp
+        val topPadding = if (rawTop <= 2.dp) defaultFallbackTop else rawTop.coerceIn(6.dp, 20.dp)
+
         Column(modifier = Modifier
             .verticalScroll(rememberScrollState())
-            .padding(insets)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(start = startInset + 16.dp, end = endInset + 16.dp, top = topPadding, bottom = bottomInset + 12.dp)
         ) {
             // Show the shared RealTimeGreeting inside the content area (this ensures a single large greeting)
             RealTimeGreeting()
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
 
             // Summary cards row
             LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {

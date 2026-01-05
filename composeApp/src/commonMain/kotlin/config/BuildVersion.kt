@@ -1,3 +1,3 @@
 package config
 
-const val VERSION_NUMBER = "2.2.0"
+const val VERSION_NUMBER = "3.0"

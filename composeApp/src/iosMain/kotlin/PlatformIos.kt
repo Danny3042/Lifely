@@ -1,4 +1,3 @@
-
 import Authentication.Authentication
 import Authentication.LoginScreen
 import Authentication.ResetPasswordScreen
@@ -41,6 +40,8 @@ import platform.Foundation.NSNotification
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSOperationQueue
 import platform.PlatformBridge
+import com.mmk.kmpnotifier.notification.NotifierManager
+import com.mmk.kmpnotifier.notification.configuration.NotificationPlatformConfiguration
 import sub_pages.AboutPage
 import sub_pages.AboutPageScreen
 import sub_pages.CompletedHabitsPage
@@ -283,10 +284,11 @@ actual fun PlatformApp() {
             val navControllerLocal = navController
             
             // Apply padding for safe area insets to prevent content from being hidden
+            // Do not apply global top/bottom safe-area padding here because individual screens
+            // already call rememberSafeAreaInsetsWithTabBar() and handle their own insets.
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = topInset.dp, bottom = bottomInset.dp)
             ) {
                 NavHost(navController = navControllerLocal, startDestination = LoginScreen) {
                     composable(LoginScreen) { Authentication().Login(navControllerLocal) }

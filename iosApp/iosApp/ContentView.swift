@@ -252,7 +252,7 @@ struct ContentView: View {
             TabView(selection: $selectedTab) {
                 NavigationView {
                     SharedComposeHost(selectedTab: $selectedTab)
-                        .ignoresSafeArea(.all, edges: [.top, .bottom])
+                        .ignoresSafeArea(.all, edges: [.bottom])
                         .navigationTitle("Home")
                         .navigationBarTitleDisplayMode(.large)
                         .navigationBarHidden(composeHidesNavigationBar)
@@ -264,7 +264,7 @@ struct ContentView: View {
 
                 NavigationView {
                     SharedComposeHost(selectedTab: $selectedTab)
-                        .ignoresSafeArea(.all, edges: [.top, .bottom])
+                        .ignoresSafeArea(.all, edges: [.bottom])
                         .navigationTitle("Habits")
                         .navigationBarTitleDisplayMode(.large)
                         .navigationBarHidden(composeHidesNavigationBar)
@@ -276,7 +276,7 @@ struct ContentView: View {
 
                 NavigationView {
                     SharedComposeHost(selectedTab: $selectedTab)
-                        .ignoresSafeArea(.all, edges: [.top, .bottom])
+                        .ignoresSafeArea(.all, edges: [.bottom])
                         .navigationTitle("Chat")
                         .navigationBarTitleDisplayMode(.large)
                         .navigationBarHidden(composeHidesNavigationBar)
@@ -288,7 +288,7 @@ struct ContentView: View {
 
                 NavigationView {
                     SharedComposeHost(selectedTab: $selectedTab)
-                        .ignoresSafeArea(.all, edges: [.top, .bottom])
+                        .ignoresSafeArea(.all, edges: [.bottom])
                         .navigationTitle("Meditate")
                         .navigationBarTitleDisplayMode(.large)
                         .navigationBarHidden(composeHidesNavigationBar)
@@ -300,7 +300,7 @@ struct ContentView: View {
 
                 NavigationView {
                     SharedComposeHost(selectedTab: $selectedTab)
-                        .ignoresSafeArea(.all, edges: [.top, .bottom])
+                        .ignoresSafeArea(.all, edges: [.bottom])
                         .navigationTitle("Profile")
                         .navigationBarTitleDisplayMode(.large)
                         .navigationBarHidden(composeHidesNavigationBar)
