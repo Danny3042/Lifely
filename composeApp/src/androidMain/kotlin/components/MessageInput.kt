@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material3.ElevatedCard
@@ -39,6 +40,8 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import keyboardUtil.hideKeyboard
 import keyboardUtil.onDoneHideKeyboardAction
+import tts.TtsSettings
+import tts.getTtsService
 import java.io.InputStream
 
 @Composable
@@ -119,22 +122,35 @@ actual fun MessageInput(
                         null
                     },
                     trailingIcon = {
-                        IconButton(
-                            enabled = enabled,
-                            onClick = {
-                                if (userMessage.isNotBlank() || selectedImage != null) {
-                                    onSendMessage(userMessage, selectedImage)
-                                    userMessage = ""
-                                    selectedImage = null
-                                    selectedImageBitmap = null
-                                    hideKeyboard()
-                                }
-                            },
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Rounded.Send,
-                                contentDescription = "Send message",
-                            )
+                        Row {
+                            // TTS toggle button
+                            IconButton(onClick = {
+                                TtsSettings.enabled = !TtsSettings.enabled
+                                if (!TtsSettings.enabled) try { getTtsService().stop() } catch (_: Throwable) {}
+                            }) {
+                                Icon(
+                                    imageVector = if (TtsSettings.enabled) Icons.Default.AutoAwesome else Icons.Default.AutoAwesome,
+                                    contentDescription = "Toggle TTS",
+                                )
+                            }
+
+                            IconButton(
+                                enabled = enabled,
+                                onClick = {
+                                    if (userMessage.isNotBlank() || selectedImage != null) {
+                                        onSendMessage(userMessage, selectedImage)
+                                        userMessage = ""
+                                        selectedImage = null
+                                        selectedImageBitmap = null
+                                        hideKeyboard()
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Rounded.Send,
+                                    contentDescription = "Send message",
+                                )
+                            }
                         }
                     },
                     modifier = Modifier

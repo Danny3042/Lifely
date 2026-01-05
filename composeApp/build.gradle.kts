@@ -1,6 +1,7 @@
 import com.codingfeline.buildkonfig.compiler.FieldSpec
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -24,7 +25,6 @@ kotlin {
             }
         }
     }
-
 
     listOf(
         iosX64(),
@@ -178,3 +178,4 @@ dependencies {
     implementation(libs.play.services.measurement.api)
     implementation(libs.firebase.crashlytics)
 }
+

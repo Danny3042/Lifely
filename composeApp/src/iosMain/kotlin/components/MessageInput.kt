@@ -1,6 +1,5 @@
 package components
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,10 +7,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material3.ElevatedCard
@@ -24,14 +23,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
@@ -45,6 +40,21 @@ import platform.Foundation.NSData
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSOperationQueue
 import platform.posix.memcpy
+import tts.TtsSettings
+import tts.getTtsService
+
+@OptIn(ExperimentalForeignApi::class)
+private fun nsDataToByteArray(nsData: NSData): ByteArray {
+    val length = nsData.length.toInt()
+    val bytes = ByteArray(length)
+    if (length > 0 && nsData.bytes != null) {
+        bytes.usePinned { pinned ->
+            // addressOf usage is inside this opted-in helper
+            memcpy(pinned.addressOf(0), nsData.bytes, length.convert())
+        }
+    }
+    return bytes
+}
 
 @OptIn(ExperimentalForeignApi::class)
 @Composable
@@ -67,13 +77,8 @@ actual fun MessageInput(
             // Expect NSData under "data"
             val nsData = userInfo?.get("data") as? NSData
             nsData?.let {
-                val length = it.length.toInt()
-                val bytes = ByteArray(length)
-                if (length > 0 && it.bytes != null) {
-                    bytes.usePinned { pinned ->
-                        memcpy(pinned.addressOf(0), it.bytes, length.convert())
-                    }
-                }
+                // use the opted-in helper to convert
+                val bytes = nsDataToByteArray(it)
                 selectedImage = bytes
             }
         }
@@ -131,21 +136,30 @@ actual fun MessageInput(
                         null
                     },
                     trailingIcon = {
-                        IconButton(
-                            enabled = enabled,
-                            onClick = {
-                                if (userMessage.isNotBlank() || selectedImage != null) {
-                                    onSendMessage(userMessage, selectedImage)
-                                    userMessage = ""
-                                    selectedImage = null
-                                    hideKeyboard()
-                                }
-                            },
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Rounded.Send,
-                                contentDescription = "Send message",
-                            )
+                        Row {
+                            IconButton(onClick = {
+                                TtsSettings.enabled = !TtsSettings.enabled
+                                if (!TtsSettings.enabled) try { getTtsService().stop() } catch (_: Throwable) {}
+                            }) {
+                                Icon(Icons.Default.AutoAwesome, "Toggle TTS")
+                            }
+
+                            IconButton(
+                                enabled = enabled,
+                                onClick = {
+                                    if (userMessage.isNotBlank() || selectedImage != null) {
+                                        onSendMessage(userMessage, selectedImage)
+                                        userMessage = ""
+                                        selectedImage = null
+                                        hideKeyboard()
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Rounded.Send,
+                                    contentDescription = "Send message",
+                                )
+                            }
                         }
                     },
                     modifier = Modifier.weight(1f)

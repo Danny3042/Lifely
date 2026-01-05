@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import service.GenerativeAiService
+import tts.getTtsService
 
 @Composable
 fun AIDebug() {
@@ -34,6 +35,21 @@ fun AIDebug() {
             }
         }) {
             Text("Test Gemini")
+        }
+
+        Button(onClick = {
+            output = "Requesting Gemini TTS..."
+            scope.launch {
+                try {
+                    // Trigger the cross-platform TTS service using Gemini (cloud) path
+                    getTtsService().speak("Hello from Gemini TTS test", useGemini = true)
+                    output = "TTS requested"
+                } catch (e: Exception) {
+                    output = "TTS error: ${e.message}"
+                }
+            }
+        }, modifier = Modifier.padding(top = 12.dp)) {
+            Text("Test Gemini TTS")
         }
 
         output?.let {

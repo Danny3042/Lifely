@@ -1,11 +1,7 @@
 package platform
 
-import android.content.Context
 import java.io.File
 import java.io.FileOutputStream
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlin.jvm.JvmStatic
 
 actual object FileIO {
     private fun appFilesDir(): File {
@@ -23,8 +19,8 @@ actual object FileIO {
         return f.readText()
     }
 
-    actual fun saveAttachment(id: String, bytes: ByteArray): String {
-        val filename = "attachments/${id}.jpg"
+    actual fun saveAttachment(id: String, bytes: ByteArray, ext: String): String {
+        val filename = "attachments/${id}.${ext}"
         val f = File(appFilesDir(), filename)
         f.parentFile?.mkdirs()
         FileOutputStream(f).use { it.write(bytes) }
@@ -36,4 +32,3 @@ actual object FileIO {
         return if (f.exists()) f.readBytes() else null
     }
 }
-

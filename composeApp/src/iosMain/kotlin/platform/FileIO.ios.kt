@@ -67,8 +67,8 @@ actual object FileIO {
         }
     }
 
-    actual fun saveAttachment(id: String, bytes: ByteArray): String {
-        val filename = "attachments/${id}.bin"
+    actual fun saveAttachment(id: String, bytes: ByteArray, ext: String): String {
+        val filename = "attachments/${id}.${ext}"
         val full = fullPath(filename)
         ensureParentDir(full)
         val mode = "wb"

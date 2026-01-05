@@ -18,7 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -28,8 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.material3.Button
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import components.ChatBubbleItem
 import components.MessageInput
@@ -37,6 +34,9 @@ import kotlinx.coroutines.launch
 import model.ChatViewModel
 import service.GenerativeAiService
 import utils.isAndroid
+import components.ModelChatMessage
+import tts.getTtsService
+import tts.TtsSettings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,9 +49,10 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     var showNewMessageChip by remember { mutableStateOf(false) }
     val messages = chatUiState.messages
+    // Use shared TTS setting
 
     // When messages change, auto-scroll only if the user is already near the bottom.
-    LaunchedEffect(messages.size) {
+    LaunchedEffect(messages.size, TtsSettings.enabled) {
         if (messages.isEmpty()) return@LaunchedEffect
         val lastIndex = messages.size - 1
         // Determine currently visible last item; if it's within 1 item of the end, auto-scroll.
@@ -65,6 +66,15 @@ fun ChatScreen(
         } else {
             // show new message affordance
             showNewMessageChip = true
+        }
+
+        // Speak latest model message when TTS is enabled
+        val lastMessage = messages.getOrNull(lastIndex)
+        if (TtsSettings.enabled && lastMessage is ModelChatMessage.LoadedModelMessage) {
+            // Use Gemini TTS where available
+            try {
+                getTtsService().speak(lastMessage.text, useGemini = true)
+            } catch (_: Throwable) {}
         }
     }
 
@@ -115,6 +125,7 @@ fun ChatScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
             ) {
+                // TTS toggle moved into the message input box (MessageInput.trailings)
                 // Show a small button when new messages arrive and user is scrolled up
                 if (showNewMessageChip) {
                     Button(
