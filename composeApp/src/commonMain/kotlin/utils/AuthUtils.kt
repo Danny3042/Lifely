@@ -18,11 +18,9 @@ suspend fun deleteUser(auth: FirebaseAuth, navController: NavController, snackBa
     if (user != null) {
         try {
             user.delete()
-            println("User account deleted.")
             snackBarHostState.showSnackbar("User account deleted.")
             navController.navigate("LoginScreen")
         } catch (e: Exception) {
-            println("User account deletion failed: ${e.message}")
             snackBarHostState.showSnackbar("User account deletion failed")
         }
     }

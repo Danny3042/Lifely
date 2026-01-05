@@ -27,6 +27,5 @@ object PlatformBridge {
         safeAreaBottom = bottom
         safeAreaLeading = leading
         safeAreaTrailing = trailing
-        println("PlatformBridge: setSafeAreaInsets top=$top bottom=$bottom leading=$leading trailing=$trailing")
     }
 }

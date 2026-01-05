@@ -28,10 +28,8 @@ fun AIDebug() {
                 try {
                     val resp = GenerativeAiService.instance.getSuggestions(listOf("Give a one-line test suggestion."))
                     output = resp ?: "(no response)"
-                    println("Gemini test success: $resp")
                 } catch (e: Exception) {
                     output = "Error: ${e.message}"
-                    println("Gemini test error: ${e.stackTraceToString()}")
                 }
             }
         }) {
@@ -43,4 +41,3 @@ fun AIDebug() {
         }
     }
 }
-

@@ -11,9 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.ContentAlpha
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
@@ -87,11 +86,9 @@ class Authentication {
         var onFirebaseResult: (Result<FirebaseUser?>) -> Unit = { result ->
             if (result.isSuccess) {
                 val user = result.getOrNull()
-                println("User: $user")
                 navController.navigate(HeroScreen)
             } else {
                 val error = result.exceptionOrNull()
-                println("Error Result: ${result.exceptionOrNull()?.message}")
             }
         }
 
@@ -303,7 +300,6 @@ class Authentication {
                                     password = userPassword
                                 )
                                 firebaseUser = result.user
-                                println("User account created: $firebaseUser")
                                 navController.navigate(HeroScreen)
                             } catch (e: Exception) {
                                 val result = auth.signInWithEmailAndPassword(

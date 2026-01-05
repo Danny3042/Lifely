@@ -133,7 +133,7 @@ fun ProfilePage(navController: NavController) {
                         try {
                             navController.navigate(DarkModeSettingsPageScreen)
                         } catch (e: Throwable) {
-                            println("ProfilePage: failed to navigate to DarkModeSettingsPageScreen: ${e.message}")
+                            // logging removed
                         }
                     },
                     leadingIcon = {

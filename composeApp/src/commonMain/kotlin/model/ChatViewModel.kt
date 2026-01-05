@@ -60,7 +60,6 @@ class ChatViewModel(aiService: GenerativeAiService) {
     }
 
     fun onCleared() {
-        println("ChatViewModel: onCleared")
         coroutineScope.cancel()
     }
 }

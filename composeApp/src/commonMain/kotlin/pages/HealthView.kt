@@ -95,7 +95,7 @@ fun ExpandableCard(title: String, onSave: (Float) -> Unit) {
                         val success = sendMoodRatingToGeminiChat(rating)
                         if (success) {
                             val suggestions = fetchSuggestionsFromGemini()
-                            println("Suggestions: $suggestions")
+                            // logging removed
                         }
                     }
                 })
@@ -217,7 +217,7 @@ fun AlertDialogExample(
         confirmButton = {
             Button(
                 onClick = {
-                    println(" AlertDialogExample: Confirm button clicked")
+                    // logging removed
                     onConfirmation()
                     onDismissRequest() },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)

@@ -1,3 +1,4 @@
+
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -16,7 +17,6 @@ import cafe.adriel.voyager.navigator.tab.Tab
 import cafe.adriel.voyager.navigator.tab.TabDisposable
 import cafe.adriel.voyager.navigator.tab.TabNavigator
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.filterNotNull
 import platform.PlatformBridge
 import tabs.ChatTab
 import tabs.HabitsTab
@@ -59,7 +59,6 @@ fun HeroScreen(navController: NavHostController, showBottomBar: Boolean = true) 
         // If a tab was requested before HeroScreen composition, apply it immediately
         LaunchedEffect(Unit) {
             val initial = PlatformBridge.requestedTabName
-            println("HeroScreen: initial requestedTabName = $initial")
             if (initial != null) {
                 when (initial) {
                     "HomePage", "Home" -> tabNavigator.current = homeTab
@@ -76,7 +75,6 @@ fun HeroScreen(navController: NavHostController, showBottomBar: Boolean = true) 
         LaunchedEffect(Unit) {
             snapshotFlow { PlatformBridge.requestedTabSignal }
                 .collectLatest {
-                    println("HeroScreen: received requestedTabSignal = ${PlatformBridge.requestedTabSignal}, name=${PlatformBridge.requestedTabName}")
                     val requested = PlatformBridge.requestedTabName
                     if (requested != null) {
                         when (requested) {

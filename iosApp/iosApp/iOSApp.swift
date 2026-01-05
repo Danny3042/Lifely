@@ -172,20 +172,19 @@ struct iOSApp: App {
                     switch status {
                     case .authorized:
                         // Tracking authorized
-                        print("Tracking authorized")
+                        break
                     case .denied:
                         // Tracking denied
-                        print("Tracking denied")
                         Analytics.setAnalyticsCollectionEnabled(false)
                     case .restricted:
                         // Tracking restricted
-                        print("Tracking restricted")
+                        break
                     case .notDetermined:
                         // Tracking not determined
-                        print("Tracking not determined")
+                        break
                     @unknown default:
                         // Handle unknown status
-                        print("Unknown tracking status")
+                        break
                     }
                 }
             

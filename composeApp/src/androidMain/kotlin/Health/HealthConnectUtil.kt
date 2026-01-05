@@ -1,7 +1,6 @@
 package Health
 
 import android.content.Context
-import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.DistanceRecord
@@ -149,7 +148,6 @@ object HealthConnectUtils {
                 )
                 trackTime = trackTime.plusDays(1).toLocalDate().atStartOfDay()
             }
-            Log.d("Data", stepsData.toString())
             return stepsData
         }
         return emptyList()
@@ -234,7 +232,6 @@ object HealthConnectUtils {
                 )
                 trackTime = trackTime.plusDays(1)
             }
-            Log.d("Data", distanceData.toString())
             return distanceData
         }
         return emptyList()
@@ -318,7 +315,6 @@ object HealthConnectUtils {
                 )
                 trackTime = trackTime.plusDays(1)
             }
-            Log.d("Data", minutesData.toString())
             return minutesData
         }
         return emptyList()
@@ -387,7 +383,6 @@ object HealthConnectUtils {
             }
         }
 
-        Log.d("data", sleepData.toString())
         return sleepData
     }
 

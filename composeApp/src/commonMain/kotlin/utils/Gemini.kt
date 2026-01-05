@@ -24,8 +24,7 @@ suspend fun getGeminiSuggestions(results: List<String>, sleepRating: Int, moodRa
             val response = instance.getSuggestions(promptList)
             response?.split(",")?.map { it.trim() } ?: emptyList()
         } catch (e: Exception) {
-            // Log the error and return an empty list so callers can handle gracefully
-            println("Gemini API call failed: ${e.message}")
+            // failure suppressed - logging removed
             emptyList()
         }
     }

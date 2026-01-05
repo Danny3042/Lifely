@@ -53,9 +53,6 @@ override fun requestAuthorization(): Boolean {
 
     healthStore.requestAuthorizationToShareTypes(null, typesToRead) { success, error ->
         isAuthorized = success
-        if (!success) {
-            println("HealthKit authorization failed: ${error?.localizedDescription}")
-        }
     }
     return isAuthorized
 }

@@ -5,7 +5,6 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.util.Log
 
 actual typealias PlatformContext = Context
 actual class StepCounter actual constructor(private val context: PlatformContext) : SensorEventListener {
@@ -40,19 +39,15 @@ actual class StepCounter actual constructor(private val context: PlatformContext
         when (accuracy) {
             SensorManager.SENSOR_STATUS_ACCURACY_HIGH -> {
                 // Sensor has high accuracy
-                Log.d("SensorAccuracy", "Sensor has high accuracy")
             }
             SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM -> {
                 // Sensor has medium accuracy
-                Log.d("SensorAccuracy", "Sensor has medium accuracy")
             }
             SensorManager.SENSOR_STATUS_ACCURACY_LOW -> {
                 // Sensor has low accuracy
-                Log.d("SensorAccuracy", "Sensor has low accuracy")
             }
             SensorManager.SENSOR_STATUS_UNRELIABLE -> {
                 // Sensor is unreliable
-                Log.d("SensorAccuracy", "Sensor is unreliable")
             }
         }
     }

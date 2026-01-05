@@ -22,8 +22,6 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     private func postNavigateTo(route: String) {
-        // debug log to help diagnose navigation bridging
-        print("AuthManager.postNavigateTo -> \(route)")
         NotificationCenter.default.post(name: Notifications.navigate, object: nil, userInfo: ["route": route])
     }
 

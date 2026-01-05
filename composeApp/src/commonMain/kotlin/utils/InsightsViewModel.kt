@@ -1,8 +1,8 @@
 package utils
 
-import androidx.lifecycle.ViewModel
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.ViewModel
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
@@ -30,7 +30,7 @@ class InsightsViewModel : ViewModel() {
         try {
             ChartPublisher.publishTotals(totals)
         } catch (e: Throwable) {
-            println("InsightsViewModel: failed to publish totals to platform: ${e.message}")
+            // logging removed
         }
     }
 

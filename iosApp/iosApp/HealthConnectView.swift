@@ -32,34 +32,22 @@ struct HealthConnectView: View {
                         if success {
                             // Fetch the actual data from HealthKit
                             healthKitManager.getSteps { stepsData, error  in
-                                if let error = error {
-                                    // Handle the error
-                                    print("Error: \(error)")
-                                } else {
+                                if error == nil {
                                     steps = stepsData
                                 }
                             }
                             healthKitManager.getActiveMinutes { activeMinutesData, error  in
-                                if let error = error {
-                                    // Handle the error
-                                    print("Error: \(error)")
-                                } else {
+                                if error == nil {
                                     mins = activeMinutesData
                                 }
                             }
                             healthKitManager.getDistance { distanceData, error in
-                                if let error = error {
-                                    // Handle the error
-                                    print("Error: \(error)")
-                                } else {
+                                if error == nil {
                                     distance = distanceData
                                 }
                             }
                             healthKitManager.getSleepDuration { sleepDurationData, error in
-                                if let error = error {
-                                    // Handle the error
-                                    print("Error: \(error)")
-                                } else {
+                                if error == nil {
                                     sleepDuration = sleepDurationData
                                 }
                             }

@@ -1,3 +1,4 @@
+
 import Authentication.Authentication
 import Authentication.LoginScreen
 import Authentication.ResetPasswordScreen
@@ -5,6 +6,10 @@ import Authentication.SignUpScreen
 import Colors.DarkColors
 import Colors.LightColors
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -14,56 +19,40 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import androidx.navigation.NavDestination
-import androidx.navigation.NavGraph
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.mmk.kmpnotifier.notification.NotifierManager
-import com.mmk.kmpnotifier.notification.configuration.NotificationPlatformConfiguration
 import config.VERSION_NUMBER
+import kotlinx.coroutines.flow.collectLatest
+import pages.ChartsPageScreen
 import pages.HomePageScreen
 import pages.InsightsPage
 import pages.InsightsPageScreen
-import pages.ChartsPageScreen
 import pages.STRESS_MANAGEMENT_PAGE_ROUTE
 import pages.StressManagementPage
-import pages.Timer
 import pages.TimerScreenContent
+import platform.ChartBridge
+import platform.Foundation.NSDictionary
+import platform.Foundation.NSNotification
+import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSOperationQueue
+import platform.PlatformBridge
 import sub_pages.AboutPage
 import sub_pages.AboutPageScreen
 import sub_pages.CompletedHabitsPage
 import sub_pages.CompletedHabitsPageRoute
+import sub_pages.DarkModeSettingsPage
+import sub_pages.DarkModeSettingsPageScreen
 import sub_pages.MEDITATION_PAGE_ROUTE
 import sub_pages.MeditationPage
 import sub_pages.NotificationPage
 import sub_pages.NotificationPageScreen
-import sub_pages.DarkModeSettingsPage
-import sub_pages.DarkModeSettingsPageScreen
 import tabs.HomeTab
-import tabs.ProfileTab
 import utils.SettingsManager
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.ui.Modifier
-import androidx.compose.material3.Text
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.flow.collectLatest
-import platform.ChartBridge
-import platform.Foundation.NSNotification
-import platform.Foundation.NSNotificationCenter
-import platform.Foundation.NSDictionary
-import platform.Foundation.NSOperationQueue
-import platform.PlatformBridge
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,7 +78,6 @@ actual fun PlatformApp() {
             val userInfo = notification?.userInfo as? NSDictionary
             topInset = (userInfo?.objectForKey("top") as? Double) ?: 0.0
             bottomInset = (userInfo?.objectForKey("bottom") as? Double) ?: 0.0
-            println("PlatformIos: Safe area updated - top: $topInset, bottom: $bottomInset")
         }
         onDispose {
             if (observer != null) {
@@ -103,7 +91,6 @@ actual fun PlatformApp() {
             isDarkMode = SettingsManager.loadDarkMode()
             useSystemDefault = SettingsManager.loadUseSystemDefault()
         } catch (e: Throwable) {
-            println("PlatformIos: failed loading dark mode settings: ${e.message}")
             isDarkMode = false
             useSystemDefault = true
         }
@@ -113,7 +100,6 @@ actual fun PlatformApp() {
         try {
             SettingsManager.saveDarkMode(isDarkMode)
         } catch (e: Throwable) {
-            println("PlatformIos: failed saving dark mode: ${e.message}")
         }
     }
 
@@ -121,14 +107,12 @@ actual fun PlatformApp() {
         try {
             SettingsManager.saveUseSystemDefault(useSystemDefault)
         } catch (e: Throwable) {
-            println("PlatformIos: failed saving useSystemDefault: ${e.message}")
         }
     }
 
     // Notify iOS (Swift) when dark mode or 'use system default' changes so native bars can update
     LaunchedEffect(isDarkMode, useSystemDefault) {
         try {
-            println("PlatformIos: posting ComposeDarkModeChanged dark=$isDarkMode useSystem=$useSystemDefault")
             NSOperationQueue.mainQueue.addOperationWithBlock {
                 val userInfo = mapOf("dark" to isDarkMode, "useSystem" to useSystemDefault)
                 NSNotificationCenter.defaultCenter.postNotificationName(
@@ -138,7 +122,6 @@ actual fun PlatformApp() {
                 )
             }
         } catch (e: Throwable) {
-            println("PlatformIos: failed posting ComposeDarkModeChanged: ${e.message}")
         }
     }
 
@@ -160,10 +143,8 @@ actual fun PlatformApp() {
         val route = pendingRoute
         if (!route.isNullOrEmpty()) {
             try {
-                println("PlatformIos: LaunchedEffect navigating to route: $route")
                 navController.navigate(route)
             } catch (e: Throwable) {
-                println("Failed to navigate from LaunchedEffect to route: $route, error: ${e.message}")
             }
             pendingRoute = null
         }
@@ -176,26 +157,21 @@ actual fun PlatformApp() {
             `object` = null,
             queue = NSOperationQueue.mainQueue
         ) { notification: NSNotification? ->
-            println("PlatformIos: Received AuthManagerNavigateToRoute notification")
             val userInfo = notification?.userInfo as? NSDictionary
             val route = (userInfo?.objectForKey("route") as? String)
-            println("PlatformIos: route from notification = $route")
             if (!route.isNullOrEmpty()) {
                 try {
                     // If the route looks like a tab request, set the PlatformBridge requestedTab and request navigation
                     val tabRoutes = setOf("HomePage", "HabitCoachingPage", "ChatScreen", "meditation", "profile", "Home", "Habits", "Chat", "Meditate", "Profile")
                     if (tabRoutes.contains(route)) {
                         // Write requested tab name and increment signal so Compose observers detect repeated clicks
-                        println("PlatformIos: requesting Compose tab -> $route")
                         PlatformBridge.requestedTabName = route
                         PlatformBridge.requestedTabSignal = PlatformBridge.requestedTabSignal + 1
-                        println("PlatformIos: requestedTabSignal now = ${PlatformBridge.requestedTabSignal}")
                         pendingRoute = "HeroScreen"
                     } else {
                         pendingRoute = route
                     }
                 } catch (e: Throwable) {
-                    println("Failed to handle notification route: $route, error: ${e.message}")
                 }
             }
         }
@@ -214,7 +190,6 @@ actual fun PlatformApp() {
                 // If route requests the ChartsPage on iOS, ask native Swift to open the native Charts view
                 try {
                     if (route == ChartsPageScreen) {
-                        println("PlatformIos: requested native Charts page -> posting OpenNativeCharts to Swift")
                         NSOperationQueue.mainQueue.addOperationWithBlock {
                             NSNotificationCenter.defaultCenter.postNotificationName(
                                 aName = "OpenNativeCharts",
@@ -227,18 +202,15 @@ actual fun PlatformApp() {
                         try {
                             ChartBridge.publishSample()
                         } catch (e: Throwable) {
-                            println("PlatformIos: failed to publish sample chart data: ${e.message}")
                         }
 
                         // Clear the requestedRoute so it can be requested again later
                         PlatformBridge.requestedRoute = null
                     } else {
-                        println("PlatformIos: PlatformBridge requested route = $route")
                         pendingRoute = route
                         PlatformBridge.requestedRoute = null
                     }
                 } catch (e: Throwable) {
-                    println("PlatformIos: error handling requestedRoute: ${e.message}")
                 }
             }
         }
@@ -250,8 +222,7 @@ actual fun PlatformApp() {
         val listener = NavController.OnDestinationChangedListener { controller, destination, arguments ->
             try {
                 val destName = destination.route ?: destination.toString()
-                println("PlatformIos: destination changed -> $destName")
-                
+
                 // Notify iOS about the current route so it can show/hide back button
                 NSOperationQueue.mainQueue.addOperationWithBlock {
                     val userInfo = mapOf("route" to destName)
@@ -264,7 +235,6 @@ actual fun PlatformApp() {
                 
                 if (!posted && destName == "HeroScreen") {
                     posted = true
-                    println("PlatformIos: Posting ComposeReady because destination is HeroScreen")
                     NSOperationQueue.mainQueue.addOperationWithBlock {
                         NSNotificationCenter.defaultCenter.postNotificationName(
                             aName = "ComposeReady",
@@ -273,7 +243,6 @@ actual fun PlatformApp() {
                     }
                 }
             } catch (e: Throwable) {
-                println("PlatformIos: OnDestinationChanged listener error: ${e.message}")
             }
         }
         navController.addOnDestinationChangedListener(listener)
@@ -289,16 +258,12 @@ actual fun PlatformApp() {
             `object` = null,
             queue = NSOperationQueue.mainQueue
         ) { notification: NSNotification? ->
-            println("PlatformIos: Back button pressed from iOS")
             try {
                 if (navController.previousBackStackEntry != null) {
                     navController.popBackStack()
-                    println("PlatformIos: Navigated back successfully")
                 } else {
-                    println("PlatformIos: No back stack entry to pop")
                 }
             } catch (e: Throwable) {
-                println("PlatformIos: Error handling back press: ${e.message}")
             }
         }
         onDispose {

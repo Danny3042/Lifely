@@ -39,8 +39,6 @@ class SafeAreaInsetsManager {
                     end = trailing.dp,
                     bottom = bottom.dp
                 )
-                
-                println("SafeAreaInsetsManager: Updated insets - top=$top, bottom=$bottom, leading=$leading, trailing=$trailing")
             }
         }
     }

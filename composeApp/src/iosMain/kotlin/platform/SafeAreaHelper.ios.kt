@@ -29,7 +29,6 @@ object IOSSafeAreaBridge {
             bottom = (userInfo?.get("bottom") as? NSNumber)?.doubleValue ?: bottom
             leading = (userInfo?.get("leading") as? NSNumber)?.doubleValue ?: leading
             trailing = (userInfo?.get("trailing") as? NSNumber)?.doubleValue ?: trailing
-            println("IOSSafeAreaBridge: received notification insets top=$top bottom=$bottom leading=$leading trailing=$trailing")
         }
     }
 

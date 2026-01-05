@@ -4,7 +4,6 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 @Composable
 @Preview
 fun App() {
-    println("App(): PlatformApp will be invoked")
     PlatformApp()
 }
 

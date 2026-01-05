@@ -1,8 +1,8 @@
 package platform
 
 import kotlinx.datetime.Clock
-import platform.Foundation.NSOperationQueue
 import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSOperationQueue
 
 // Native implementation used by iOS/other native targets. Converts per-day totals into
 // timestamped data and posts a ChartDataUpdated notification. iOS-specific actual may
@@ -29,8 +29,7 @@ actual object ChartPublisher {
                 )
             }
         } catch (_: Throwable) {
-            // If posting fails silently log to console
-            println("ChartPublisher.native: failed to post chart data notification")
+            // failure suppressed - logging removed
         }
     }
 }

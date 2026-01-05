@@ -52,10 +52,6 @@ struct SharedComposeHost: View {
         GeometryReader { geometry in
             ComposeViewController(onClose: nil)
                 .onAppear {
-                    print("=== SharedComposeHost.onAppear ===")
-                    print("  - selectedTab: \(selectedTab)")
-                    print("  - geometry size: \(geometry.size)")
-                    
                     // Only register observer once globally
                     if !observerAdded {
                         observerAdded = true
@@ -66,7 +62,6 @@ struct SharedComposeHost: View {
                             object: nil,
                             queue: .main
                         ) { _ in
-                            print("SharedComposeHost: ComposeReady notification received")
                             composeReady = true
                             if let queued = lastRequestedRoute {
                                 sendRouteWithRetries(route: queued)
@@ -81,7 +76,6 @@ struct SharedComposeHost: View {
                             queue: .main
                         ) { notification in
                             if let route = notification.userInfo?["route"] as? String {
-                                print("SharedComposeHost: Route changed to: \(route)")
                                 currentRoute = route
 
                                 // Show back button for sub-pages
@@ -90,19 +84,16 @@ struct SharedComposeHost: View {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                     showBackButton = !mainRoutes.contains(route)
                                 }
-                                print("SharedComposeHost: Show back button: \(showBackButton)")
                             }
                         }
                     }
 
                     let route = tabRoutes.indices.contains(selectedTab) ? tabRoutes[selectedTab] : "HomePage"
-                    print("SharedComposeHost: requesting initial route: \(route)")
                     requestRoute(route)
                 }
                 .onChange(of: selectedTab) { newIndex in
                     guard newIndex >= 0 && newIndex < tabRoutes.count else { return }
                     let route = tabRoutes[newIndex]
-                    print("SharedComposeHost: *** TAB CHANGED to \(newIndex), navigating to route: \(route) ***")
                     requestRoute(route)
                 }
         }
@@ -125,7 +116,6 @@ struct SharedComposeHost: View {
     }
 
     private func handleBackButton() {
-        print("SharedComposeHost: Back button tapped")
         // Add haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
         impactFeedback.impactOccurred()
@@ -147,7 +137,6 @@ struct SharedComposeHost: View {
     }
 
     private func sendRouteWithRetries(route: String) {
-        print("SharedComposeHost: sendRouteWithRetries for route: \(route)")
         AuthManager.shared.requestNavigateTo(route: route)
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { 
@@ -179,11 +168,8 @@ struct ComposeViewController: UIViewControllerRepresentable {
     }
     
     func makeUIViewController(context: Context) -> UIViewController {
-        print("ComposeViewController.makeUIViewController called")
-        
         // Prevent multiple simultaneous creations
         if ComposeViewController.isCreating {
-            print("ComposeViewController: Already creating, waiting...")
             // Return a placeholder
             let placeholder = UIViewController()
             placeholder.view.backgroundColor = .clear
@@ -192,7 +178,6 @@ struct ComposeViewController: UIViewControllerRepresentable {
         
         // Return the shared instance if it exists
         if let existing = ComposeViewController.sharedComposeVC {
-            print("ComposeViewController: Reusing existing Compose VC")
             return existing
         }
         
@@ -200,7 +185,6 @@ struct ComposeViewController: UIViewControllerRepresentable {
         ComposeViewController.isCreating = true
         let composeVC = MainViewControllerKt.MainViewController()
         composeVC.view.backgroundColor = .clear
-        print("ComposeViewController: Created new Compose VC")
         
         // Store as singleton
         ComposeViewController.sharedComposeVC = composeVC
@@ -215,10 +199,7 @@ struct ComposeViewController: UIViewControllerRepresentable {
             guard let vc = ComposeViewController.sharedComposeVC else { return }
             vc.view.isHidden = false
             if let sup = vc.view.superview {
-                print("ComposeViewController: bringing existing sharedComposeVC.view to front of its superview")
                 sup.bringSubviewToFront(vc.view)
-            } else {
-                print("ComposeViewController: sharedComposeVC.view has no superview yet — nothing to bring to front")
             }
         }
     }
@@ -380,8 +361,6 @@ struct ContentView: View {
             }
         }
         .onAppear {
-            print("=== ContentView.onAppear ===")
-            
             // Force update window interface style
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
                 windowScene.windows.forEach { window in
@@ -400,12 +379,10 @@ struct ContentView: View {
 
             // Ensure Compose shared VC is visible when Compose reports navigation changes or is ready
             NotificationCenter.default.addObserver(forName: Notification.Name("ComposeNavigationChanged"), object: nil, queue: .main) { note in
-                print("ContentView: ComposeNavigationChanged received - ensuring Compose VC visible")
                 ComposeViewController.ensureSharedVisible()
             }
 
             NotificationCenter.default.addObserver(forName: Notification.Name("ComposeReady"), object: nil, queue: .main) { _ in
-                print("ContentView: ComposeReady received - ensuring Compose VC visible")
                 ComposeViewController.ensureSharedVisible()
             }
 
@@ -438,7 +415,6 @@ struct ContentView: View {
 
             // Listen for native Charts open request from Kotlin/Compose (PlatformBridge -> PlatformIos)
             NotificationCenter.default.addObserver(forName: Notification.Name("OpenNativeCharts"), object: nil, queue: .main) { _ in
-                print("ContentView: OpenNativeCharts received - showing Charts sheet")
                 showChartsSheet = true
                 // ensure compose VC is visible in case it's needed for shared host
                 ComposeViewController.ensureSharedVisible()
@@ -446,7 +422,6 @@ struct ContentView: View {
 
             // Listen for dark mode updates from Compose and apply native style & appearances
             NotificationCenter.default.addObserver(forName: Notification.Name("ComposeDarkModeChanged"), object: nil, queue: .main) { note in
-                print("ContentView: ComposeDarkModeChanged received: \(String(describing: note.userInfo))")
                 guard let userInfo = note.userInfo as? [String: Any] else { return }
                 let dark = userInfo["dark"] as? Bool
                 let useSystem = userInfo["useSystem"] as? Bool ?? true
@@ -516,8 +491,6 @@ class ChartDataModel: ObservableObject {
                 self.update(from: arrNS)
             } else if let dict = note.userInfo as? [AnyHashable: Any], let arr = dict["data"] as? NSArray {
                 self.update(from: arr)
-            } else {
-                print("ChartDataModel: unsupported payload: \(String(describing: note.userInfo))")
             }
         }
 

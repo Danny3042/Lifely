@@ -2,7 +2,6 @@ package screens
 
 import Health.HealthConnectUtils
 import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.clickable
@@ -51,16 +50,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import kotlinx.coroutines.launch
+import pages.ChartsPageScreen
+import platform.PlatformBridge
+import utils.HabitStorage
 import utils.HealthKitService
 import utils.RealTimeGreeting
-import utils.SimpleLineChart
-import utils.HabitStorage
-import platform.PlatformBridge
-import pages.ChartsPageScreen
-import androidx.core.net.toUri
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -174,7 +172,6 @@ actual fun HealthConnectScreen(healthKitService: HealthKitService) {
                                 )
                             ) { shortcut ->
                                 ShortcutCard(shortcut) {
-                                    println("Shortcut clicked: ${shortcut.title}")
                                     if (shortcut.title == "Charts") {
                                         PlatformBridge.requestedRoute = ChartsPageScreen
                                         PlatformBridge.requestedRouteSignal += 1
