@@ -41,4 +41,17 @@ actual object SettingsManager {
             false
         }
     }
+
+    actual suspend fun saveNotificationsEnabled(enabled: Boolean) {
+        NSUserDefaults.standardUserDefaults.setBool(enabled, forKey = "notifications_enabled")
+    }
+
+    actual suspend fun loadNotificationsEnabled(): Boolean {
+        val defaults = NSUserDefaults.standardUserDefaults
+        return if (defaults.objectForKey("notifications_enabled") != null) {
+            defaults.boolForKey("notifications_enabled")
+        } else {
+            true
+        }
+    }
 }

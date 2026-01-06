@@ -1,7 +1,7 @@
-
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mmk.kmpnotifier.notification.NotifierManager
+import utils.SettingsManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,8 +48,13 @@ class TimerViewModel: ViewModel() {
 }
 
 // Add this function to send a notification
-fun sendTimerEndNotification() {
-    val notifier = NotifierManager.getLocalNotifier()
-    val notificationId = notifier.notify("Timer Finished", "Your timer has finished")
+suspend fun sendTimerEndNotification() {
+    // Check user preference before sending notifications
+    val enabled = runCatching { SettingsManager.loadNotificationsEnabled() }.getOrDefault(true)
+    if (!enabled) return
 
+    val notifier = runCatching { NotifierManager.getLocalNotifier() }.getOrNull()
+    runCatching {
+        notifier?.notify("Timer Finished", "Your timer has finished")
+    }
 }

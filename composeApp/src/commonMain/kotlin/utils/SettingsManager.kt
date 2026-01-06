@@ -10,4 +10,8 @@ expect object SettingsManager {
     // runtime developer mode toggle persisted locally
     suspend fun saveDevMode(enabled: Boolean)
     suspend fun loadDevMode(): Boolean
+
+    // Persist user preference for local notifications
+    suspend fun saveNotificationsEnabled(enabled: Boolean)
+    suspend fun loadNotificationsEnabled(): Boolean
 }

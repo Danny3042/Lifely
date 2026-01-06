@@ -41,4 +41,15 @@ actual object SettingsManager {
         val prefs = appContext.dataStore.data.first()
         return prefs[key] ?: false
     }
+
+    actual suspend fun saveNotificationsEnabled(enabled: Boolean) {
+        val key = booleanPreferencesKey("notifications_enabled")
+        appContext.dataStore.edit { it[key] = enabled }
+    }
+
+    actual suspend fun loadNotificationsEnabled(): Boolean {
+        val key = booleanPreferencesKey("notifications_enabled")
+        val prefs = appContext.dataStore.data.first()
+        return prefs[key] ?: true
+    }
 }

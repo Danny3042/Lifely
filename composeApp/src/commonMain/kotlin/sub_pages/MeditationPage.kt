@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.mmk.kmpnotifier.notification.NotifierManager
+import utils.SettingsManager
 import components.TimeEditDialog
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
@@ -81,10 +82,16 @@ fun MeditationPage(
                     duration = totalTime / 60
                 )
             )
-            notifier?.notify(
-                title = "Meditation Timer Finished",
-                body = "Your meditation session has ended. Take a moment to reflect.",
-            )
+            // Send notification only if user has enabled notifications
+            runCatching {
+                val enabled = SettingsManager.loadNotificationsEnabled()
+                if (enabled) {
+                    notifier?.notify(
+                        title = "Meditation Timer Finished",
+                        body = "Your meditation session has ended. Take a moment to reflect.",
+                    )
+                }
+            }
             onNavigateToInsights?.invoke()
         }
     }

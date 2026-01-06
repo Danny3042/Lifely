@@ -10,7 +10,7 @@ import org.danielramzani.HealthCompose.BuildKonfig
  */
 class GenerativeAiService(
      private val visionModel: GenerativeModel,
-     private val maxTokens: Int,
+     @Suppress("unused") private val maxTokens: Int,
      private val enabled: Boolean = true
 ) {
 
@@ -49,7 +49,7 @@ class GenerativeAiService(
                 prompt = prompt,
             )
             return response.text?.trim()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             return null
         }
     }
@@ -58,20 +58,39 @@ class GenerativeAiService(
         // Use BuildKonfig (set at build time). Do not call JVM-specific APIs in commonMain.
         var GEMINI_API_KEY: String = BuildKonfig.GEMINI_API_KEY
 
-        val instance: GenerativeAiService by lazy {
-            val enabled = GEMINI_API_KEY.isNotBlank()
+        // Runtime-configurable model name. You can change this at runtime via `setModelName("...")`.
+        var MODEL_NAME: String = "gemini-2.5-flash"
 
-            // Create the model even if apiKey is blank; the getSuggestions call will guard against disabled state.
+        // Backing instance that can be recreated if model name is changed.
+        private var _instance: GenerativeAiService? = null
+
+        // Lazily-created instance that uses the current MODEL_NAME and GEMINI_API_KEY
+        val instance: GenerativeAiService
+            get() {
+                if (_instance == null) {
+                    _instance = createService(maxTokens = 200)
+                }
+                return _instance!!
+            }
+
+        // Create a service using the current MODEL_NAME and provided maxTokens
+        fun createService(maxTokens: Int = 200): GenerativeAiService {
+            val enabled = GEMINI_API_KEY.isNotBlank()
             val model = GenerativeModel(
-                modelName = "gemini-2.5-flash",
+                modelName = MODEL_NAME,
                 apiKey = GEMINI_API_KEY,
             )
-
-            GenerativeAiService(
+            return GenerativeAiService(
                 visionModel = model,
-                maxTokens = 200,
+                maxTokens = maxTokens,
                 enabled = enabled
             )
         }
-    }
-}
+
+        // Change model name at runtime (next access to `instance` will recreate with the new model)
+        fun setModelName(newModelName: String, recreateInstance: Boolean = true) {
+            MODEL_NAME = newModelName
+            if (recreateInstance) _instance = createService()
+        }
+     }
+ }
