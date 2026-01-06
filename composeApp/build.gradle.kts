@@ -152,7 +152,7 @@ android {
         applicationId = "org.danielramzani.HealthCompose"
         minSdk = 31
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 10
+        versionCode = 11
         versionName = "1.0"
     }
     packaging {
@@ -178,4 +178,3 @@ dependencies {
     implementation(libs.play.services.measurement.api)
     implementation(libs.firebase.crashlytics)
 }
-
