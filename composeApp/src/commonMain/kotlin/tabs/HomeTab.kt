@@ -5,22 +5,19 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import androidx.navigation.compose.rememberNavController
 import cafe.adriel.voyager.navigator.tab.Tab
 import cafe.adriel.voyager.navigator.tab.TabOptions
+import pages.ChartsPageScreen
 import pages.HomePage
 import utils.HealthKitService
 import utils.HealthKitServiceImpl
 import utils.iOSHealthKitManager
+import platform.PlatformBridge
 
 object HomeTab : Tab {
 
-    private lateinit var healthKitService: HealthKitService
-
-    init {
-        val healthKitManager = iOSHealthKitManager()
-        healthKitService = HealthKitServiceImpl(healthKitManager)
-    }
+    // initialize directly
+    private val healthKitService: HealthKitService = HealthKitServiceImpl(iOSHealthKitManager())
 
     override val options: TabOptions
         @Composable
@@ -38,7 +35,21 @@ object HomeTab : Tab {
 
     @Composable
     override fun Content() {
-        val navController = rememberNavController()
-        HomePage(healthKitService)
+        HomePage(
+            healthKitService,
+            onNavigateMeditate = {
+                // request the native tab/compose to switch to meditate
+                PlatformBridge.requestedTabName = "meditation"
+                PlatformBridge.requestedTabSignal = PlatformBridge.requestedTabSignal + 1
+            },
+            onNavigateHabits = {
+                PlatformBridge.requestedTabName = "HabitCoachingPage"
+                PlatformBridge.requestedTabSignal = PlatformBridge.requestedTabSignal + 1
+            },
+            onChartClick = {
+                PlatformBridge.requestedRoute = ChartsPageScreen
+                PlatformBridge.requestedRouteSignal = PlatformBridge.requestedRouteSignal + 1
+            }
+        )
     }
 }

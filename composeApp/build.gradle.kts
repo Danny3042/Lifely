@@ -1,7 +1,6 @@
 import com.codingfeline.buildkonfig.compiler.FieldSpec
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -151,8 +150,8 @@ android {
     defaultConfig {
         applicationId = "org.danielramzani.HealthCompose"
         minSdk = 31
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 11
+        targetSdk = 35
+        versionCode = 12
         versionName = "1.0"
     }
     packaging {

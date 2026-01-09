@@ -53,6 +53,8 @@ struct SharedComposeHost: View {
         GeometryReader { geometry in
             ComposeViewController(onClose: nil)
                 .frame(width: geometry.size.width, height: geometry.size.height)
+                // Add bottom padding equal to the safe area so Compose content doesn't go under the tab bar
+                .padding(.bottom, geometry.safeAreaInsets.bottom)
                 .onAppear {
                     // Only register observer once globally
                     if !observerAdded {
@@ -260,7 +262,6 @@ struct ContentView: View {
             TabView(selection: $selectedTab) {
                 NavigationView {
                     SharedComposeHost(selectedTab: $selectedTab)
-                        .ignoresSafeArea(.all, edges: [.bottom])
                         .navigationTitle("Home")
                         .navigationBarTitleDisplayMode(.large)
                         .navigationBarHidden(composeHidesNavigationBar)
@@ -272,7 +273,6 @@ struct ContentView: View {
 
                 NavigationView {
                     SharedComposeHost(selectedTab: $selectedTab)
-                        .ignoresSafeArea(.all, edges: [.bottom])
                         .navigationTitle("Habits")
                         .navigationBarTitleDisplayMode(.large)
                         .navigationBarHidden(composeHidesNavigationBar)
@@ -284,7 +284,6 @@ struct ContentView: View {
 
                 NavigationView {
                     SharedComposeHost(selectedTab: $selectedTab)
-                        .ignoresSafeArea(.all, edges: [.bottom])
                         .navigationTitle("Chat")
                         .navigationBarTitleDisplayMode(.large)
                         .navigationBarHidden(composeHidesNavigationBar)
@@ -296,7 +295,6 @@ struct ContentView: View {
 
                 NavigationView {
                     SharedComposeHost(selectedTab: $selectedTab)
-                        .ignoresSafeArea(.all, edges: [.bottom])
                         .navigationTitle("Meditate")
                         .navigationBarTitleDisplayMode(.large)
                         .navigationBarHidden(composeHidesNavigationBar)
@@ -308,7 +306,6 @@ struct ContentView: View {
 
                 NavigationView {
                     SharedComposeHost(selectedTab: $selectedTab)
-                        .ignoresSafeArea(.all, edges: [.bottom])
                         .navigationTitle("Profile")
                         .navigationBarTitleDisplayMode(.large)
                         .navigationBarHidden(composeHidesNavigationBar)
@@ -333,8 +330,27 @@ struct ContentView: View {
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+
+            // Native FAB overlay (iOS) - anchored bottom-end above the tab bar
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        // Tell Compose to create a new chat / handle new chat
+                        NotificationCenter.default.post(name: Notification.Name("ComposeRequestNewChat"), object: nil)
+                    }) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 56, height: 56)
+                            .background(Circle().fill(Color(.systemBlue)))
+                    }
+                    .padding(.trailing, 20)
+                    .padding(.bottom, safeAreaBottom + 20)
+                }
+            }
         }
-        .ignoresSafeArea(.all)
         .sheet(isPresented: $showImagePicker) {
             ImagePicker(selectedImage: $selectedImage, onImageSelected: { image in
                 if let image = image {
@@ -393,21 +409,20 @@ struct ContentView: View {
                 }
             }
 
-            // Ensure Compose shared VC is visible when Compose reports navigation changes or is ready
+            // Compose event observers (do not force the shared UIViewController to front so SwiftUI overlays like the FAB remain visible)
             NotificationCenter.default.addObserver(forName: Notification.Name("ComposeNavigationChanged"), object: nil, queue: .main) { note in
-                ComposeViewController.ensureSharedVisible()
+                // Received navigation change from Compose — we no longer force the shared VC to the front
             }
 
             NotificationCenter.default.addObserver(forName: Notification.Name("ComposeReady"), object: nil, queue: .main) { _ in
-                ComposeViewController.ensureSharedVisible()
-                // If Compose became ready and there is a pending charts request, open charts now
+                // Compose became ready. Do not force bringToFront; just handle pending charts
                 let pendingAfterReady = UserDefaults.standard.bool(forKey: "OpenNativeChartsPending")
                 if pendingAfterReady {
                     print("ContentView: ComposeReady detected and pending OpenNativeCharts -> opening charts")
                     showChartsSheet = true
                     UserDefaults.standard.set(false, forKey: "OpenNativeChartsPending")
                 }
-             }
+            }
 
             // Listen for native-host FAB tap to request a new chat (this will be posted by the FAB below)
             NotificationCenter.default.addObserver(forName: Notification.Name("ComposeRequestNewChat"), object: nil, queue: .main) { _ in
@@ -890,6 +905,18 @@ struct ChartView: View {
 }
 #endif
 // --- End embedded Chart support ---
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
