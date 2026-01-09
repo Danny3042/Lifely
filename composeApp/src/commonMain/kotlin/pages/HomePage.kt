@@ -116,10 +116,10 @@ fun HomePage(
     // Convert platform safe-area (points) to Dp for Compose padding; reading PlatformBridge triggers recomposition.
     val topInsetDp = with(LocalDensity.current) { PlatformBridge.safeAreaTop.toFloat().toDp() }
     val bottomInsetDp = with(LocalDensity.current) { PlatformBridge.safeAreaBottom.toFloat().toDp() }
-    // Ensure content sits well below the native top inset (status/notch).
-    // Use an inset-based top padding so the greeting never gets clipped. Keep it stable
-    // across devices by adding a moderate extra gap to the platform top inset.
-    val effectiveTopPadding = if (topInsetDp > 0.dp) (topInsetDp + 84.dp) else 80.dp
+    // Keep content below the native top inset (status/notch). Use a small extra gap so the greeting
+    // doesn't get clipped but isn't pushed too far below the nav bar on iOS.
+    val extraTopGap = 8.dp
+    val effectiveTopPadding = if (topInsetDp > 0.dp) (topInsetDp + extraTopGap) else 16.dp
 
     // Wrap content in a Box so we can overlay a FAB anchored bottom-end
     Box(modifier = modifier.fillMaxSize().padding(top = effectiveTopPadding)) {
