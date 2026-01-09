@@ -33,6 +33,7 @@ import pages.InsightsPage
 import pages.InsightsPageScreen
 import pages.STRESS_MANAGEMENT_PAGE_ROUTE
 import pages.StressManagementPage
+import pages.Timer
 import pages.TimerScreenContent
 import platform.ChartBridge
 import platform.Foundation.NSDictionary
@@ -328,7 +329,7 @@ actual fun PlatformApp() {
                     composable(CompletedHabitsPageRoute) { CompletedHabitsPage(navControllerLocal) }
                     composable(NotificationPageScreen) { NotificationPage(navControllerLocal) }
                     composable(AboutPageScreen) { AboutPage(navControllerLocal, versionNumber = VERSION_NUMBER) }
-                    composable("TimerScreen") { TimerScreenContent(onBack = { navControllerLocal.popBackStack() }) }
+                    composable(Timer) { TimerScreenContent(onBack = { navControllerLocal.popBackStack() }) }
                 }
             }
         }

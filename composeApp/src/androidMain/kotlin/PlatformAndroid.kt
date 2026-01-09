@@ -14,6 +14,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -28,8 +30,6 @@ import pages.InsightsPage
 import pages.InsightsPageScreen
 import pages.STRESS_MANAGEMENT_PAGE_ROUTE
 import pages.StressManagementPage
-import pages.Timer
-import pages.TimerScreenContent
 import sub_pages.AboutPage
 import sub_pages.AboutPageScreen
 import sub_pages.CompletedHabitsPage
@@ -48,6 +48,9 @@ import utils.iOSHealthKitManager
 import sub_pages.REFLECTION_PAGE_ROUTE
 import sub_pages.ReflectionPage
 import platform.PlatformBridge
+import kotlinx.coroutines.flow.collectLatest
+import pages.Timer
+import pages.TimerScreenContent
 
 // Android actual implementation uses Material design
 @Composable
@@ -70,11 +73,23 @@ actual fun PlatformApp() {
         val navController = rememberNavController()
 
         LaunchedEffect(Unit) {
+            // Observe platform requestedRouteSignal (requests originating from other parts of the app)
+            snapshotFlow { PlatformBridge.requestedRouteSignal }.collectLatest {
+                val route = PlatformBridge.requestedRoute
+                route?.let {
+                    try {
+                        navController.navigate(it)
+                    } catch (t: Throwable) {
+                        println("Failed to navigate to route from PlatformBridge=$it: $t")
+                    }
+                    PlatformBridge.requestedRoute = null
+                }
+            }
+
             // Provide a notification icon resource id (0 used as fallback; replace with real drawable id)
             NotifierManager.initialize(NotificationPlatformConfiguration.Android(notificationIconResId = 0))
         }
 
-        // (PlatformBridge-based navigation is handled on iOS/native host.)
 
         NavHost(navController, startDestination = LoginScreen) {
             composable(LoginScreen) { Authentication().Login(navController) }

@@ -39,7 +39,7 @@ object HomeTab : Tab {
         HomePage(
             healthKitService,
             onNavigateMeditate = {
-                // request navigation to the meditation route inside the Compose nav host
+                // request the Compose Meditation route so Home -> Meditate opens MeditationPage
                 PlatformBridge.requestedRoute = MEDITATION_PAGE_ROUTE
                 PlatformBridge.requestedRouteSignal = PlatformBridge.requestedRouteSignal + 1
             },

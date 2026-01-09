@@ -237,7 +237,8 @@ fun HomePage(
                         StatsRow(personalized = personalizationEnabled,
                             steps = stepsValue,
                             meditationMinutes = meditationMinutes,
-                            sessions = sessionsValue)
+                            sessions = sessionsValue,
+                            onMeditate = onNavigateMeditate)
                     }
                     Spacer(modifier = Modifier.height(28.dp)) // increased separation to avoid overlap with charts
                     if (loading) {
@@ -474,7 +475,7 @@ private fun StatsRow(personalized: Boolean) {
 }
 
 @Composable
-private fun StatsRow(personalized: Boolean, steps: Int?, meditationMinutes: Int?, sessions: Int?) {
+private fun StatsRow(personalized: Boolean, steps: Int?, meditationMinutes: Int?, sessions: Int?, onMeditate: () -> Unit = {}) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         StatsCard(
             title = if (personalized) "Streak" else "Avg streak",
@@ -485,7 +486,7 @@ private fun StatsRow(personalized: Boolean, steps: Int?, meditationMinutes: Int?
         StatsCard(
             title = if (personalized) "Meditation" else "Meditation (avg)",
             value = meditationMinutes?.let { "${it}m" } ?: if (personalized) "42m" else "20m",
-            modifier = Modifier.weight(1f).heightIn(min = 72.dp)
+            modifier = Modifier.weight(1f).heightIn(min = 72.dp).clickable { onMeditate() }
         )
 
         StatsCard(
