@@ -19,3 +19,20 @@ actual fun registerComposeNewChatListener(onNewChat: () -> Unit): () -> Unit {
         NSNotificationCenter.defaultCenter.removeObserver(observer)
     }
 }
+
+actual fun registerComposeShowAddDialogListener(onShow: () -> Unit): () -> Unit {
+    val name = "ComposeShowAddDialog"
+    val observer = NSNotificationCenter.defaultCenter.addObserverForName(
+        name = name,
+        `object` = null,
+        queue = NSOperationQueue.mainQueue
+    ) { _ ->
+        try {
+            onShow()
+        } catch (_: Throwable) {}
+    }
+
+    return {
+        NSNotificationCenter.defaultCenter.removeObserver(observer)
+    }
+}

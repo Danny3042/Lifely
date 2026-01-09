@@ -30,7 +30,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -41,6 +40,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -64,10 +64,12 @@ import utils.isAndroid
 import platform.PlatformBridge
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.zIndex
+import platform.registerComposeShowAddDialogListener
 
 const val HomePageScreen = "HomePage"
 
@@ -88,6 +90,15 @@ fun HomePage(
     val customCards = remember { mutableStateListOf<Pair<Int, String>>() }
     var nextCardId by remember { mutableStateOf(0) }
     var showAddDialog by remember { mutableStateOf(false) }
+
+    // Register platform listener: when native host posts "ComposeShowAddDialog" the onShow lambda will
+    // set showAddDialog = true so the Compose add dialog appears.
+    DisposableEffect(Unit) {
+        val unregister = registerComposeShowAddDialogListener {
+            showAddDialog = true
+        }
+        onDispose { unregister() }
+    }
 
     LaunchedEffect(Unit) {
         if (!isAndroid()) {
@@ -226,7 +237,7 @@ fun HomePage(
                                         Column { Text(title); Text("Start a session", style = MaterialTheme.typography.bodySmall) }
                                     }
                                     title.contains("Habit", ignoreCase = true) -> {
-                                        Icon(imageVector = Icons.Filled.List, contentDescription = "Habit", tint = MaterialTheme.colorScheme.primary)
+                                        Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Habit", tint = MaterialTheme.colorScheme.primary)
                                         Spacer(modifier = Modifier.size(12.dp))
                                         Column { Text(title); Text("Open habits", style = MaterialTheme.typography.bodySmall) }
                                     }
@@ -287,23 +298,37 @@ fun HomePage(
             }
         }
 
-        // Place the FAB near bottom-end but use a small base padding and a negative offset
-        // so the FAB sits above any native bottom navigation regardless of its drawing order.
-        FloatingActionButton(
-            onClick = { showAddDialog = true },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 20.dp, bottom = 12.dp)
-                // move the FAB up by bottom inset + extra gap so it's clearly above nav
-                .offset(y = -(bottomInsetDp + 120.dp))
-                .zIndex(200f)
-                .size(64.dp)
-                .shadow(18.dp, shape = CircleShape)
-                .border(width = 2.dp, color = Color.White, shape = CircleShape),
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary
-        ) {
-            Icon(imageVector = Icons.Filled.Add, contentDescription = "Add card")
+        // Place the FAB near bottom-end but use a platform-aware upward offset so it
+        // clears the native bottom nav without being positioned too high on iOS.
+        // Clamp the bottom inset to a reasonable range (0..48dp) to avoid cases where
+        // the reported inset is unexpectedly large and pushes the FAB too far up.
+        val safeBottomInset = bottomInsetDp.coerceIn(0.dp, 48.dp)
+        val fabVerticalOffset = if (isAndroid()) (bottomInsetDp + 120.dp) else (safeBottomInset + 12.dp)
+
+        // Only show Compose FAB on Android. On iOS the host (SwiftUI) should render a native FAB
+        // and invoke the equivalent action on the Compose side via your chosen bridge.
+        if (isAndroid()) {
+            FloatingActionButton(
+                onClick = { showAddDialog = true },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 20.dp, bottom = 12.dp)
+                    .offset(y = -fabVerticalOffset)
+                    .zIndex(200f)
+                    .size(64.dp)
+                    .shadow(18.dp, shape = CircleShape)
+                    .border(width = 2.dp, color = Color.White, shape = CircleShape),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ) {
+                Icon(imageVector = Icons.Filled.Add, contentDescription = "Add card")
+            }
+        } else {
+            // iOS path: Do not render a Compose FAB here to avoid layout overlap issues.
+            // Implement a native SwiftUI FAB anchored above the native tab bar in the
+            // iOS host (ContentView.swift). The SwiftUI FAB should call into the
+            // platform bridge (or your chosen callback) to trigger the same add dialog
+            // behavior inside Compose.
         }
     }
 }
@@ -350,7 +375,7 @@ private fun QuickActionsRow(personalized: Boolean, onMeditate: () -> Unit, onHab
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Filled.List, contentDescription = "Suggestion")
+                    Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Suggestion")
                     Spacer(modifier = Modifier.size(8.dp))
                     Column {
                         Text("Suggested")
@@ -385,7 +410,7 @@ private fun QuickActionsRow(personalized: Boolean, onMeditate: () -> Unit, onHab
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Filled.List, contentDescription = "Habits")
+                    Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Habits")
                     Spacer(modifier = Modifier.size(8.dp))
                     Text("Habits")
                 }

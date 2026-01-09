@@ -6,3 +6,8 @@ package platform
  */
 expect fun registerComposeNewChatListener(onNewChat: () -> Unit): () -> Unit
 
+/**
+ * Register a listener for "ComposeShowAddDialog" events coming from the native host.
+ * When invoked, the listener should show the Compose add dialog (e.g. set showAddDialog = true).
+ */
+expect fun registerComposeShowAddDialogListener(onShow: () -> Unit): () -> Unit

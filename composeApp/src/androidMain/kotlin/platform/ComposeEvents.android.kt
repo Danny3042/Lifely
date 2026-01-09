@@ -5,3 +5,7 @@ actual fun registerComposeNewChatListener(onNewChat: () -> Unit): () -> Unit {
     return {}
 }
 
+actual fun registerComposeShowAddDialogListener(onShow: () -> Unit): () -> Unit {
+    // No-op on Android; provided so common code can register without platform checks.
+    return {}
+}

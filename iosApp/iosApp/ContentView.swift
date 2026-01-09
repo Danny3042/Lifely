@@ -1,4 +1,3 @@
-import UIKit
 import SwiftUI
 import ComposeApp
 import FirebaseAuth
@@ -50,12 +49,10 @@ struct SharedComposeHost: View {
     private let composeReadyNotification = Notification.Name("ComposeReady")
 
     var body: some View {
-        GeometryReader { geometry in
-            ComposeViewController(onClose: nil)
-                .frame(width: geometry.size.width, height: geometry.size.height)
-                // Add bottom padding equal to the safe area so Compose content doesn't go under the tab bar
-                .padding(.bottom, geometry.safeAreaInsets.bottom)
-                .onAppear {
+        ComposeViewController(onClose: nil)
+            .edgesIgnoringSafeArea(.bottom)
+            .padding(.top, -20)
+            .onAppear {
                     // Only register observer once globally
                     if !observerAdded {
                         observerAdded = true
@@ -100,9 +97,7 @@ struct SharedComposeHost: View {
                     let route = tabRoutes[newIndex]
                     requestRoute(route)
                 }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .toolbar {
+                .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 if showBackButton {
                     Button(action: handleBackButton) {
@@ -330,26 +325,44 @@ struct ContentView: View {
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+            
+            // FAB (Floating Action Button) - show when signed in and tab bar is visible
+            if isSignedIn && !composeHidesTabBar {
+                 VStack {
+                     Spacer()
+                     HStack {
+                         Spacer()
+                         Button(action: {
+                             // Add haptic feedback
+                             let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                             impactFeedback.impactOccurred()
 
-            // Native FAB overlay (iOS) - anchored bottom-end above the tab bar
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Button(action: {
-                        // Tell Compose to create a new chat / handle new chat
-                        NotificationCenter.default.post(name: Notification.Name("ComposeRequestNewChat"), object: nil)
-                    }) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 56, height: 56)
-                            .background(Circle().fill(Color(.systemBlue)))
-                    }
-                    .padding(.trailing, 20)
-                    .padding(.bottom, safeAreaBottom + 20)
-                }
-            }
+                             // Post notification that Compose listens to in order to show the add dialog.
+                             // Compose registers a listener for "ComposeShowAddDialog" and will set showAddDialog = true.
+                             NotificationCenter.default.post(
+                                 name: Notification.Name("ComposeShowAddDialog"),
+                                 object: nil
+                             )
+                         }) {
+                             Image(systemName: "plus")
+                                 .font(.system(size: 24, weight: .semibold))
+                                 .foregroundColor(.white)
+                                 .frame(width: 56, height: 56)
+                                 .background(
+                                     Circle()
+                                         .fill(Color.accentColor)
+                                         .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 4)
+                                 )
+                         }
+                         .padding(.trailing, 20)
+                         // Raise the FAB well above the tab bar
+                         .padding(.bottom, 90)
+                         .zIndex(1000)
+                         .accessibilityLabel("Add card")
+                         .accessibilityAddTraits(.isButton)
+                     }
+                 }
+             }
         }
         .sheet(isPresented: $showImagePicker) {
             ImagePicker(selectedImage: $selectedImage, onImageSelected: { image in
@@ -905,6 +918,13 @@ struct ChartView: View {
 }
 #endif
 // --- End embedded Chart support ---
+
+
+
+
+
+
+
 
 
 
