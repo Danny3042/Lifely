@@ -94,9 +94,17 @@ fun MeditationPage(
                 }
             }
             // Prefer explicit meditation-complete navigation (Reflection page).
-            // Call the completion handler first; fall back to navigating to insights.
-            onMeditationComplete?.invoke()
-            onNavigateToInsights?.invoke()
+            // Call the completion handler if provided; otherwise fall back to navigating to insights.
+            if (onMeditationComplete != null) {
+                try {
+                    onMeditationComplete.invoke()
+                } catch (e: Throwable) {
+                    // If the completion handler fails, fallback to insights navigation
+                    onNavigateToInsights?.invoke()
+                }
+            } else {
+                onNavigateToInsights?.invoke()
+            }
         }
     }
 

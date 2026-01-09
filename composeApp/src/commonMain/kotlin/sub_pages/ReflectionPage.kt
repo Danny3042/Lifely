@@ -3,6 +3,7 @@ package sub_pages
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -18,6 +19,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import utils.HealthData
 import utils.HealthKitService
+import utils.InsightsViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import utils.isAndroid
 
 const val REFLECTION_PAGE_ROUTE = "meditation_reflection"
 
@@ -71,6 +78,25 @@ fun ReflectionPage(
         Text("- How do you feel now compared to before the session?")
         Spacer(modifier = Modifier.height(6.dp))
         Text("- Any intentions for the rest of your day?")
+
+        Spacer(modifier = Modifier.height(24.dp))
+        // Back to Home button
+        Button(onClick = { onBack() }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+            Text("Back to Home")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        // Test button: log a sample session so we can verify Charts update
+        val insightsViewModel: InsightsViewModel = if (isAndroid()) viewModel() else InsightsViewModel()
+        Button(onClick = {
+            val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+            val time = "${now.hour.toString().padStart(2,'0')}:${now.minute.toString().padStart(2,'0')}"
+            val session = utils.Session(time = time, duration = 5)
+            insightsViewModel.addSession(session)
+            println("ReflectionPage: test session added: $session")
+        }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+            Text("Log test session (5m)")
+        }
 
     }
 }

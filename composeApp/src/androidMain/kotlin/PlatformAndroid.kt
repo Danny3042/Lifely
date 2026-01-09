@@ -118,7 +118,12 @@ actual fun PlatformApp() {
                     onMeditationComplete = { navController.navigate(REFLECTION_PAGE_ROUTE) }
                 )
             }
-            composable(REFLECTION_PAGE_ROUTE) { ReflectionPage(healthKitService = HealthKitServiceImpl(iOSHealthKitManager())) }
+            composable(REFLECTION_PAGE_ROUTE) {
+                ReflectionPage(
+                    healthKitService = HealthKitServiceImpl(iOSHealthKitManager()),
+                    onBack = { navController.navigate("HeroScreen") { launchSingleTop = true } }
+                )
+            }
             composable(STRESS_MANAGEMENT_PAGE_ROUTE) {
                 StressManagementPage(navController)
             }

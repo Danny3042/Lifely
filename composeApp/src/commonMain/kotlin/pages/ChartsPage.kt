@@ -48,11 +48,13 @@ fun ChartsPage(
     val sessionsPerDay by insightsViewModel.sessionsPerDay
 
     // compute totals per day for the last 7 days (index 0 = Monday in existing code)
-    val totals = remember(sessionsPerDay) {
-        List(7) { idx ->
-            sessionsPerDay.getOrNull(idx)?.sumOf { it.duration }?.toFloat() ?: 0f
-        }
+    // compute directly so changes to sessionsPerDay trigger recomposition and the UI updates immediately
+    val totals = List(7) { idx ->
+        sessionsPerDay.getOrNull(idx)?.sumOf { it.duration }?.toFloat() ?: 0f
     }
+
+    // Debug logging to confirm totals and underlying sessions are observed by ChartsPage
+    println("ChartsPage: totals=$totals sessionsPerDay=${sessionsPerDay.map { it.map { s -> s.duration } }}")
 
     Surface(modifier = modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier

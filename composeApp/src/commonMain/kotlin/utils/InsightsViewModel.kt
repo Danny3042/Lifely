@@ -11,7 +11,13 @@ import platform.ChartPublisher
 data class Session(val time: String, val duration: Int)
 
 class InsightsViewModel : ViewModel() {
-    private val _sessionsPerDay = mutableStateOf(List(7) { emptyList<Session>() })
+    companion object {
+        // Shared backing store so multiple ViewModel instances observe the same data
+        private val SHARED_SESSIONS = mutableStateOf(List(7) { emptyList<Session>() })
+    }
+
+    // Instance reference to the shared state
+    private val _sessionsPerDay = SHARED_SESSIONS
     val sessionsPerDay: State<List<List<Session>>> = _sessionsPerDay
 
 
@@ -20,6 +26,9 @@ class InsightsViewModel : ViewModel() {
         _sessionsPerDay.value = _sessionsPerDay.value.toMutableList().also { list ->
             list[currentDayIndex] = list[currentDayIndex] + session
         }
+
+        // Debug logging to help verify session addition during testing
+        println("InsightsViewModel: added session dayIndex=$currentDayIndex session=$session totals=${_sessionsPerDay.value.map { it.sumOf { s -> s.duration } }}")
 
         // Compute totals and publish to platform chart bridge so native views can update
         publishTotalsToPlatform()

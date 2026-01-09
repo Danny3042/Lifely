@@ -64,6 +64,11 @@ import utils.HealthKitService
 import utils.RealTimeGreeting
 import utils.isAndroid
 import platform.PlatformBridge
+import androidx.lifecycle.viewmodel.compose.viewModel
+import utils.InsightsViewModel
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.automirrored.filled.List
@@ -148,10 +153,32 @@ fun HomePage(
         SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
 
         // Health data states (populated on Android via HealthConnect)
-        var stepsValue by remember { mutableStateOf<Int?>(null) }
-        var meditationMinutes by remember { mutableStateOf<Int?>(null) }
-        var sessionsValue by remember { mutableStateOf<Int?>(null) }
-        var distanceMeters by remember { mutableStateOf<Double?>(null) }
+        // Stats derived from shared InsightsViewModel so they reflect real meditation sessions
+        val insightsViewModel: InsightsViewModel = if (isAndroid()) viewModel() else InsightsViewModel()
+        val sessionsPerDay by insightsViewModel.sessionsPerDay
+
+        // compute totals per day (last 7 days) and aggregated stats
+        val totals = List(7) { idx ->
+            sessionsPerDay.getOrNull(idx)?.sumOf { it.duration }?.toFloat() ?: 0f
+        }
+        val meditationMinutes = totals.sum().toInt()
+        val sessionsCount = sessionsPerDay.sumOf { it.size }
+
+        // compute streak: consecutive days up to today with at least one session
+        val todayIndex = try {
+            val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+            (today.dayOfWeek.ordinal + 6) % 7
+        } catch (e: Throwable) { 0 }
+        var streakDays = 0
+        for (offset in 0 until 7) {
+            val idx = (todayIndex - offset + 7) % 7
+            val daySessions = sessionsPerDay.getOrNull(idx) ?: emptyList()
+            if (daySessions.isNotEmpty()) streakDays++ else break
+        }
+        val streakDisplay = if (streakDays > 0) "${streakDays}d" else "0d"
+
+        var stepsValue: Int? = null
+        var distanceMeters: Double? = null
 
         // keep the page content in a column inside the Box
         Column(modifier = Modifier.fillMaxSize()) {
@@ -173,10 +200,6 @@ fun HomePage(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = if (personalizationEnabled) "Personalized" else "Standard",
-                    style = MaterialTheme.typography.bodyMedium
-                )
                 // The top row no longer shows the add button; the FAB handles adding
                 Spacer(modifier = Modifier.size(40.dp))
             }
@@ -235,9 +258,10 @@ fun HomePage(
                 item {
                     AnimatedSection(visible = !loading) {
                         StatsRow(personalized = personalizationEnabled,
+                            streakDays = streakDays,
                             steps = stepsValue,
                             meditationMinutes = meditationMinutes,
-                            sessions = sessionsValue,
+                            sessions = sessionsCount,
                             onMeditate = onNavigateMeditate)
                     }
                     Spacer(modifier = Modifier.height(28.dp)) // increased separation to avoid overlap with charts
@@ -471,15 +495,16 @@ private fun QuickActionsRow(personalized: Boolean, onMeditate: () -> Unit, onSec
 @Composable
 private fun StatsRow(personalized: Boolean) {
     // Provide default values; overload to accept live health data
-    StatsRow(personalized, steps = null, meditationMinutes = null, sessions = null)
+    StatsRow(personalized, streakDays = null, steps = null, meditationMinutes = null, sessions = null)
 }
 
 @Composable
-private fun StatsRow(personalized: Boolean, steps: Int?, meditationMinutes: Int?, sessions: Int?, onMeditate: () -> Unit = {}) {
+private fun StatsRow(personalized: Boolean, streakDays: Int?, steps: Int?, meditationMinutes: Int?, sessions: Int?, onMeditate: () -> Unit = {}) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        val streakValue = streakDays?.let { "${it}d" } ?: if (personalized) "7d" else "3d"
         StatsCard(
             title = if (personalized) "Streak" else "Avg streak",
-            value = if (personalized) "7d" else "3d",
+            value = streakValue,
             modifier = Modifier.weight(1f).heightIn(min = 72.dp)
         )
 

@@ -309,7 +309,7 @@ actual fun PlatformApp() {
             ) {
                 NavHost(navController = navControllerLocal, startDestination = LoginScreen) {
                     composable(LoginScreen) { Authentication().Login(navControllerLocal) }
-                    composable("HeroScreen") { HeroScreen(navControllerLocal, showBottomBar = false) }
+                    composable("HeroScreen") { HeroScreen(navControllerLocal, showBottomBar = true) }
                     composable(SignUpScreen) { Authentication().signUp(navControllerLocal) }
                     composable(ResetPasswordScreen) { Authentication().ResetPassword(navControllerLocal) }
                     composable(HomePageScreen) { HomeTab.Content() }
@@ -325,7 +325,12 @@ actual fun PlatformApp() {
                     composable(InsightsPageScreen) { InsightsPage() }
                     composable(STRESS_MANAGEMENT_PAGE_ROUTE) { StressManagementPage(navControllerLocal) }
                     composable(MEDITATION_PAGE_ROUTE) { MeditationPage(onBack = { navControllerLocal.popBackStack() }, onNavigateToInsights = { navControllerLocal.navigate(InsightsPageScreen) }, onMeditationComplete = { navControllerLocal.navigate(REFLECTION_PAGE_ROUTE) }) }
-                    composable(REFLECTION_PAGE_ROUTE) { ReflectionPage(healthKitService = HealthKitServiceImpl(iOSHealthKitManager())) }
+                    composable(REFLECTION_PAGE_ROUTE) {
+                        ReflectionPage(
+                            healthKitService = HealthKitServiceImpl(iOSHealthKitManager()),
+                            onBack = { navControllerLocal.navigate("HeroScreen") { launchSingleTop = true } }
+                        )
+                    }
                     composable(CompletedHabitsPageRoute) { CompletedHabitsPage(navControllerLocal) }
                     composable(NotificationPageScreen) { NotificationPage(navControllerLocal) }
                     composable(AboutPageScreen) { AboutPage(navControllerLocal, versionNumber = VERSION_NUMBER) }
