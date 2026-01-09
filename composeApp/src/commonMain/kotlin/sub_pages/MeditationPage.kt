@@ -44,6 +44,7 @@ const val MEDITATION_PAGE_ROUTE = "meditation"
 fun MeditationPage(
     onBack: (() -> Unit)? = null,
     onNavigateToInsights: (() -> Unit)? = null,
+    onMeditationComplete: (() -> Unit)? = null,
     insightsViewModelParam: InsightsViewModel? = null
 ) {
     // Use provided view model if given; otherwise use platform-appropriate creation.
@@ -92,6 +93,9 @@ fun MeditationPage(
                     )
                 }
             }
+            // Prefer explicit meditation-complete navigation (Reflection page).
+            // Call the completion handler first; fall back to navigating to insights.
+            onMeditationComplete?.invoke()
             onNavigateToInsights?.invoke()
         }
     }

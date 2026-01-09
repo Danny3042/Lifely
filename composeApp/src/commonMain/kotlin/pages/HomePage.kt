@@ -37,6 +37,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -57,7 +59,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.delay
-import screens.HealthConnectScreen
+import androidx.compose.runtime.LaunchedEffect
 import utils.HealthKitService
 import utils.RealTimeGreeting
 import utils.isAndroid
@@ -81,8 +83,6 @@ fun HomePage(
     onNavigateHabits: () -> Unit = {},
     onChartClick: () -> Unit = {}
 ) {
-    var hasPermissions by remember { mutableStateOf(false) }
-
     // personalization toggle and loading state (toggle replaced by add button)
     var personalizationEnabled by remember { mutableStateOf(true) } // retained for backward compatibility
     var loading by remember { mutableStateOf(true) }
@@ -102,15 +102,33 @@ fun HomePage(
 
     LaunchedEffect(Unit) {
         if (!isAndroid()) {
-            hasPermissions = healthKitService.checkPermissions()
-            if (!hasPermissions) {
-                hasPermissions = healthKitService.requestAuthorization()
+            // Trigger any platform-specific checks; don't store results (HealthConnect removed)
+            try {
+                healthKitService.checkPermissions()
+                healthKitService.requestAuthorization()
+            } catch (_: Throwable) {
+                // ignore - host may not support HealthKit
             }
         }
         // simulate loading data for personalization
         loading = true
         delay(700L)
         loading = false
+    }
+
+    // Permission status state (Android only)
+    var hasHealthConnectPermissions by remember { mutableStateOf<Boolean?>(null) }
+
+    LaunchedEffect(Unit) {
+        if (isAndroid()) {
+            try {
+                hasHealthConnectPermissions = healthKitService.checkPermissions()
+            } catch (_: Throwable) {
+                hasHealthConnectPermissions = false
+            }
+        } else {
+            hasHealthConnectPermissions = null
+        }
     }
 
     // Convert platform safe-area (points) to Dp for Compose padding; reading PlatformBridge triggers recomposition.
@@ -121,16 +139,33 @@ fun HomePage(
     val extraTopGap = 8.dp
     val effectiveTopPadding = if (topInsetDp > 0.dp) (topInsetDp + extraTopGap) else 16.dp
 
+    // Snackbar for permission confirmation
+    val snackbarHostState = remember { SnackbarHostState() }
+
     // Wrap content in a Box so we can overlay a FAB anchored bottom-end
     Box(modifier = modifier.fillMaxSize().padding(top = effectiveTopPadding)) {
+        // Snackbar host overlays the page; placed inside Box so it floats above content.
+        SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
+
+        // Health data states (populated on Android via HealthConnect)
+        var stepsValue by remember { mutableStateOf<Int?>(null) }
+        var meditationMinutes by remember { mutableStateOf<Int?>(null) }
+        var sessionsValue by remember { mutableStateOf<Int?>(null) }
+        var distanceMeters by remember { mutableStateOf<Double?>(null) }
+
         // keep the page content in a column inside the Box
         Column(modifier = Modifier.fillMaxSize()) {
-            // Top greeting and personalization toggle
-            // Greeting area (keep modest inner padding; outer top inset already applied).
-            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            // Greeting at top (ensure visible)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .heightIn(min = 80.dp)
+            ) {
                 RealTimeGreeting()
             }
 
+            // Row with personalization label remains below the greeting
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -178,17 +213,17 @@ fun HomePage(
                 )
             }
 
-            // Main scrollable content
+            // Main scrollable content — greeting is the first item so it's always visible in the scroll area
             LazyColumn(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .weight(1f)
                     .padding(horizontal = 16.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = (88.dp + bottomInsetDp))
             ) {
-                // Quick actions / placeholder (first section) — now personalized
+                // Quick actions / placeholder (second section) — now personalized
                 item {
                     AnimatedSection(visible = !loading) {
-                        QuickActionsRow(personalized = personalizationEnabled, onMeditate = onNavigateMeditate, onHabits = onNavigateHabits)
+                        QuickActionsRow(personalized = personalizationEnabled, onMeditate = onNavigateMeditate, onSecondAction = onChartClick)
                     }
                     Spacer(modifier = Modifier.height(16.dp)) // increased separation to avoid overlap
                     if (loading) {
@@ -196,10 +231,13 @@ fun HomePage(
                     }
                 }
 
-                // Stats cards (second section)
+                // Stats cards (third section)
                 item {
                     AnimatedSection(visible = !loading) {
-                        StatsRow(personalized = personalizationEnabled)
+                        StatsRow(personalized = personalizationEnabled,
+                            steps = stepsValue,
+                            meditationMinutes = meditationMinutes,
+                            sessions = sessionsValue)
                     }
                     Spacer(modifier = Modifier.height(28.dp)) // increased separation to avoid overlap with charts
                     if (loading) {
@@ -289,13 +327,7 @@ fun HomePage(
                 item { Spacer(modifier = Modifier.height(24.dp)) }
             }
 
-            // Health connect content - show as a compact footer when not available
-            if (isAndroid() && !hasPermissions) {
-                HealthConnectScreen(healthKitService)
-            } else {
-                // keep the HealthConnect component available but compact
-                HealthConnectScreen(healthKitService)
-            }
+            // HealthConnectScreen intentionally removed per user request; keep Home content focused on the Home page cards and recent activity.
         }
 
         // Place the FAB near bottom-end but use a platform-aware upward offset so it
@@ -331,6 +363,17 @@ fun HomePage(
             // behavior inside Compose.
         }
     }
+
+    // Show a confirmation snackbar when permissions become granted
+    LaunchedEffect(hasHealthConnectPermissions) {
+        if (hasHealthConnectPermissions == true) {
+            try {
+                snackbarHostState.showSnackbar("Health Connect enabled")
+            } catch (_: Throwable) {
+                // ignore
+            }
+        }
+    }
 }
 
 @Composable
@@ -344,21 +387,26 @@ private fun AnimatedSection(visible: Boolean, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun QuickActionsRow(personalized: Boolean, onMeditate: () -> Unit, onHabits: () -> Unit) {
+private fun QuickActionsRow(personalized: Boolean, onMeditate: () -> Unit, onSecondAction: () -> Unit) {
     if (personalized) {
-        // Personalized quick actions: resume last session and a suggested habit
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Personalized quick actions: resume last session and a suggested habit (now insights)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp), // extra vertical breathing room
+            horizontalArrangement = Arrangement.spacedBy(40.dp)
+        ) {
             Card(
                 modifier = Modifier
                     .weight(1f)
-                    .height(56.dp)
+                    .height(88.dp)
                     .clickable { onMeditate() },
-                shape = RoundedCornerShape(12.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
             ) {
-                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = "Resume")
-                    Spacer(modifier = Modifier.size(8.dp))
+                    Spacer(modifier = Modifier.size(16.dp))
                     Column {
                         Text("Resume")
                         Text("10m guided", style = MaterialTheme.typography.bodySmall)
@@ -369,50 +417,50 @@ private fun QuickActionsRow(personalized: Boolean, onMeditate: () -> Unit, onHab
             Card(
                 modifier = Modifier
                     .weight(1f)
-                    .height(56.dp)
-                    .clickable { /* could open habit suggestion */ onHabits() },
-                shape = RoundedCornerShape(12.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    .height(88.dp)
+                    .clickable { /* insights */ onSecondAction() },
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
             ) {
-                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Suggestion")
-                    Spacer(modifier = Modifier.size(8.dp))
+                Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Insights")
+                    Spacer(modifier = Modifier.size(16.dp))
                     Column {
-                        Text("Suggested")
-                        Text("Drink water", style = MaterialTheme.typography.bodySmall)
+                        Text("Insights")
+                        Text("View trends", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
         }
     } else {
         // Generic quick actions
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
             Card(
                 modifier = Modifier
                     .weight(1f)
-                    .height(56.dp)
+                    .height(88.dp)
                     .clickable { onMeditate() },
-                shape = RoundedCornerShape(12.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
             ) {
-                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = "Meditate")
-                    Spacer(modifier = Modifier.size(8.dp))
+                    Spacer(modifier = Modifier.size(16.dp))
                     Text("Meditate")
                 }
             }
             Card(
                 modifier = Modifier
                     .weight(1f)
-                    .height(56.dp)
-                    .clickable { onHabits() },
-                shape = RoundedCornerShape(12.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    .height(88.dp)
+                    .clickable { onSecondAction() },
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
             ) {
-                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Habits")
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text("Habits")
+                Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Insights")
+                    Spacer(modifier = Modifier.size(16.dp))
+                    Text("Insights")
                 }
             }
         }
@@ -421,6 +469,12 @@ private fun QuickActionsRow(personalized: Boolean, onMeditate: () -> Unit, onHab
 
 @Composable
 private fun StatsRow(personalized: Boolean) {
+    // Provide default values; overload to accept live health data
+    StatsRow(personalized, steps = null, meditationMinutes = null, sessions = null)
+}
+
+@Composable
+private fun StatsRow(personalized: Boolean, steps: Int?, meditationMinutes: Int?, sessions: Int?) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         StatsCard(
             title = if (personalized) "Streak" else "Avg streak",
@@ -430,13 +484,13 @@ private fun StatsRow(personalized: Boolean) {
 
         StatsCard(
             title = if (personalized) "Meditation" else "Meditation (avg)",
-            value = if (personalized) "42m" else "20m",
+            value = meditationMinutes?.let { "${it}m" } ?: if (personalized) "42m" else "20m",
             modifier = Modifier.weight(1f).heightIn(min = 72.dp)
         )
 
         StatsCard(
             title = "Sessions",
-            value = if (personalized) "8" else "5",
+            value = sessions?.toString() ?: if (personalized) "8" else "5",
             modifier = Modifier.weight(1f).heightIn(min = 72.dp)
         )
     }

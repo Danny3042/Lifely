@@ -326,8 +326,8 @@ struct ContentView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             
-            // FAB (Floating Action Button) - show when signed in and tab bar is visible
-            if isSignedIn && !composeHidesTabBar {
+            // FAB (Floating Action Button) - only show on home page (tab 0)
+            if selectedTab == 0 && isSignedIn && !composeHidesTabBar {
                  VStack {
                      Spacer()
                      HStack {
@@ -350,8 +350,8 @@ struct ContentView: View {
                                  .frame(width: 56, height: 56)
                                  .background(
                                      Circle()
-                                         .fill(Color.accentColor)
-                                         .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 4)
+                                         .fill(Color(red: 0.4, green: 0.2, blue: 0.6))
+                                         .shadow(color: Color(red: 0.4, green: 0.2, blue: 0.6).opacity(0.5), radius: 8, x: 0, y: 4)
                                  )
                          }
                          .padding(.trailing, 20)

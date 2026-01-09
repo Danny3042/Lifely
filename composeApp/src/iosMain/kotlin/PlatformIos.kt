@@ -53,6 +53,10 @@ import sub_pages.MEDITATION_PAGE_ROUTE
 import sub_pages.MeditationPage
 import sub_pages.NotificationPage
 import sub_pages.NotificationPageScreen
+import sub_pages.REFLECTION_PAGE_ROUTE
+import sub_pages.ReflectionPage
+import utils.HealthKitServiceImpl
+import utils.iOSHealthKitManager
 import tabs.HomeTab
 import utils.SettingsManager
 
@@ -319,7 +323,8 @@ actual fun PlatformApp() {
                     }
                     composable(InsightsPageScreen) { InsightsPage() }
                     composable(STRESS_MANAGEMENT_PAGE_ROUTE) { StressManagementPage(navControllerLocal) }
-                    composable(MEDITATION_PAGE_ROUTE) { MeditationPage(onBack = { navControllerLocal.popBackStack() }, onNavigateToInsights = { navControllerLocal.navigate(InsightsPageScreen) }) }
+                    composable(MEDITATION_PAGE_ROUTE) { MeditationPage(onBack = { navControllerLocal.popBackStack() }, onNavigateToInsights = { navControllerLocal.navigate(InsightsPageScreen) }, onMeditationComplete = { navControllerLocal.navigate(REFLECTION_PAGE_ROUTE) }) }
+                    composable(REFLECTION_PAGE_ROUTE) { ReflectionPage(healthKitService = HealthKitServiceImpl(iOSHealthKitManager())) }
                     composable(CompletedHabitsPageRoute) { CompletedHabitsPage(navControllerLocal) }
                     composable(NotificationPageScreen) { NotificationPage(navControllerLocal) }
                     composable(AboutPageScreen) { AboutPage(navControllerLocal, versionNumber = VERSION_NUMBER) }

@@ -30,9 +30,6 @@ import pages.STRESS_MANAGEMENT_PAGE_ROUTE
 import pages.StressManagementPage
 import pages.Timer
 import pages.TimerScreenContent
-import platform.PlatformBridge
-import kotlinx.coroutines.flow.collectLatest
-import androidx.compose.runtime.snapshotFlow
 import sub_pages.AboutPage
 import sub_pages.AboutPageScreen
 import sub_pages.CompletedHabitsPage
@@ -46,6 +43,11 @@ import sub_pages.DarkModeSettingsPageScreen
 import tabs.HomeTab
 import tabs.ProfileTab
 import utils.SettingsManager
+import utils.HealthKitServiceImpl
+import utils.iOSHealthKitManager
+import sub_pages.REFLECTION_PAGE_ROUTE
+import sub_pages.ReflectionPage
+import platform.PlatformBridge
 
 // Android actual implementation uses Material design
 @Composable
@@ -72,21 +74,7 @@ actual fun PlatformApp() {
             NotifierManager.initialize(NotificationPlatformConfiguration.Android(notificationIconResId = 0))
         }
 
-        // Observe platform requestedRoute and navigate when set
-        LaunchedEffect(Unit) {
-            snapshotFlow { PlatformBridge.requestedRouteSignal }
-                .collectLatest {
-                    val route = PlatformBridge.requestedRoute
-                    if (route != null) {
-                        try {
-                            navController.navigate(route)
-                        } catch (t: Throwable) {
-                            println("Failed to navigate to route=$route: $t")
-                        }
-                        PlatformBridge.requestedRoute = null
-                    }
-                }
-        }
+        // (PlatformBridge-based navigation is handled on iOS/native host.)
 
         NavHost(navController, startDestination = LoginScreen) {
             composable(LoginScreen) { Authentication().Login(navController) }
@@ -111,9 +99,11 @@ actual fun PlatformApp() {
             composable(MEDITATION_PAGE_ROUTE) {
                 MeditationPage(
                     onBack = { navController.popBackStack() },
-                    onNavigateToInsights = { navController.navigate(InsightsPageScreen) }
+                    onNavigateToInsights = { navController.navigate(InsightsPageScreen) },
+                    onMeditationComplete = { navController.navigate(REFLECTION_PAGE_ROUTE) }
                 )
             }
+            composable(REFLECTION_PAGE_ROUTE) { ReflectionPage(healthKitService = HealthKitServiceImpl(iOSHealthKitManager())) }
             composable(STRESS_MANAGEMENT_PAGE_ROUTE) {
                 StressManagementPage(navController)
             }

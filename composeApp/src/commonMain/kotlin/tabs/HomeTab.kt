@@ -9,6 +9,7 @@ import cafe.adriel.voyager.navigator.tab.Tab
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import pages.ChartsPageScreen
 import pages.HomePage
+import sub_pages.MEDITATION_PAGE_ROUTE
 import utils.HealthKitService
 import utils.HealthKitServiceImpl
 import utils.iOSHealthKitManager
@@ -38,9 +39,9 @@ object HomeTab : Tab {
         HomePage(
             healthKitService,
             onNavigateMeditate = {
-                // request the native tab/compose to switch to meditate
-                PlatformBridge.requestedTabName = "meditation"
-                PlatformBridge.requestedTabSignal = PlatformBridge.requestedTabSignal + 1
+                // request navigation to the meditation route inside the Compose nav host
+                PlatformBridge.requestedRoute = MEDITATION_PAGE_ROUTE
+                PlatformBridge.requestedRouteSignal = PlatformBridge.requestedRouteSignal + 1
             },
             onNavigateHabits = {
                 PlatformBridge.requestedTabName = "HabitCoachingPage"
