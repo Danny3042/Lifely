@@ -46,6 +46,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -59,7 +60,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.delay
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import utils.HealthKitService
 import utils.RealTimeGreeting
 import utils.isAndroid
@@ -69,6 +71,7 @@ import utils.InsightsViewModel
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
+import utils.HabitRepository
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.automirrored.filled.List
@@ -175,10 +178,6 @@ fun HomePage(
             val daySessions = sessionsPerDay.getOrNull(idx) ?: emptyList()
             if (daySessions.isNotEmpty()) streakDays++ else break
         }
-        val streakDisplay = if (streakDays > 0) "${streakDays}d" else "0d"
-
-        var stepsValue: Int? = null
-        var distanceMeters: Double? = null
 
         // keep the page content in a column inside the Box
         Column(modifier = Modifier.fillMaxSize()) {
@@ -236,6 +235,40 @@ fun HomePage(
                 )
             }
 
+            // remember per-item checked states so checkboxes persist while composable is active
+            val checkedStates = remember { mutableStateMapOf<String, Boolean>() }
+
+            // Build recent activity list from sessions and completed habits
+            data class RecentItem(val id: String, val label: String, val autoCompleted: Boolean)
+
+            val recentItems = remember(sessionsPerDay, HabitRepository.completedHabits) {
+                val items = mutableListOf<RecentItem>()
+
+                // Add the most recent session (search last 7 days)
+                run loop@{
+                    for (offset in 0 until 7) {
+                        val idx = ( (Clock.System.todayIn(TimeZone.currentSystemDefault()).dayOfWeek.ordinal + 6) % 7 - offset + 7) % 7
+                        val dayList = sessionsPerDay.getOrNull(idx) ?: emptyList()
+                        if (dayList.isNotEmpty()) {
+                            val s = dayList.last()
+                            items.add(RecentItem(id = "session_${idx}_${s.time}", label = "Meditation ${s.duration}m", autoCompleted = true))
+                            return@loop
+                        }
+                    }
+
+                }
+
+                // Add completed habits
+                HabitRepository.completedHabits.forEach { habit ->
+                    items.add(RecentItem(id = "habit_${habit.hashCode()}", label = habit, autoCompleted = true))
+                }
+
+                // If no items, keep a friendly placeholder
+                if (items.isEmpty()) items.add(RecentItem(id = "none", label = "No recent activity", autoCompleted = false))
+
+                items.toList()
+            }
+
             // Main scrollable content — greeting is the first item so it's always visible in the scroll area
             LazyColumn(
                 modifier = Modifier
@@ -259,7 +292,7 @@ fun HomePage(
                     AnimatedSection(visible = !loading) {
                         StatsRow(personalized = personalizationEnabled,
                             streakDays = streakDays,
-                            steps = stepsValue,
+                            steps = null,
                             meditationMinutes = meditationMinutes,
                             sessions = sessionsCount,
                             onMeditate = onNavigateMeditate)
@@ -331,9 +364,10 @@ fun HomePage(
                     )
                 }
 
-                // Example recent activities --- replace with real data list
-                val recent = listOf("Meditation 10m", "Habit logged", "Session completed")
-                items(recent) { act ->
+                items(recentItems) { item ->
+                    // initialize default state if missing; autoCompleted items are marked checked
+                    if (!checkedStates.containsKey(item.id)) checkedStates[item.id] = item.autoCompleted
+
                     Card(modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 6.dp)
@@ -344,7 +378,13 @@ fun HomePage(
                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(modifier = Modifier.size(44.dp).background(Color(0xFFE0E0E0), shape = RoundedCornerShape(8.dp)))
                             Spacer(modifier = Modifier.size(12.dp))
-                            Text(text = act, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(text = item.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            Checkbox(
+                                checked = checkedStates[item.id] == true,
+                                onCheckedChange = { checked -> if (!item.autoCompleted) checkedStates[item.id] = checked },
+                                enabled = !item.autoCompleted,
+                                colors = CheckboxDefaults.colors(checkmarkColor = MaterialTheme.colorScheme.onPrimary)
+                            )
                         }
                     }
                 }

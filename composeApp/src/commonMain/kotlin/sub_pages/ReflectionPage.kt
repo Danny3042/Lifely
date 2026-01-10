@@ -85,18 +85,5 @@ fun ReflectionPage(
             Text("Back to Home")
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
-        // Test button: log a sample session so we can verify Charts update
-        val insightsViewModel: InsightsViewModel = if (isAndroid()) viewModel() else InsightsViewModel()
-        Button(onClick = {
-            val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
-            val time = "${now.hour.toString().padStart(2,'0')}:${now.minute.toString().padStart(2,'0')}"
-            val session = utils.Session(time = time, duration = 5)
-            insightsViewModel.addSession(session)
-            println("ReflectionPage: test session added: $session")
-        }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-            Text("Log test session (5m)")
-        }
-
     }
 }

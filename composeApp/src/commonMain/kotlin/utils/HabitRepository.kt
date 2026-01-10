@@ -1,8 +1,10 @@
 package utils
 
+import androidx.compose.runtime.mutableStateListOf
 
 object HabitRepository {
-    var completedHabits = HabitStorage.loadHabits().toMutableList()
+    // Use a SnapshotStateList so Compose observers recompose when this changes
+    var completedHabits = mutableStateListOf<String>().apply { addAll(HabitStorage.loadHabits()) }
     val habits: List<String> get() = completedHabits
 
     fun addCompletedHabit(habit: String) {

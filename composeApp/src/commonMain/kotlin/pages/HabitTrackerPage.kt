@@ -174,7 +174,7 @@ fun HabitTrackerPage(navcontroller: NavController) {
         Spacer(modifier = Modifier.height(24.dp))
 
         HabitTrackerPage(habits = trackedHabits,
-            onHabitCompleted = { habit -> HabitRepository.removeHabit(habit) })
+            onHabitCompleted = { habit -> HabitRepository.addCompletedHabit(habit) })
         Spacer(modifier = Modifier.height(24.dp))
 
         Surface(
