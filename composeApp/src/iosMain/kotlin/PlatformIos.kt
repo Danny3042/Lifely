@@ -4,10 +4,6 @@ import Authentication.ResetPasswordScreen
 import Authentication.SignUpScreen
 import Colors.DarkColors
 import Colors.LightColors
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -21,12 +17,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
+import androidx.compose.foundation.layout.*
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import config.VERSION_NUMBER
 import kotlinx.coroutines.flow.collectLatest
+import pages.ChartsPage
 import pages.ChartsPageScreen
 import pages.HomePageScreen
 import pages.InsightsPage
@@ -42,8 +39,6 @@ import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSOperationQueue
 import platform.Foundation.NSUserDefaults
 import platform.PlatformBridge
-import com.mmk.kmpnotifier.notification.NotifierManager
-import com.mmk.kmpnotifier.notification.configuration.NotificationPlatformConfiguration
 import sub_pages.AboutPage
 import sub_pages.AboutPageScreen
 import sub_pages.CompletedHabitsPage
@@ -63,9 +58,15 @@ import utils.SettingsManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-actual fun PlatformApp() {
+actual fun PlatformApp(showBottomBar: Boolean) {
     // remember a NavController for Compose navigation on iOS
     val navController = rememberNavController()
+
+    // Let PlatformBridge know whether the native host should show its tab bar
+    try {
+        PlatformBridge.useNativeTabBar = !showBottomBar
+    } catch (_: Throwable) {
+    }
 
     // Dark mode state (iOS) - load/save using SettingsManager similar to Android
     var isDarkMode by remember { mutableStateOf(false) }
@@ -74,7 +75,7 @@ actual fun PlatformApp() {
     // Safe area insets from iOS - these will be updated via PlatformBridge
     var topInset by remember { mutableStateOf(0.0) }
     var bottomInset by remember { mutableStateOf(0.0) }
-    
+
     // Listen for safe area changes from iOS
     DisposableEffect(Unit) {
         val observer = NSNotificationCenter.defaultCenter.addObserverForName(
@@ -87,9 +88,8 @@ actual fun PlatformApp() {
             bottomInset = (userInfo?.objectForKey("bottom") as? Double) ?: 0.0
         }
         onDispose {
-            if (observer != null) {
-                NSNotificationCenter.defaultCenter.removeObserver(observer as Any)
-            }
+            // removeObserver expects a non-null observer reference
+            NSNotificationCenter.defaultCenter.removeObserver(observer as Any)
         }
     }
 
@@ -97,7 +97,7 @@ actual fun PlatformApp() {
         try {
             isDarkMode = SettingsManager.loadDarkMode()
             useSystemDefault = SettingsManager.loadUseSystemDefault()
-        } catch (e: Throwable) {
+        } catch (_: Throwable) {
             isDarkMode = false
             useSystemDefault = true
         }
@@ -106,14 +106,14 @@ actual fun PlatformApp() {
     LaunchedEffect(isDarkMode) {
         try {
             SettingsManager.saveDarkMode(isDarkMode)
-        } catch (e: Throwable) {
+        } catch (_: Throwable) {
         }
     }
 
     LaunchedEffect(useSystemDefault) {
         try {
             SettingsManager.saveUseSystemDefault(useSystemDefault)
-        } catch (e: Throwable) {
+        } catch (_: Throwable) {
         }
     }
 
@@ -121,24 +121,14 @@ actual fun PlatformApp() {
     LaunchedEffect(isDarkMode, useSystemDefault) {
         try {
             NSOperationQueue.mainQueue.addOperationWithBlock {
-                val userInfo = mapOf("dark" to isDarkMode, "useSystem" to useSystemDefault)
+                val userInfo: Map<Any?, Any?> = mapOf("dark" to isDarkMode, "useSystem" to useSystemDefault)
                 NSNotificationCenter.defaultCenter.postNotificationName(
                     aName = "ComposeDarkModeChanged",
                     `object` = null,
-                    userInfo = userInfo as Map<Any?, *>
+                    userInfo = userInfo
                 )
             }
-        } catch (e: Throwable) {
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        try {
-            println("PlatformIos: initializing NotifierManager for iOS")
-            NotifierManager.initialize(NotificationPlatformConfiguration.Ios())
-            println("PlatformIos: NotifierManager initialized")
-        } catch (e: Throwable) {
-            println("PlatformIos: NotifierManager.initialize failed: ${e.message}")
+        } catch (_: Throwable) {
         }
     }
 
@@ -150,44 +140,96 @@ actual fun PlatformApp() {
         val route = pendingRoute
         if (!route.isNullOrEmpty()) {
             try {
-                navController.navigate(route)
-            } catch (e: Throwable) {
+                navController.navigate(route) {
+                    // Ensure we don't create duplicate HeroScreen entries and restore state when possible
+                    popUpTo("HeroScreen") { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            } catch (_: Throwable) {
             }
+            // clear pendingRoute so future identical requests will re-trigger navigation if needed
             pendingRoute = null
         }
     }
 
     // Observe native navigation requests from AuthManager (Swift) via NotificationCenter
     DisposableEffect(navController) {
+        @Suppress("UNUSED_VARIABLE")
         val observer = NSNotificationCenter.defaultCenter.addObserverForName(
-            name = "AuthManagerNavigateToRoute",
-            `object` = null,
-            queue = NSOperationQueue.mainQueue
-        ) { notification: NSNotification? ->
-            val userInfo = notification?.userInfo as? NSDictionary
-            val route = (userInfo?.objectForKey("route") as? String)
-            if (!route.isNullOrEmpty()) {
+             name = "AuthManagerNavigateToRoute",
+             `object` = null,
+             queue = NSOperationQueue.mainQueue
+         ) { notification: NSNotification? ->
+             val userInfo = notification?.userInfo as? NSDictionary
+             val route = (userInfo?.objectForKey("route") as? String)
+             if (!route.isNullOrEmpty()) {
+                 try {
+                     // Tab routes that should be handled by the tab navigation system
+                     val tabRoutes = setOf("HomePage", "HabitCoachingPage", "ChatScreen", "meditation", "profile", "Home", "Habits", "Chat", "Meditate", "Profile")
+                     if (tabRoutes.contains(route)) {
+                         println("PlatformIos: Tab route requested via AuthManager -> $route")
+                         // Map to a standard tab name and signal the Compose side to switch tabs
+                         val standardTab = when (route) {
+                             "Home" -> "HomePage"
+                             "Habits" -> "HabitCoachingPage"
+                             "Chat" -> "ChatScreen"
+                             "Meditate" -> "meditation"
+                             "Profile" -> "profile"
+                             else -> route
+                         }
+                         // Request the Compose tab switch via PlatformBridge and ensure HeroScreen is shown
+                         try {
+                            PlatformBridge.requestedTabName = standardTab
+                            PlatformBridge.requestedTabSignal = PlatformBridge.requestedTabSignal + 1
+                         } catch (_: Throwable) {
+                         }
+                         // Ensure we end up on the HeroScreen where the TabNavigator lives
+                         pendingRoute = "HeroScreen"
+                     } else {
+                         // Non-tab routes, navigate normally
+                         pendingRoute = route
+                     }
+                 } catch (_: Throwable) {
+                 }
+             }
+         }
+         onDispose {
+             NSNotificationCenter.defaultCenter.removeObserver(observer as Any)
+         }
+    }
+
+    // Observe tab bar clicks from iOS
+    LaunchedEffect(Unit) {
+        snapshotFlow { PlatformBridge.requestedTabSignal }.collectLatest { signal ->
+            val tabName = PlatformBridge.requestedTabName
+            println("PlatformIos: requestedTabSignal changed to $signal, tabName = $tabName")
+            
+            if (!tabName.isNullOrEmpty()) {
                 try {
-                    // If the route looks like a tab request, set the PlatformBridge requestedTab and request navigation
-                    val tabRoutes = setOf("HomePage", "HabitCoachingPage", "ChatScreen", "meditation", "profile", "Home", "Habits", "Chat", "Meditate", "Profile")
-                    if (tabRoutes.contains(route)) {
-                        // Write requested tab name and increment signal so Compose observers detect repeated clicks
-                        PlatformBridge.requestedTabName = route
-                        PlatformBridge.requestedTabSignal = PlatformBridge.requestedTabSignal + 1
+                    // Ensure app is showing HeroScreen so the Compose TabNavigator can switch tabs
+                    val current = navController.currentBackStackEntry?.destination?.route
+                    if (current != "HeroScreen") {
+                        // Set pendingRoute so the existing pending-route handler navigates to HeroScreen
                         pendingRoute = "HeroScreen"
-                    } else {
-                        pendingRoute = route
+                    }
+
+                    // Also post a notification so the native Swift TabView can switch selection to match
+                    NSOperationQueue.mainQueue.addOperationWithBlock {
+                        val userInfo: Map<Any?, Any?> = mapOf("tab" to tabName)
+                        NSNotificationCenter.defaultCenter.postNotificationName(
+                            aName = "SwitchNativeTab",
+                            `object` = null,
+                            userInfo = userInfo
+                        )
                     }
                 } catch (e: Throwable) {
+                    println("PlatformIos: Failed to navigate to tab $tabName: ${e.message}")
+                    e.printStackTrace()
                 }
             }
         }
-        onDispose {
-            if (observer != null) {
-                NSNotificationCenter.defaultCenter.removeObserver(observer as Any)
-            }
-        }
-    }
+     }
 
     // Also observe PlatformBridge.requestedRouteSignal (requests from Compose UI/native host)
     LaunchedEffect(Unit) {
@@ -209,15 +251,15 @@ actual fun PlatformApp() {
                         // Also set a persistent flag so Swift can pick it up if it missed the notification
                         try {
                             NSUserDefaults.standardUserDefaults.setBool(true, forKey = "OpenNativeChartsPending")
-                        } catch (e: Throwable) {
-                            println("PlatformIos: failed to set OpenNativeChartsPending flag: ${e.message}")
+                        } catch (_: Throwable) {
+                            println("PlatformIos: failed to set OpenNativeChartsPending flag")
                         }
 
                         // Publish sample chart data immediately so native Swift Charts can display something
                         try {
                             ChartBridge.publishSample()
-                        } catch (e: Throwable) {
-                            println("PlatformIos: ChartBridge.publishSample failed: ${e.message}")
+                        } catch (_: Throwable) {
+                            println("PlatformIos: ChartBridge.publishSample failed")
                         }
 
                         // Clear the requestedRoute so it can be requested again later
@@ -227,116 +269,118 @@ actual fun PlatformApp() {
                         pendingRoute = route
                         PlatformBridge.requestedRoute = null
                     }
-                } catch (e: Throwable) {
-                    println("PlatformIos: failed handling requestedRoute: ${e.message}")
+                } catch (_: Throwable) {
+                    println("PlatformIos: failed handling requestedRoute")
                 }
             }
         }
     }
 
-    // Strong readiness signal: post ComposeReady once NavController reaches HeroScreen
-    DisposableEffect(navController) {
-        var posted = false
-        val listener = NavController.OnDestinationChangedListener { controller, destination, arguments ->
-            try {
-                val destName = destination.route ?: destination.toString()
+    // Observe route changes via snapshotFlow - platform-agnostic approach
+    LaunchedEffect(navController) {
+        snapshotFlow { navController.currentBackStackEntry?.destination?.route ?: navController.currentBackStackEntry?.destination?.toString() }
+            .collectLatest { destName ->
+                try {
+                    if (destName == null) return@collectLatest
 
-                // Notify iOS about the current route so it can show/hide back button
-                NSOperationQueue.mainQueue.addOperationWithBlock {
-                    val userInfo = mapOf("route" to destName)
-                    NSNotificationCenter.defaultCenter.postNotificationName(
-                        aName = "ComposeRouteChanged",
-                        `object` = null,
-                        userInfo = userInfo as Map<Any?, *>
-                    )
-                }
-                
-                if (!posted && destName == "HeroScreen") {
-                    posted = true
+                    // Decide which routes are main (show tab bar) vs sub-pages
+                    // Routes where we want to show the tab bar
+                    val mainRoutes = setOf("HomePage", "HabitCoachingPage", "ChatScreen", "meditation", "profile", "HeroScreen")
+                    // Routes where we want to hide the navigation bar
+                    val routesWithHiddenNav = setOf("Login", "SignUp", "ResetPassword")
+                    
+                    val isMain = mainRoutes.contains(destName)
+                    val shouldHideTab = !isMain
+                    val shouldHideNav = routesWithHiddenNav.contains(destName)
+                    // Show back button on sub-pages (when tab bar is hidden and nav bar is shown)
+                    val shouldShowBackButton = !isMain && !shouldHideNav
+
                     NSOperationQueue.mainQueue.addOperationWithBlock {
-                        NSNotificationCenter.defaultCenter.postNotificationName(
-                            aName = "ComposeReady",
-                            `object` = null
+                        val userInfo: Map<Any?, Any?> = mapOf(
+                            "route" to destName, 
+                            "shouldHideTab" to shouldHideTab, 
+                            "shouldHideNavigationBar" to shouldHideNav,
+                            "shouldShowBackButton" to shouldShowBackButton
                         )
+                        NSNotificationCenter.defaultCenter.postNotificationName(
+                            aName = "ComposeRouteChanged",
+                            `object` = null,
+                            userInfo = userInfo
+                        )
+
+                        // Also post a dedicated show/hide back button notification for convenience
+                        try {
+                            if (shouldShowBackButton) {
+                                NSNotificationCenter.defaultCenter.postNotificationName(
+                                    aName = "ComposeShowBackButton",
+                                    `object` = null,
+                                    userInfo = mapOf("route" to destName)
+                                )
+                            } else {
+                                NSNotificationCenter.defaultCenter.postNotificationName(
+                                    aName = "ComposeHideBackButton",
+                                    `object` = null,
+                                    userInfo = mapOf("route" to destName)
+                                )
+                            }
+                        } catch (_: Throwable) {
+                        }
                     }
+
+                    if (destName == "HeroScreen") {
+                        NSOperationQueue.mainQueue.addOperationWithBlock {
+                            NSNotificationCenter.defaultCenter.postNotificationName(
+                                aName = "ComposeReady",
+                                `object` = null
+                            )
+                        }
+                    }
+                } catch (_: Throwable) {
                 }
-            } catch (e: Throwable) {
             }
-        }
-        navController.addOnDestinationChangedListener(listener)
-        onDispose {
-            navController.removeOnDestinationChangedListener(listener)
-        }
     }
-    
+
     // Listen for back button press from iOS
     DisposableEffect(navController) {
         val observer = NSNotificationCenter.defaultCenter.addObserverForName(
-            name = "ComposeBackPressed",
-            `object` = null,
-            queue = NSOperationQueue.mainQueue
-        ) { notification: NSNotification? ->
+             name = "ComposeBackPressed",
+             `object` = null,
+             queue = NSOperationQueue.mainQueue
+        ) { _: NSNotification? ->
             try {
                 if (navController.previousBackStackEntry != null) {
                     navController.popBackStack()
-                } else {
                 }
-            } catch (e: Throwable) {
+            } catch (_: Throwable) {
             }
         }
         onDispose {
-            if (observer != null) {
-                NSNotificationCenter.defaultCenter.removeObserver(observer as Any)
-            }
+            NSNotificationCenter.defaultCenter.removeObserver(observer as Any)
         }
     }
 
-    // Render the shared Compose NavHost on iOS so the Compose MainViewController shows the full app
-    // Compute effective dark mode (use system default unless overridden)
-    val darkModeEffective = if (useSystemDefault) isSystemInDarkTheme() else isDarkMode
-    val colors = if (darkModeEffective) DarkColors else LightColors
+    // Removed PlatformBridge.useNativeTabBar writes because the binding isn't available reliably here.
 
-    MaterialTheme(colorScheme = colors) {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            val navControllerLocal = navController
-            
-            // Apply padding for safe area insets to prevent content from being hidden
-            // Do not apply global top/bottom safe-area padding here because individual screens
-            // already call rememberSafeAreaInsetsWithTabBar() and handle their own insets.
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-            ) {
-                NavHost(navController = navControllerLocal, startDestination = LoginScreen) {
-                    composable(LoginScreen) { Authentication().Login(navControllerLocal) }
-                    composable("HeroScreen") { HeroScreen(navControllerLocal, showBottomBar = true) }
-                    composable(SignUpScreen) { Authentication().signUp(navControllerLocal) }
-                    composable(ResetPasswordScreen) { Authentication().ResetPassword(navControllerLocal) }
-                    composable(HomePageScreen) { HomeTab.Content() }
-                    composable(DarkModeSettingsPageScreen) {
-                        DarkModeSettingsPage(
-                            isDarkMode = isDarkMode,
-                            onDarkModeToggle = { checked: Boolean -> isDarkMode = checked },
-                            useSystemDefault = useSystemDefault,
-                            onUseSystemDefaultToggle = { use: Boolean -> useSystemDefault = use },
-                            navController = navControllerLocal
-                        )
-                    }
-                    composable(InsightsPageScreen) { InsightsPage() }
-                    composable(STRESS_MANAGEMENT_PAGE_ROUTE) { StressManagementPage(navControllerLocal) }
-                    composable(MEDITATION_PAGE_ROUTE) { MeditationPage(onBack = { navControllerLocal.popBackStack() }, onNavigateToInsights = { navControllerLocal.navigate(InsightsPageScreen) }, onMeditationComplete = { navControllerLocal.navigate(REFLECTION_PAGE_ROUTE) }) }
-                    composable(REFLECTION_PAGE_ROUTE) {
-                        ReflectionPage(
-                            healthKitService = HealthKitServiceImpl(iOSHealthKitManager()),
-                            onBack = { navControllerLocal.navigate("HeroScreen") { launchSingleTop = true } }
-                        )
-                    }
-                    composable(CompletedHabitsPageRoute) { CompletedHabitsPage(navControllerLocal) }
-                    composable(NotificationPageScreen) { NotificationPage(navControllerLocal) }
-                    composable(AboutPageScreen) { AboutPage(navControllerLocal, versionNumber = VERSION_NUMBER) }
-                    composable(Timer) { TimerScreenContent(onBack = { navControllerLocal.popBackStack() }) }
-                }
-            }
+    // Set initial Compose Material3 colors based on dark mode state
+    val colors = if (isDarkMode) DarkColors else LightColors
+
+    // Main app surface with safe area insets applied
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(
+                top = topInset.dp,
+                bottom = bottomInset.dp
+            ),
+        color = colors.background
+    ) {
+        // Apply MaterialTheme with dynamic colors
+        MaterialTheme(
+            colorScheme = colors
+        ) {
+            // Navigation host for Compose — on iOS we hide Compose's bottom bar because
+            // the app uses a native SwiftUI TabView. Pass showBottomBar=false.
+            YourMainNavHost(navController = navController, showBottomBar = false)
         }
-    }
-}
+     }
+ }

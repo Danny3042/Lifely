@@ -21,6 +21,9 @@ object PlatformBridge {
     var safeAreaLeading: Double by mutableStateOf(0.0)
     var safeAreaTrailing: Double by mutableStateOf(0.0)
 
+    // When set to true, the native host (iOS) will show a native UITabBar and the Compose UI should hide its bottom navigation.
+    var useNativeTabBar: Boolean by mutableStateOf(false)
+
     // Called from Swift/ObjC bindings (ComposeAppPlatformBridge.shared.setSafeAreaInsets)
     fun setSafeAreaInsets(top: Double, bottom: Double, leading: Double, trailing: Double) {
         safeAreaTop = top

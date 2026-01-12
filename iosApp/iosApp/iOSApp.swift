@@ -7,11 +7,77 @@ import GoogleSignIn
 import FirebaseMessaging
 import UserNotifications
 import AppTrackingTransparency
+import Combine
+
+// Simple NativeRouter placed here so the type is available to the App entry point
+final class NativeRouter: ObservableObject {
+    @Published var selectedTabIndex: Int = 0
+    @Published var navigationBarHidden: Bool = false
+    @Published var showBackButton: Bool = false
+
+    private var observers: [NSObjectProtocol] = []
+
+    init() {
+        // Listen for ComposeRouteChanged
+        let o1 = NotificationCenter.default.addObserver(forName: NSNotification.Name("ComposeRouteChanged"), object: nil, queue: .main) { [weak self] note in
+            guard let info = note.userInfo else { return }
+            if let idx = info["tabIndex"] as? Int {
+                self?.selectedTabIndex = idx
+            }
+            if let hideNav = info["shouldHideNavigationBar"] as? Bool {
+                self?.navigationBarHidden = hideNav
+            }
+            if let show = info["shouldShowBackButton"] as? Bool {
+                self?.showBackButton = show
+            }
+        }
+        observers.append(o1)
+
+        let o2 = NotificationCenter.default.addObserver(forName: NSNotification.Name("ComposeShowBackButton"), object: nil, queue: .main) { [weak self] _ in
+            self?.showBackButton = true
+        }
+        observers.append(o2)
+
+        let o3 = NotificationCenter.default.addObserver(forName: NSNotification.Name("ComposeHideBackButton"), object: nil, queue: .main) { [weak self] _ in
+            self?.showBackButton = false
+        }
+        observers.append(o3)
+
+        let o4 = NotificationCenter.default.addObserver(forName: NSNotification.Name("SwitchNativeTab"), object: nil, queue: .main) { [weak self] note in
+            if let tab = note.userInfo?["tab"] as? String {
+                let idx: Int
+                switch tab {
+                case "HomePage","Home": idx = 0
+                case "HabitCoachingPage","Habits": idx = 1
+                case "ChatScreen","Chat": idx = 2
+                case "meditation","Meditate": idx = 3
+                case "profile","Profile": idx = 4
+                default: idx = 0
+                }
+                self?.selectedTabIndex = idx
+            }
+        }
+        observers.append(o4)
+
+        print("NativeRouter (in iOSApp.swift) initialized and observing notifications")
+    }
+
+    func nativeBackTapped() {
+        NotificationCenter.default.post(name: NSNotification.Name("ComposeBackPressed"), object: nil)
+    }
+
+    deinit {
+        for o in observers { NotificationCenter.default.removeObserver(o) }
+    }
+}
+
 @main
 struct iOSApp: App {
     
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    
+    // NativeRouter syncs Compose notifications to SwiftUI. Inject as an environment object.
+    @StateObject private var router = NativeRouter()
+
     init() {
         FirebaseApp.configure()
         // Make hosting window backgrounds clear so Compose window underlay can show through
@@ -107,10 +173,11 @@ struct iOSApp: App {
 
         logInitialEvent()
     }
-    
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(router)
                 .onOpenURL { url in
                     #if canImport(GoogleSignIn)
                     GIDSignIn.sharedInstance.handle(url)
@@ -119,15 +186,20 @@ struct iOSApp: App {
                 }
         }
     }
-    
+
     func logInitialEvent() {
         // logging app open event
         Analytics.logEvent(AnalyticsEventAppOpen, parameters: nil)
     }
-    
+
+
     
     
     class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
+        
+        // Coordinator for Compose <-> Native communication
+        private var composeCoordinator: ComposeCoordinator?
+        
         func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
 
             // Ensure existing windows are transparent
@@ -140,6 +212,12 @@ struct iOSApp: App {
                     }
                 }
             }
+
+            // Initialize and install Compose coordinator observers
+            // Note: For SwiftUI TabView apps, we pass nil for both parameters
+            // The coordinator will use notifications to communicate with ContentView instead
+            composeCoordinator = ComposeCoordinator(tabBarController: nil, navigationController: nil)
+            composeCoordinator?.installObservers()
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                 self.requestTrackingPermission()

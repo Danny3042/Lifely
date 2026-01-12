@@ -19,4 +19,10 @@
    <FileRef
       location = "group:KotlinExceptionHandler.swift">
    </FileRef>
+   <FileRef
+      location = "group:TAB_NAVIGATION_DEBUG.md">
+   </FileRef>
+   <FileRef
+      location = "group:TAB_NAVIGATION_FIX.md">
+   </FileRef>
 </Workspace>

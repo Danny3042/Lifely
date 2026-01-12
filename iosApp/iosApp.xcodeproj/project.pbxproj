@@ -19,6 +19,7 @@
 		087F31292C431A7A00F6B3B2 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 087F31282C431A7A00F6B3B2 /* GoogleSignIn */; };
 		087F312B2C431A7A00F6B3B2 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 087F312A2C431A7A00F6B3B2 /* GoogleSignInSwift */; };
 		087F312D2C43376A00F6B3B2 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 087F312C2C43376A00F6B3B2 /* FirebaseCrashlytics */; };
+		08A3D0D72F147AB800EB7CF9 /* ComposeCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08A3D0D62F147AB800EB7CF9 /* ComposeCoordinator.swift */; };
 		08D7A4B82EF76CE200F44193 /* ComposeNavigationBridge.kt in Resources */ = {isa = PBXBuildFile; fileRef = 08D7A4B72EF76CE200F44193 /* ComposeNavigationBridge.kt */; };
 		08D7A4BA2EF76CFD00F44193 /* NAVIGATION_SETUP.md in Resources */ = {isa = PBXBuildFile; fileRef = 08D7A4B92EF76CFD00F44193 /* NAVIGATION_SETUP.md */; };
 		08DBFD912EF72EF000CCB6B3 /* SafeAreaHelper.kt in Resources */ = {isa = PBXBuildFile; fileRef = 08DBFD902EF72EF000CCB6B3 /* SafeAreaHelper.kt */; };
@@ -89,6 +90,7 @@
 		0836A8E42DE674A2008755A3 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		08683C0A2C287E8D00180F44 /* HealthKitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitManager.swift; sourceTree = "<group>"; };
 		08683C0C2C28801300180F44 /* HealthConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthConnectView.swift; sourceTree = "<group>"; };
+		08A3D0D62F147AB800EB7CF9 /* ComposeCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeCoordinator.swift; sourceTree = "<group>"; };
 		08D07E0C2BFA712D00C7C391 /* ResearchKit.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = ResearchKit.xcodeproj; path = "../../../Downloads/ResearchKit-main/ResearchKit.xcodeproj"; sourceTree = "<group>"; };
 		08D7A4B72EF76CE200F44193 /* ComposeNavigationBridge.kt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ComposeNavigationBridge.kt; sourceTree = "<group>"; };
 		08D7A4B92EF76CFD00F44193 /* NAVIGATION_SETUP.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = NAVIGATION_SETUP.md; sourceTree = "<group>"; };
@@ -212,6 +214,7 @@
 				08DBFD902EF72EF000CCB6B3 /* SafeAreaHelper.kt */,
 				08D7A4B72EF76CE200F44193 /* ComposeNavigationBridge.kt */,
 				08D7A4B92EF76CFD00F44193 /* NAVIGATION_SETUP.md */,
+				08A3D0D62F147AB800EB7CF9 /* ComposeCoordinator.swift */,
 			);
 			path = iosApp;
 			sourceTree = "<group>";
@@ -400,6 +403,7 @@
 				9D9BB4BA477F86A64EDEF86E /* LoginView.swift in Sources */,
 				F30FFFEAD8DC3DBC46A59E01 /* HeroTabView.swift in Sources */,
 				5B82680352B7629EF01DAADE /* HabitTrackerView.swift in Sources */,
+				08A3D0D72F147AB800EB7CF9 /* ComposeCoordinator.swift in Sources */,
 				6DFC66CBE1BD1D7726073B6E /* ChatView.swift in Sources */,
 				BD43E0CE05D2A5BB6BDAA62C /* MeditationView.swift in Sources */,
 				11D975B877485487ECF8CE18 /* ProfileView.swift in Sources */,

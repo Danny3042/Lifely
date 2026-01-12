@@ -1,4 +1,3 @@
-
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -90,6 +89,23 @@ fun HeroScreen(navController: NavHostController, showBottomBar: Boolean = true) 
                 }
         }
 
+        // Also react directly to requestedTabName changes (in case signal was missed or set earlier)
+        LaunchedEffect(Unit) {
+            snapshotFlow { PlatformBridge.requestedTabName }
+                .collectLatest { requested ->
+                    if (!requested.isNullOrEmpty()) {
+                        when (requested) {
+                            "HomePage", "Home" -> tabNavigator.current = homeTab
+                            "HabitCoachingPage", "Habits" -> tabNavigator.current = habitsTab
+                            "ChatScreen", "Chat" -> tabNavigator.current = chatTab
+                            "meditation", "Meditate" -> tabNavigator.current = meditateTab
+                            "profile", "Profile" -> tabNavigator.current = profileTab
+                        }
+                        PlatformBridge.requestedTabName = null
+                    }
+                }
+        }
+
         Scaffold(
             topBar = {
                 if (isAndroid()) {
@@ -100,6 +116,7 @@ fun HeroScreen(navController: NavHostController, showBottomBar: Boolean = true) 
                 CurrentTab()
             },
             bottomBar = {
+                // Show Compose bottom bar only when requested by caller (iOS host will handle native tabs)
                 if (showBottomBar) {
                     NavigationBar {
                         TabNavigationItem(homeTab)

@@ -7,6 +7,172 @@ import PhotosUI
 import Charts
 #endif
 
+// MARK: - ComposeBridge
+/// Singleton bridge to coordinate between Compose and native UIKit/SwiftUI components
+final class ComposeBridge {
+    static let shared = ComposeBridge()
+
+    private(set) weak var tabBarController: UITabBarController?
+    private(set) weak var navigationController: UINavigationController?
+    
+    // Callbacks for SwiftUI coordination
+    var onTabSelectionChange: ((Int) -> Void)?
+    var onTabBarVisibilityChange: ((Bool) -> Void)?
+    var onNavigationBarVisibilityChange: ((Bool) -> Void)?
+    var onBackButtonVisibilityChange: ((Bool) -> Void)?
+
+    private init() {
+        setupObservers()
+    }
+
+    // Call this to register UIKit controllers (optional, mainly for pure UIKit apps)
+    func install(tabBarController: UITabBarController?, navigationController: UINavigationController?) {
+        self.tabBarController = tabBarController
+        self.navigationController = navigationController
+    }
+
+    private func setupObservers() {
+        // Listen for tab switching requests from Compose
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("SwitchNativeTab"), 
+            object: nil, 
+            queue: .main
+        ) { [weak self] note in
+            guard let tab = note.userInfo?["tab"] as? String else { return }
+            let index = self?.tabIndex(for: tab) ?? 0
+            
+            // Update UIKit tab bar if available
+            self?.tabBarController?.selectedIndex = index
+            
+            // Notify SwiftUI via callback
+            self?.onTabSelectionChange?(index)
+        }
+
+        // Listen for route changes from Compose
+        // Note: We only handle visibility here - back button is handled by SharedComposeHost
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ComposeRouteChanged"), 
+            object: nil, 
+            queue: .main
+        ) { [weak self] note in
+            guard let info = note.userInfo else { return }
+            
+            let shouldHideTab = (info["shouldHideTab"] as? Bool) ?? false
+            let shouldHideNav = (info["shouldHideNavigationBar"] as? Bool) ?? false
+            let shouldShowBackButton = (info["shouldShowBackButton"] as? Bool) ?? false
+
+            print("📡 ComposeBridge received ComposeRouteChanged:")
+            print("   shouldHideTab: \(shouldHideTab)")
+            print("   shouldHideNav: \(shouldHideNav)")
+            print("   shouldShowBackButton: \(shouldShowBackButton)")
+
+            // Update UIKit tab bar if available
+            if let tabBar = self?.tabBarController?.tabBar {
+                UIView.animate(withDuration: 0.3) {
+                    tabBar.isHidden = shouldHideTab
+                }
+            }
+
+            // Update UIKit navigation bar if available (only for pure UIKit apps)
+            if let nav = self?.navigationController {
+                nav.setNavigationBarHidden(shouldHideNav, animated: true)
+                
+                if shouldShowBackButton {
+                    let backItem = UIBarButtonItem(
+                        title: "Back", 
+                        style: .plain, 
+                        target: self, 
+                        action: #selector(self?.handleNativeBack(_:))
+                    )
+                    nav.topViewController?.navigationItem.leftBarButtonItem = backItem
+                } else {
+                    nav.topViewController?.navigationItem.leftBarButtonItem = nil
+                }
+            }
+            
+            // Notify SwiftUI via callbacks (SharedComposeHost uses these)
+            self?.onTabBarVisibilityChange?(shouldHideTab)
+            self?.onNavigationBarVisibilityChange?(shouldHideNav)
+            self?.onBackButtonVisibilityChange?(shouldShowBackButton)
+        }
+        
+        // Listen for explicit tab bar show/hide requests
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ShowNativeTabBar"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.tabBarController?.tabBar.isHidden = false
+            self?.onTabBarVisibilityChange?(false)
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("HideNativeTabBar"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.tabBarController?.tabBar.isHidden = true
+            self?.onTabBarVisibilityChange?(true)
+        }
+        
+        // Listen for explicit navigation bar show/hide requests
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ShowNativeNavigationBar"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.navigationController?.setNavigationBarHidden(false, animated: true)
+            self?.onNavigationBarVisibilityChange?(false)
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("HideNativeNavigationBar"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.navigationController?.setNavigationBarHidden(true, animated: true)
+            self?.onNavigationBarVisibilityChange?(true)
+        }
+    }
+
+    @objc private func handleNativeBack(_ sender: Any) {
+        // Add haptic feedback
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
+
+        // Post notification to Compose to handle back navigation
+        NotificationCenter.default.post(
+            name: Notification.Name("ComposeBackPressed"),
+            object: nil
+        )
+    }
+    
+    private func tabIndex(for route: String) -> Int {
+        switch route {
+        case "HomePage", "Home": return 0
+        case "HabitCoachingPage", "Habits": return 1
+        case "ChatScreen", "Chat": return 2
+        case "meditation", "Meditate": return 3
+        case "profile", "Profile": return 4
+        default: return 0
+        }
+    }
+    
+    // Helper to programmatically switch tabs
+    func switchToTab(_ index: Int) {
+        tabBarController?.selectedIndex = index
+        onTabSelectionChange?(index)
+    }
+    
+    // Helper to programmatically switch tabs by route name
+    func switchToTab(route: String) {
+        let index = tabIndex(for: route)
+        switchToTab(index)
+    }
+}
+
+// MARK: - Original Code
+
 // Helper to apply native interface style and update native bar appearances
 func applyNativeInterfaceStyle(dark: Bool?, useSystem: Bool) {
     DispatchQueue.main.async {
@@ -39,6 +205,8 @@ func applyNativeInterfaceStyle(dark: Bool?, useSystem: Bool) {
 // Shared Compose host that uses a single view across all tabs with safe area handling
 struct SharedComposeHost: View {
     @Binding var selectedTab: Int
+    @Binding var hideTabBar: Bool
+    @Binding var hideNavigationBar: Bool
     private let tabRoutes = ["HomePage", "HabitCoachingPage", "ChatScreen", "meditation", "profile"]
 
     @State private var composeReady: Bool = false
@@ -49,10 +217,12 @@ struct SharedComposeHost: View {
     private let composeReadyNotification = Notification.Name("ComposeReady")
 
     var body: some View {
-        ComposeViewController(onClose: nil)
-            .edgesIgnoringSafeArea(.bottom)
-            .padding(.top, -20)
-            .onAppear {
+        ZStack(alignment: .topTrailing) {
+            ComposeViewController(onClose: nil)
+                .edgesIgnoringSafeArea(.bottom)
+                .padding(.top, -20)
+        }
+        .onAppear {
                     // Only register observer once globally
                     if !observerAdded {
                         observerAdded = true
@@ -76,14 +246,52 @@ struct SharedComposeHost: View {
                             object: nil,
                             queue: .main
                         ) { notification in
+                            print("🔍 SharedComposeHost: ComposeRouteChanged notification received")
+                            print("   userInfo: \(notification.userInfo ?? [:])")
+                            
                             if let route = notification.userInfo?["route"] as? String {
                                 currentRoute = route
+                                print("   📍 Current route: \(route)")
+                            }
 
-                                // Show back button for sub-pages
-                                let mainRoutes = ["HomePage", "HabitCoachingPage", "ChatScreen", "meditation", "profile", "HeroScreen", "Login", "SignUp", "ResetPassword"]
-
+                            // Update back button visibility
+                            // Auto-detect: If shouldShowBackButton is not explicitly provided,
+                            // infer it based on whether this is a main tab route
+                            let isMainTabRoute = tabRoutes.contains(currentRoute)
+                            
+                            if let shouldShow = notification.userInfo?["shouldShowBackButton"] as? Bool {
+                                // Use explicit value if provided
+                                print("   ✅ shouldShowBackButton (explicit): \(shouldShow)")
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    showBackButton = !mainRoutes.contains(route)
+                                    showBackButton = shouldShow
+                                }
+                                print("   🔘 Back button is now: \(showBackButton ? "VISIBLE" : "HIDDEN")")
+                            } else if !currentRoute.isEmpty {
+                                // Auto-detect: show back button if NOT on a main tab route
+                                let autoDetectedValue = !isMainTabRoute
+                                print("   🤖 shouldShowBackButton (auto-detected): \(autoDetectedValue)")
+                                print("   📋 isMainTabRoute: \(isMainTabRoute)")
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    showBackButton = autoDetectedValue
+                                }
+                                print("   🔘 Back button is now: \(showBackButton ? "VISIBLE" : "HIDDEN")")
+                            }
+
+                            // Update tab / navigation bar visibility if Compose provides it
+                            if let shouldHideTab = notification.userInfo?["shouldHideTab"] as? Bool {
+                                print("   👁️ shouldHideTab: \(shouldHideTab)")
+                                DispatchQueue.main.async {
+                                    withAnimation(.easeInOut) {
+                                        hideTabBar = shouldHideTab
+                                    }
+                                }
+                            }
+                            if let shouldHideNav = notification.userInfo?["shouldHideNavigationBar"] as? Bool {
+                                print("   🧭 shouldHideNavigationBar: \(shouldHideNav)")
+                                DispatchQueue.main.async {
+                                    withAnimation(.easeInOut) {
+                                        hideNavigationBar = shouldHideNav
+                                    }
                                 }
                             }
                         }
@@ -93,8 +301,19 @@ struct SharedComposeHost: View {
                     requestRoute(route)
                 }
                 .onChange(of: selectedTab) { newIndex in
-                    guard newIndex >= 0 && newIndex < tabRoutes.count else { return }
+                    print("SharedComposeHost: selectedTab changed to \(newIndex)")
+                    guard newIndex >= 0 && newIndex < tabRoutes.count else {
+                        print("SharedComposeHost: Invalid tab index \(newIndex)")
+                        return
+                    }
                     let route = tabRoutes[newIndex]
+                    print("SharedComposeHost: Mapped to route: \(route)")
+                    
+                    // Hide back button when switching to a main tab
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showBackButton = false
+                    }
+                    
                     requestRoute(route)
                 }
                 .toolbar {
@@ -136,16 +355,30 @@ struct SharedComposeHost: View {
     }
 
     private func sendRouteWithRetries(route: String) {
+        print("SharedComposeHost: sendRouteWithRetries called with route: \(route)")
+        
+        // First, update PlatformBridge directly to trigger Compose navigation
+        let bridge = PlatformBridge.shared
+        print("SharedComposeHost: Before update - requestedTabSignal = \(bridge.requestedTabSignal)")
+        bridge.requestedTabName = route
+        bridge.requestedTabSignal = bridge.requestedTabSignal + 1
+        print("SharedComposeHost: After update - requestedTabName = \(bridge.requestedTabName ?? "nil"), requestedTabSignal = \(bridge.requestedTabSignal)")
+        
+        // Also send via AuthManager for backwards compatibility
         AuthManager.shared.requestNavigateTo(route: route)
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { 
-            AuthManager.shared.requestNavigateTo(route: route) 
+        // Retry logic to ensure navigation happens
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            bridge.requestedTabName = route
+            bridge.requestedTabSignal = bridge.requestedTabSignal + 1
+            print("SharedComposeHost: Retry 1 - requestedTabSignal = \(bridge.requestedTabSignal)")
+            AuthManager.shared.requestNavigateTo(route: route)
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { 
-            AuthManager.shared.requestNavigateTo(route: route) 
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { 
-            AuthManager.shared.requestNavigateTo(route: route) 
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            bridge.requestedTabName = route
+            bridge.requestedTabSignal = bridge.requestedTabSignal + 1
+            print("SharedComposeHost: Retry 2 - requestedTabSignal = \(bridge.requestedTabSignal)")
+            AuthManager.shared.requestNavigateTo(route: route)
         }
     }
 }
@@ -153,7 +386,7 @@ struct SharedComposeHost: View {
 /// Wrapper to host the Compose MainViewController with singleton pattern and safe area support
 struct ComposeViewController: UIViewControllerRepresentable {
     let onClose: (() -> Void)?
-    
+
     // Singleton Compose ViewController shared across all tabs
     private static var sharedComposeVC: UIViewController?
     private static var isCreating = false
@@ -179,22 +412,22 @@ struct ComposeViewController: UIViewControllerRepresentable {
         if let existing = ComposeViewController.sharedComposeVC {
             return existing
         }
-        
+
         // Create new instance only once
         ComposeViewController.isCreating = true
         let composeVC = MainViewControllerKt.MainViewController()
         composeVC.view.backgroundColor = .clear
-        
+
         // Enable user interaction for scrolling
         composeVC.view.isUserInteractionEnabled = true
-        
+
         // Store as singleton
         ComposeViewController.sharedComposeVC = composeVC
         ComposeViewController.isCreating = false
-        
+
         return composeVC
     }
-    
+
     // Ensure the shared compose VC is visible and in front of other UI layers
     static func ensureSharedVisible() {
         DispatchQueue.main.async {
@@ -206,12 +439,21 @@ struct ComposeViewController: UIViewControllerRepresentable {
         }
     }
 
+    // Allow host to hide/show the shared compose VC when using native UI (used by ContentView when UseNativeTabBar toggles)
+    static func setSharedHidden(_ hidden: Bool) {
+        DispatchQueue.main.async {
+            guard let vc = ComposeViewController.sharedComposeVC else { return }
+            vc.view.isHidden = hidden
+        }
+    }
+
+
     func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
         // Only send safe area insets once per update cycle
         if !context.coordinator.hasSetupObserver {
             context.coordinator.hasSetupObserver = true
         }
-        
+
         // Send safe area insets to Compose
         let safeAreaInsets = uiViewController.view.safeAreaInsets
         let insetsInfo: [String: CGFloat] = [
@@ -240,6 +482,7 @@ struct ComposeViewController: UIViewControllerRepresentable {
 
 /// Root SwiftUI view that uses native TabView with Compose content
 struct ContentView: View {
+    @EnvironmentObject var router: NativeRouter
     @State private var selectedTab: Int = 0
     @State private var showImagePicker: Bool = false
     @State private var selectedImage: UIImage? = nil
@@ -251,12 +494,15 @@ struct ContentView: View {
     @State private var composeHidesNavigationBar: Bool = false
     @State private var safeAreaBottom: CGFloat = 0
 
+    // Reference to ComposeBridge for coordination
+    private let composeBridge = ComposeBridge.shared
+
     var body: some View {
         ZStack {
             // Native TabView with shared Compose host in each tab
             TabView(selection: $selectedTab) {
                 NavigationView {
-                    SharedComposeHost(selectedTab: $selectedTab)
+                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
                         .navigationTitle("Home")
                         .navigationBarTitleDisplayMode(.large)
                         .navigationBarHidden(composeHidesNavigationBar)
@@ -267,7 +513,7 @@ struct ContentView: View {
                 .tag(0)
 
                 NavigationView {
-                    SharedComposeHost(selectedTab: $selectedTab)
+                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
                         .navigationTitle("Habits")
                         .navigationBarTitleDisplayMode(.large)
                         .navigationBarHidden(composeHidesNavigationBar)
@@ -278,7 +524,7 @@ struct ContentView: View {
                 .tag(1)
 
                 NavigationView {
-                    SharedComposeHost(selectedTab: $selectedTab)
+                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
                         .navigationTitle("Chat")
                         .navigationBarTitleDisplayMode(.large)
                         .navigationBarHidden(composeHidesNavigationBar)
@@ -289,7 +535,7 @@ struct ContentView: View {
                 .tag(2)
 
                 NavigationView {
-                    SharedComposeHost(selectedTab: $selectedTab)
+                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
                         .navigationTitle("Meditate")
                         .navigationBarTitleDisplayMode(.large)
                         .navigationBarHidden(composeHidesNavigationBar)
@@ -300,7 +546,7 @@ struct ContentView: View {
                 .tag(3)
 
                 NavigationView {
-                    SharedComposeHost(selectedTab: $selectedTab)
+                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
                         .navigationTitle("Profile")
                         .navigationBarTitleDisplayMode(.large)
                         .navigationBarHidden(composeHidesNavigationBar)
@@ -310,6 +556,39 @@ struct ContentView: View {
                 }
                 .tag(4)
             }
+
+            // Native back button overlay driven by NativeRouter
+            // Only show the overlay when Compose requested a back button AND the native
+            // navigation bar is hidden. This avoids duplicates when SwiftUI's NavigationView
+            // already shows a back button in the navigation bar.
+            if router.showBackButton && router.navigationBarHidden {
+                 VStack {
+                     HStack(spacing: 8) {
+                         Button(action: {
+                             // add haptic
+                             let impact = UIImpactFeedbackGenerator(style: .light)
+                             impact.impactOccurred()
+                             router.nativeBackTapped()
+                         }) {
+                             HStack(spacing: 6) {
+                                 Image(systemName: "chevron.left")
+                                     .font(.system(size: 17, weight: .semibold))
+                                 Text("Back")
+                                     .font(.system(size: 17))
+                             }
+                             .padding(8)
+                             .background(.ultraThinMaterial)
+                             .cornerRadius(8)
+                         }
+                         Spacer()
+                     }
+                     .padding(.top, 12)
+                     .padding(.leading, 8)
+                     Spacer()
+                 }
+                 .transition(.opacity.combined(with: .move(edge: .top)))
+                 .zIndex(1100)
+             }
 
             // Snackbar overlay
             if settings.showSnackbar {
@@ -406,12 +685,60 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            // Set up ComposeBridge callbacks for SwiftUI coordination
+            composeBridge.onTabSelectionChange = { [selectedTab] index in
+                if selectedTab != index {
+                    withAnimation {
+                        self.selectedTab = index
+                    }
+                }
+            }
+            
+            composeBridge.onTabBarVisibilityChange = { [composeHidesTabBar] hidden in
+                if composeHidesTabBar != hidden {
+                    withAnimation(.easeInOut) {
+                        self.composeHidesTabBar = hidden
+                    }
+                }
+            }
+            
+            composeBridge.onNavigationBarVisibilityChange = { [composeHidesNavigationBar] hidden in
+                if composeHidesNavigationBar != hidden {
+                    withAnimation(.easeInOut) {
+                        self.composeHidesNavigationBar = hidden
+                    }
+                }
+            }
+            
+            // Forward back-button visibility changes from ComposeBridge into the SwiftUI NativeRouter
+            composeBridge.onBackButtonVisibilityChange = { visible in
+                DispatchQueue.main.async {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        // Update both the local SharedComposeHost state and the router so overlay/back-button shows
+                        self.composeHidesNavigationBar = false
+                        self.composeHidesTabBar = false
+                        // Update router directly (EnvironmentObject)
+                        self.router.showBackButton = visible
+                    }
+                }
+            }
+
             // Force update window interface style
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
                 windowScene.windows.forEach { window in
                     window.overrideUserInterfaceStyle = .unspecified
                 }
             }
+
+            // Tell Compose to hide its tab bar since we're using native SwiftUI TabView
+            print("ContentView: posting UseNativeTabBar -> enabled = true")
+             NotificationCenter.default.post(
+                 name: Notification.Name("UseNativeTabBar"),
+                 object: nil,
+                 userInfo: ["enabled": true]
+             )
+
+            // Note: Compose will detect "UseNativeTabBar" notification; skip direct PlatformBridge assignment
 
             // Register Firebase auth state listener to show/hide sign-in UI
             if authHandle == nil {
@@ -421,10 +748,24 @@ struct ContentView: View {
                     }
                 }
             }
+            
+            // 🆕 Listen for tab selection updates from ComposeCoordinator
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("UpdateNativeTabSelection"),
+                object: nil,
+                queue: .main
+            ) { notification in
+                if let index = notification.userInfo?["index"] as? Int {
+                    print("ContentView: Received UpdateNativeTabSelection -> index \(index)")
+                    withAnimation {
+                        selectedTab = index
+                    }
+                }
+            }
 
             // Compose event observers (do not force the shared UIViewController to front so SwiftUI overlays like the FAB remain visible)
             NotificationCenter.default.addObserver(forName: Notification.Name("ComposeNavigationChanged"), object: nil, queue: .main) { note in
-                // Received navigation change from Compose — we no longer force the shared VC to the front
+                // Received navigation change from Compose — we no longer force bringToFront
             }
 
             NotificationCenter.default.addObserver(forName: Notification.Name("ComposeReady"), object: nil, queue: .main) { _ in
@@ -435,7 +776,27 @@ struct ContentView: View {
                     showChartsSheet = true
                     UserDefaults.standard.set(false, forKey: "OpenNativeChartsPending")
                 }
+
+                // Re-post UseNativeTabBar on ComposeReady so the Kotlin observer (which may have been registered by then) receives it.
+                NotificationCenter.default.post(
+                    name: Notification.Name("UseNativeTabBar"),
+                    object: nil,
+                    userInfo: ["enabled": true]
+                )
+
             }
+
+            // Observe dark mode changes coming from Compose so native bars update automatically
+            NotificationCenter.default.addObserver(forName: Notification.Name("ComposeDarkModeChanged"), object: nil, queue: .main) { note in
+                if let info = note.userInfo as? [String: Any] {
+                    let dark = info["dark"] as? Bool
+                    let useSystem = info["useSystem"] as? Bool ?? true
+                    applyNativeInterfaceStyle(dark: dark, useSystem: useSystem)
+                }
+            }
+
+            // Ensure native tab bar visibility matches initial Compose preference
+            setNativeTabBarHidden(composeHidesTabBar)
 
             // Listen for native-host FAB tap to request a new chat (this will be posted by the FAB below)
             NotificationCenter.default.addObserver(forName: Notification.Name("ComposeRequestNewChat"), object: nil, queue: .main) { _ in
@@ -471,6 +832,24 @@ struct ContentView: View {
             if let h = authHandle {
                 Auth.auth().removeStateDidChangeListener(h)
                 authHandle = nil
+            }
+        }
+        // Keep native UITabBar in sync with Compose's requests
+        .onChange(of: composeHidesTabBar) { hidden in
+            setNativeTabBarHidden(hidden)
+        }
+        .onChange(of: composeHidesNavigationBar) { hidden in
+            // when Compose wants native nav bar hidden/shown, update the appearance on main thread
+            DispatchQueue.main.async {
+                // wrapped in animation to avoid jarring changes
+                withAnimation(.easeInOut) {
+                    // Force update windows so NavigationView picks up the change
+                    if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                        for window in scene.windows {
+                            window.rootViewController?.navigationController?.setNavigationBarHidden(hidden, animated: true)
+                        }
+                    }
+                }
             }
         }
     }
@@ -918,6 +1297,26 @@ struct ChartView: View {
 }
 #endif
 // --- End embedded Chart support ---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
