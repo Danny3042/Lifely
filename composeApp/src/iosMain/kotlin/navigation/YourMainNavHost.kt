@@ -43,7 +43,14 @@ import config.VERSION_NUMBER
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
-fun YourMainNavHost(navController: NavHostController, showBottomBar: Boolean = true) {
+fun YourMainNavHost(
+    navController: NavHostController,
+    showBottomBar: Boolean = true,
+    isDarkMode: Boolean = false,
+    onDarkModeToggle: (Boolean) -> Unit = {},
+    useSystemDefault: Boolean = true,
+    onUseSystemDefaultToggle: (Boolean) -> Unit = {}
+) {
     // Observe current back stack entry for route changes
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
 
@@ -131,10 +138,10 @@ fun YourMainNavHost(navController: NavHostController, showBottomBar: Boolean = t
         composable(NotificationPageScreen) { NotificationPage(navController) }
         composable(DarkModeSettingsPageScreen) {
             DarkModeSettingsPage(
-                isDarkMode = false,
-                onDarkModeToggle = {},
-                useSystemDefault = true,
-                onUseSystemDefaultToggle = {},
+                isDarkMode = isDarkMode,
+                onDarkModeToggle = onDarkModeToggle,
+                useSystemDefault = useSystemDefault,
+                onUseSystemDefaultToggle = onUseSystemDefaultToggle,
                 navController = navController
             )
         }

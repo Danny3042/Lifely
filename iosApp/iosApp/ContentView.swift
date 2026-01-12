@@ -171,36 +171,7 @@ final class ComposeBridge {
     }
 }
 
-// MARK: - Original Code
-
-// Helper to apply native interface style and update native bar appearances
-func applyNativeInterfaceStyle(dark: Bool?, useSystem: Bool) {
-    DispatchQueue.main.async {
-        let style: UIUserInterfaceStyle = useSystem ? .unspecified : ((dark ?? false) ? .dark : .light)
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-            for window in windowScene.windows {
-                window.overrideUserInterfaceStyle = style
-            }
-        }
-
-        // Update navigation bar appearance to use system background (adapts to dark/light)
-        let navAppearance = UINavigationBarAppearance()
-        navAppearance.configureWithDefaultBackground()
-        UINavigationBar.appearance().standardAppearance = navAppearance
-        UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
-        UINavigationBar.appearance().tintColor = UIColor.label
-
-        // Update tab bar appearance
-        let tabAppearance = UITabBarAppearance()
-        tabAppearance.configureWithDefaultBackground()
-        UITabBar.appearance().standardAppearance = tabAppearance
-        if #available(iOS 15.0, *) {
-            UITabBar.appearance().scrollEdgeAppearance = tabAppearance
-        }
-        UITabBar.appearance().tintColor = UIColor.systemBlue
-        UITabBar.appearance().unselectedItemTintColor = UIColor.secondaryLabel
-    }
-}
+// MARK: - SwiftUI Views
 
 // Shared Compose host that uses a single view across all tabs with safe area handling
 struct SharedComposeHost: View {
@@ -218,9 +189,13 @@ struct SharedComposeHost: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
+            // Host the shared Compose view controller. Do not apply negative padding here —
+            // the Compose host receives safe area insets via notifications and the Compose
+            // Surface uses top/bottom insets. Removing the negative top padding prevents the
+            // Compose content from drawing behind the native navigation bar and fixes the
+            // large gap/overlap seen in dark mode.
             ComposeViewController(onClose: nil)
                 .edgesIgnoringSafeArea(.bottom)
-                .padding(.top, -20)
         }
         .onAppear {
                     // Only register observer once globally
@@ -248,7 +223,7 @@ struct SharedComposeHost: View {
                         ) { notification in
                             print("🔍 SharedComposeHost: ComposeRouteChanged notification received")
                             print("   userInfo: \(notification.userInfo ?? [:])")
-                            
+
                             if let route = notification.userInfo?["route"] as? String {
                                 currentRoute = route
                                 print("   📍 Current route: \(route)")
@@ -456,6 +431,7 @@ struct ComposeViewController: UIViewControllerRepresentable {
 
         // Send safe area insets to Compose
         let safeAreaInsets = uiViewController.view.safeAreaInsets
+        print("ComposeViewController: safeAreaInsets top=\(safeAreaInsets.top) bottom=\(safeAreaInsets.bottom) left=\(safeAreaInsets.left) right=\(safeAreaInsets.right)")
         let insetsInfo: [String: CGFloat] = [
             "top": safeAreaInsets.top,
             "bottom": safeAreaInsets.bottom,
@@ -467,6 +443,13 @@ struct ComposeViewController: UIViewControllerRepresentable {
             name: Notification.Name("SafeAreaInsetsChanged"),
             object: nil,
             userInfo: insetsInfo
+        )
+        // Also inform Kotlin/Compose of the current interface style so Compose can follow system appearance when requested
+        let isDarkInterface = uiViewController.traitCollection.userInterfaceStyle == .dark
+        NotificationCenter.default.post(
+            name: Notification.Name("SystemInterfaceStyleChanged"),
+            object: nil,
+            userInfo: ["dark": isDarkInterface]
         )
         // Also attempt typed call into Kotlin-generated bridge if available.
         let bridge = PlatformBridge.shared
@@ -493,6 +476,29 @@ struct ContentView: View {
     @State private var composeHidesTabBar: Bool = false
     @State private var composeHidesNavigationBar: Bool = false
     @State private var safeAreaBottom: CGFloat = 0
+    @State private var preferredColorScheme: ColorScheme? = {
+        // Initialize from saved preferences immediately
+        let defaults = UserDefaults.standard
+
+        // Check if useSystemDefault is explicitly set
+        let savedUseSystemObj = defaults.object(forKey: "useSystemDefault")
+        let savedUseSystem = (savedUseSystemObj as? Bool) ?? true
+        
+        if savedUseSystem {
+            print("ContentView: Initial state -> following system (nil)")
+            return nil
+        } else {
+            // Only read isDarkMode if not using system default
+            let savedDarkModeObj = defaults.object(forKey: "isDarkMode")
+            let savedDarkMode = (savedDarkModeObj as? Bool) ?? false
+            print("ContentView: Initial state -> dark: \(savedDarkMode)")
+            return savedDarkMode ? .dark : .light
+        }
+    }()
+     // Ensure we only sync persisted color scheme once at first appearance to avoid overwriting
+     @State private var didInitColorScheme: Bool = false
+    // Debounce work item to avoid rapid preferredColorScheme flips
+    @State private var darkModeDebounceItem: DispatchWorkItem? = nil
 
     // Reference to ComposeBridge for coordination
     private let composeBridge = ComposeBridge.shared
@@ -556,6 +562,10 @@ struct ContentView: View {
                 }
                 .tag(4)
             }
+            .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
+            .preferredColorScheme(preferredColorScheme)
+            .animation(.easeInOut(duration: 0.2), value: composeHidesTabBar)
+            .animation(.easeInOut(duration: 0.25), value: preferredColorScheme)
 
             // Native back button overlay driven by NativeRouter
             // Only show the overlay when Compose requested a back button AND the native
@@ -723,13 +733,6 @@ struct ContentView: View {
                 }
             }
 
-            // Force update window interface style
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                windowScene.windows.forEach { window in
-                    window.overrideUserInterfaceStyle = .unspecified
-                }
-            }
-
             // Tell Compose to hide its tab bar since we're using native SwiftUI TabView
             print("ContentView: posting UseNativeTabBar -> enabled = true")
              NotificationCenter.default.post(
@@ -786,17 +789,82 @@ struct ContentView: View {
 
             }
 
-            // Observe dark mode changes coming from Compose so native bars update automatically
-            NotificationCenter.default.addObserver(forName: Notification.Name("ComposeDarkModeChanged"), object: nil, queue: .main) { note in
-                if let info = note.userInfo as? [String: Any] {
-                    let dark = info["dark"] as? Bool
-                    let useSystem = info["useSystem"] as? Bool ?? true
-                    applyNativeInterfaceStyle(dark: dark, useSystem: useSystem)
+            // Listen for dark mode changes from Compose to update SwiftUI's preferred color scheme
+            // This is the ONLY place where tab bar appearance should be controlled (via .preferredColorScheme)
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("ComposeDarkModeChanged"),
+                object: nil,
+                queue: .main
+            ) { [self] notification in
+                guard let userInfo = notification.userInfo else { return }
+                let dark = (userInfo["dark"] as? Bool) ?? false
+                let useSystem = (userInfo["useSystem"] as? Bool) ?? true
+
+                // If the incoming notification requests 'useSystem' but the user has explicitly
+                // chosen a manual theme (saved useSystemDefault == false), ignore this notification.
+                let defaults = UserDefaults.standard
+                let currentSavedUseSystem = (defaults.object(forKey: "useSystemDefault") as? Bool) ?? true
+                if useSystem && currentSavedUseSystem == false {
+                    print("ContentView: Ignoring ComposeDarkModeChanged -> useSystem=true but user previously chose manual theme")
+                    return
+                }
+
+                // Calculate the new color scheme
+                let newColorScheme: ColorScheme? = useSystem ? nil : (dark ? .dark : .light)
+
+                print("ContentView: ComposeDarkModeChanged received")
+                print("  - dark: \(dark)")
+                print("  - useSystem: \(useSystem)")
+                print("  - current preferredColorScheme: \(String(describing: self.preferredColorScheme))")
+                print("  - new preferredColorScheme: \(String(describing: newColorScheme))")
+                
+                // Debounce quick successive notifications to avoid flip-flop during tab switches
+                darkModeDebounceItem?.cancel()
+                let work = DispatchWorkItem {
+                    // Only update if it actually changed to prevent unnecessary redraws
+                    guard newColorScheme != self.preferredColorScheme else {
+                        print("  - SKIPPED (no change)")
+                        return
+                    }
+                    print("  - UPDATING preferredColorScheme (debounced)")
+                    self.preferredColorScheme = newColorScheme
+                    // Persist the selection so future onAppear checks won't overwrite it
+                    let defaults = UserDefaults.standard
+                    defaults.set((newColorScheme == .dark), forKey: "isDarkMode")
+                    defaults.set(useSystem, forKey: "useSystemDefault")
+                    // Also notify Compose/Kotlin via PlatformBridge if needed (optional)
+                }
+                darkModeDebounceItem = work
+                // Small delay to coalesce rapid updates (50-120ms is sufficient)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: work)
+            }
+            
+            // Load initial dark mode preference from UserDefaults (set by Compose/Kotlin)
+            if !didInitColorScheme {
+                didInitColorScheme = true
+                let defaults = UserDefaults.standard
+                let savedDarkModeObj = defaults.object(forKey: "isDarkMode")
+                let savedUseSystemObj = defaults.object(forKey: "useSystemDefault")
+
+                let savedDarkMode = (savedDarkModeObj as? Bool) ?? false
+                let savedUseSystem = (savedUseSystemObj as? Bool) ?? true
+
+                print("ContentView: onAppear - Loading initial preferences (once)")
+                print("  - isDarkMode key exists: \(savedDarkModeObj != nil)")
+                print("  - useSystemDefault key exists: \(savedUseSystemObj != nil)")
+                print("  - savedDarkMode: \(savedDarkMode)")
+                print("  - savedUseSystem: \(savedUseSystem)")
+                print("  - current preferredColorScheme: \(String(describing: self.preferredColorScheme))")
+
+                // Update if values from UserDefaults differ from initialized state
+                let expectedColorScheme: ColorScheme? = savedUseSystem ? nil : (savedDarkMode ? .dark : .light)
+                if expectedColorScheme != self.preferredColorScheme {
+                    print("  - Updating preferredColorScheme from \(String(describing: self.preferredColorScheme)) to \(String(describing: expectedColorScheme))")
+                    self.preferredColorScheme = expectedColorScheme
+                } else {
+                    print("  - preferredColorScheme matches expected value")
                 }
             }
-
-            // Ensure native tab bar visibility matches initial Compose preference
-            setNativeTabBarHidden(composeHidesTabBar)
 
             // Listen for native-host FAB tap to request a new chat (this will be posted by the FAB below)
             NotificationCenter.default.addObserver(forName: Notification.Name("ComposeRequestNewChat"), object: nil, queue: .main) { _ in
@@ -834,10 +902,7 @@ struct ContentView: View {
                 authHandle = nil
             }
         }
-        // Keep native UITabBar in sync with Compose's requests
-        .onChange(of: composeHidesTabBar) { hidden in
-            setNativeTabBarHidden(hidden)
-        }
+        // SwiftUI handles tab bar visibility via .toolbar() modifier above - no manual UIKit manipulation needed
         .onChange(of: composeHidesNavigationBar) { hidden in
             // when Compose wants native nav bar hidden/shown, update the appearance on main thread
             DispatchQueue.main.async {
@@ -850,25 +915,6 @@ struct ContentView: View {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    // Hide/show UITabBar instances found in the app windows.
-    private func setNativeTabBarHidden(_ hidden: Bool) {
-        DispatchQueue.main.async {
-            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
-            for window in scene.windows {
-                // traverse subviews to find UITabBar instances
-                func traverse(_ view: UIView) {
-                    if let tb = view as? UITabBar {
-                        tb.isHidden = hidden
-                    }
-                    for sub in view.subviews {
-                        traverse(sub)
-                    }
-                }
-                traverse(window)
             }
         }
     }
@@ -1297,6 +1343,15 @@ struct ChartView: View {
 }
 #endif
 // --- End embedded Chart support ---
+
+
+
+
+
+
+
+
+
 
 
 

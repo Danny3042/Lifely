@@ -77,122 +77,38 @@ struct iOSApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     // NativeRouter syncs Compose notifications to SwiftUI. Inject as an environment object.
     @StateObject private var router = NativeRouter()
-
+    
     init() {
         FirebaseApp.configure()
+        
+        // Pure SwiftUI approach - no UIKit appearance configuration
+        // Dark mode is fully controlled by ContentView's .preferredColorScheme() modifier
         // Make hosting window backgrounds clear so Compose window underlay can show through
         UIWindow.appearance().backgroundColor = .clear
         
-        // Configure navigation bar appearance for proper dark mode support
-        let navigationBarAppearance = UINavigationBarAppearance()
-        navigationBarAppearance.configureWithDefaultBackground()
-        UINavigationBar.appearance().standardAppearance = navigationBarAppearance
-        UINavigationBar.appearance().compactAppearance = navigationBarAppearance
-        UINavigationBar.appearance().scrollEdgeAppearance = navigationBarAppearance
-        
-        // Configure tab bar appearance for proper dark mode support
-        let tabBarAppearance = UITabBarAppearance()
-        tabBarAppearance.configureWithDefaultBackground()
-        UITabBar.appearance().standardAppearance = tabBarAppearance
-        if #available(iOS 15.0, *) {
-            UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
-        }
-        
-        // Observe Compose dark-mode changes so native bars can match the Compose theme
-        NotificationCenter.default.addObserver(forName: NSNotification.Name("ComposeDarkModeChanged"), object: nil, queue: .main) { notification in
-            let userInfo = notification.userInfo
-            let dark = (userInfo?["dark"] as? Bool) ?? false
-            let useSystem = (userInfo?["useSystem"] as? Bool) ?? true
-
-            // Prepare new appearances based on flags
-            let newNavAppearance = UINavigationBarAppearance()
-            let newTabAppearance = UITabBarAppearance()
-
-            if useSystem {
-                // Let the system decide (follow device appearance)
-                newNavAppearance.configureWithDefaultBackground()
-                newTabAppearance.configureWithDefaultBackground()
-                UINavigationBar.appearance().tintColor = nil
-                UITabBar.appearance().tintColor = nil
-                UITabBar.appearance().unselectedItemTintColor = nil
-            } else if dark {
-                // Force dark styling for bars
-                newNavAppearance.configureWithOpaqueBackground()
-                newNavAppearance.backgroundColor = UIColor { trait in
-                    return .black
-                }
-                newNavAppearance.titleTextAttributes = [.foregroundColor: UIColor.white]
-                newNavAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
-
-                newTabAppearance.configureWithOpaqueBackground()
-                newTabAppearance.backgroundColor = UIColor.black
-                UITabBar.appearance().tintColor = UIColor.systemBlue
-                UITabBar.appearance().unselectedItemTintColor = UIColor.lightGray
-            } else {
-                // Force light styling for bars
-                newNavAppearance.configureWithOpaqueBackground()
-                newNavAppearance.backgroundColor = UIColor.white
-                newNavAppearance.titleTextAttributes = [.foregroundColor: UIColor.black]
-                newNavAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor.black]
-
-                newTabAppearance.configureWithOpaqueBackground()
-                newTabAppearance.backgroundColor = UIColor.white
-                UITabBar.appearance().tintColor = UIColor.systemBlue
-                UITabBar.appearance().unselectedItemTintColor = UIColor.gray
-            }
-
-            // Apply the computed appearances
-            UINavigationBar.appearance().standardAppearance = newNavAppearance
-            UINavigationBar.appearance().compactAppearance = newNavAppearance
-            UINavigationBar.appearance().scrollEdgeAppearance = newNavAppearance
-
-            UITabBar.appearance().standardAppearance = newTabAppearance
-            if #available(iOS 15.0, *) {
-                UITabBar.appearance().scrollEdgeAppearance = newTabAppearance
-            }
-
-            // Determine the override user interface style for windows
-            let overrideStyle: UIUserInterfaceStyle = {
-                if useSystem { return .unspecified }
-                return dark ? .dark : .light
-            }()
-
-            // Force the system to update existing bars and window interface style
-            DispatchQueue.main.async {
-                for scene in UIApplication.shared.connectedScenes {
-                    if let ws = scene as? UIWindowScene {
-                        for w in ws.windows {
-                            w.overrideUserInterfaceStyle = overrideStyle
-                            w.rootViewController?.setNeedsStatusBarAppearanceUpdate()
-                            w.rootViewController?.view.setNeedsLayout()
-                        }
-                    }
-                }
-            }
-        }
-
         logInitialEvent()
     }
-
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(router)
                 .onOpenURL { url in
-                    #if canImport(GoogleSignIn)
+#if canImport(GoogleSignIn)
                     GIDSignIn.sharedInstance.handle(url)
-                    #endif
-                    UIApplication.shared.endEditing()
+#endif
+                    // Dismiss the keyboard / end editing on the current first responder.
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
         }
     }
-
+    
     func logInitialEvent() {
         // logging app open event
         Analytics.logEvent(AnalyticsEventAppOpen, parameters: nil)
     }
-
-
+    
+    
     
     
     class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
@@ -201,7 +117,7 @@ struct iOSApp: App {
         private var composeCoordinator: ComposeCoordinator?
         
         func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-
+            
             // Ensure existing windows are transparent
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 for scene in UIApplication.shared.connectedScenes {
@@ -212,13 +128,16 @@ struct iOSApp: App {
                     }
                 }
             }
-
+            
             // Initialize and install Compose coordinator observers
             // Note: For SwiftUI TabView apps, we pass nil for both parameters
             // The coordinator will use notifications to communicate with ContentView instead
             composeCoordinator = ComposeCoordinator(tabBarController: nil, navigationController: nil)
             composeCoordinator?.installObservers()
-
+            
+            // Setup dark mode observer
+            setupDarkModeObserver()
+            
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                 self.requestTrackingPermission()
             }
@@ -243,34 +162,147 @@ struct iOSApp: App {
             return false
         }
         
-  
+        
         
         private func requestTrackingPermission() {
-                ATTrackingManager.requestTrackingAuthorization { status in
-                    switch status {
-                    case .authorized:
-                        // Tracking authorized
-                        break
-                    case .denied:
-                        // Tracking denied
-                        Analytics.setAnalyticsCollectionEnabled(false)
-                    case .restricted:
-                        // Tracking restricted
-                        break
-                    case .notDetermined:
-                        // Tracking not determined
-                        break
-                    @unknown default:
-                        // Handle unknown status
-                        break
+            ATTrackingManager.requestTrackingAuthorization { status in
+                switch status {
+                case .authorized:
+                    // Tracking authorized
+                    break
+                case .denied:
+                    // Tracking denied
+                    Analytics.setAnalyticsCollectionEnabled(false)
+                case .restricted:
+                    // Tracking restricted
+                    break
+                case .notDetermined:
+                    // Tracking not determined
+                    break
+                @unknown default:
+                    // Handle unknown status
+                    break
+                }
+            }
+            
+        }
+        
+        private func setupDarkModeObserver() {
+            // Observe Compose dark-mode changes so native bars can match the Compose theme
+            NotificationCenter.default.addObserver(forName: NSNotification.Name("ComposeDarkModeChanged"), object: nil, queue: .main) { notification in
+                let userInfo = notification.userInfo
+                let dark = (userInfo?["dark"] as? Bool) ?? false
+                let useSystem = (userInfo?["useSystem"] as? Bool) ?? true
+                
+                // Prepare new appearances based on flags
+                let newNavAppearance = UINavigationBarAppearance()
+                let newTabAppearance = UITabBarAppearance()
+                
+                if useSystem {
+                    // Let the system decide (follow device appearance)
+                    newNavAppearance.configureWithDefaultBackground()
+                    newTabAppearance.configureWithDefaultBackground()
+                    UINavigationBar.appearance().tintColor = nil
+                    UITabBar.appearance().tintColor = nil
+                    UITabBar.appearance().unselectedItemTintColor = nil
+                    // Ensure backgroundColor for tab bar uses system dynamic default
+                    UITabBar.appearance().backgroundColor = nil
+                } else if dark {
+                    // Force dark styling for bars
+                    newNavAppearance.configureWithOpaqueBackground()
+                    newNavAppearance.backgroundColor = UIColor { trait in
+                        return UIColor.black
+                    }
+                    newNavAppearance.titleTextAttributes = [.foregroundColor: UIColor.white]
+                    newNavAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+                    
+                    newTabAppearance.configureWithOpaqueBackground()
+                    newTabAppearance.backgroundColor = UIColor.black
+                    UITabBar.appearance().tintColor = UIColor.systemBlue
+                    UITabBar.appearance().unselectedItemTintColor = UIColor.lightGray
+                    UITabBar.appearance().backgroundColor = UIColor.black
+                } else {
+                    // Force light styling for bars
+                    newNavAppearance.configureWithOpaqueBackground()
+                    newNavAppearance.backgroundColor = UIColor.white
+                    newNavAppearance.titleTextAttributes = [.foregroundColor: UIColor.black]
+                    newNavAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor.black]
+                    
+                    newTabAppearance.configureWithOpaqueBackground()
+                    newTabAppearance.backgroundColor = UIColor.white
+                    UITabBar.appearance().tintColor = UIColor.systemBlue
+                    UITabBar.appearance().unselectedItemTintColor = UIColor.gray
+                    UITabBar.appearance().backgroundColor = UIColor.white
+                }
+                
+                // Apply the computed appearances
+                UINavigationBar.appearance().standardAppearance = newNavAppearance
+                UINavigationBar.appearance().compactAppearance = newNavAppearance
+                UINavigationBar.appearance().scrollEdgeAppearance = newNavAppearance
+                
+                UITabBar.appearance().standardAppearance = newTabAppearance
+                if #available(iOS 15.0, *) {
+                    UITabBar.appearance().scrollEdgeAppearance = newTabAppearance
+                }
+                
+                // Determine the override user interface style for windows
+                let overrideStyle: UIUserInterfaceStyle = {
+                    if useSystem { return .unspecified }
+                    return dark ? .dark : .light
+                }()
+                
+                // Force the system to update existing bars and window interface style
+                DispatchQueue.main.async {
+                    for scene in UIApplication.shared.connectedScenes {
+                        if let ws = scene as? UIWindowScene {
+                            for w in ws.windows {
+                                w.overrideUserInterfaceStyle = overrideStyle
+                                w.rootViewController?.setNeedsStatusBarAppearanceUpdate()
+                                w.rootViewController?.view.setNeedsLayout()
+                                // Additionally apply appearance directly to any existing UITabBar instances
+                                if let tbc = w.rootViewController?.tabBarController {
+                                    let tb = tbc.tabBar
+                                    tb.standardAppearance = newTabAppearance
+                                    if #available(iOS 15.0, *) {
+                                        tb.scrollEdgeAppearance = newTabAppearance
+                                    }
+                                    // Ensure background color and tints are applied now
+                                    tb.barStyle = (overrideStyle == .dark) ? .black : .default
+                                    tb.tintColor = UITabBar.appearance().tintColor
+                                    tb.unselectedItemTintColor = UITabBar.appearance().unselectedItemTintColor
+                                    tb.backgroundColor = UITabBar.appearance().backgroundColor
+                                    tb.setNeedsLayout()
+                                    tb.setNeedsDisplay()
+                                } else {
+                                    // Traverse subviews to find any UITabBar and apply appearance
+                                    func traverseApply(_ view: UIView) {
+                                        if let tb = view as? UITabBar {
+                                            tb.standardAppearance = newTabAppearance
+                                            if #available(iOS 15.0, *) {
+                                                tb.scrollEdgeAppearance = newTabAppearance
+                                            }
+                                            tb.barStyle = (overrideStyle == .dark) ? .black : .default
+                                            tb.tintColor = UITabBar.appearance().tintColor
+                                            tb.unselectedItemTintColor = UITabBar.appearance().unselectedItemTintColor
+                                            tb.backgroundColor = UITabBar.appearance().backgroundColor
+                                            tb.setNeedsLayout()
+                                            tb.setNeedsDisplay()
+                                        }
+                                        for sub in view.subviews { traverseApply(sub) }
+                                    }
+                                    traverseApply(w)
+                                }
+                            }
+                        }
                     }
                 }
-            
+            }
         }
     }
 }
-    extension UIApplication {
-        func endEditing() {
-            sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        }
+extension UIApplication {
+    func endEditing() {
+        sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
+}
+

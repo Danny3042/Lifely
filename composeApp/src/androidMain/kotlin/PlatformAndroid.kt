@@ -53,17 +53,16 @@ import pages.TimerScreenContent
 
 // Android actual implementation uses Material design
 @Composable
-actual fun PlatformApp(showBottomBar: Boolean) {
-    var isDarkMode by remember { mutableStateOf(false) }
-    var useSystemDefault by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
-        isDarkMode = SettingsManager.loadDarkMode()
-        useSystemDefault = SettingsManager.loadUseSystemDefault()
-    }
-
-    LaunchedEffect(isDarkMode) { SettingsManager.saveDarkMode(isDarkMode) }
-    LaunchedEffect(useSystemDefault) { SettingsManager.saveUseSystemDefault(useSystemDefault) }
+actual fun PlatformApp(
+    showBottomBar: Boolean,
+    isDarkMode: Boolean,
+    onDarkModeToggle: (Boolean) -> Unit,
+    useSystemDefault: Boolean,
+    onUseSystemDefaultToggle: (Boolean) -> Unit
+) {
+    // Persist incoming state and observe changes to save
+    LaunchedEffect(isDarkMode) { try { SettingsManager.saveDarkMode(isDarkMode) } catch (_: Throwable) {} }
+    LaunchedEffect(useSystemDefault) { try { SettingsManager.saveUseSystemDefault(useSystemDefault) } catch (_: Throwable) {} }
 
     val darkMode = if (useSystemDefault) isSystemInDarkTheme() else isDarkMode
     val colors = if (darkMode) DarkColors else LightColors
@@ -89,8 +88,14 @@ actual fun PlatformApp(showBottomBar: Boolean) {
             NotifierManager.initialize(NotificationPlatformConfiguration.Android(notificationIconResId = 0))
         }
 
-
-        // Use the centralized nav host
-        YourMainNavHost(navController = navController, showBottomBar = showBottomBar)
+        // Use the centralized nav host and forward dark mode hooks for the settings page
+        YourMainNavHost(
+            navController = navController,
+            showBottomBar = showBottomBar,
+            isDarkMode = isDarkMode,
+            onDarkModeToggle = onDarkModeToggle,
+            useSystemDefault = useSystemDefault,
+            onUseSystemDefaultToggle = onUseSystemDefaultToggle
+        )
      }
  }

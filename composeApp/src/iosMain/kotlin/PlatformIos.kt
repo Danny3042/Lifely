@@ -1,9 +1,11 @@
-import Authentication.Authentication
+
 import Authentication.LoginScreen
 import Authentication.ResetPasswordScreen
 import Authentication.SignUpScreen
 import Colors.DarkColors
 import Colors.LightColors
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -17,7 +19,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.*
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -36,6 +37,7 @@ import platform.ChartBridge
 import platform.Foundation.NSDictionary
 import platform.Foundation.NSNotification
 import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSNumber
 import platform.Foundation.NSOperationQueue
 import platform.Foundation.NSUserDefaults
 import platform.PlatformBridge
@@ -58,7 +60,13 @@ import utils.SettingsManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-actual fun PlatformApp(showBottomBar: Boolean) {
+actual fun PlatformApp(
+    showBottomBar: Boolean,
+    isDarkMode: Boolean,
+    onDarkModeToggle: (Boolean) -> Unit,
+    useSystemDefault: Boolean,
+    onUseSystemDefaultToggle: (Boolean) -> Unit
+) {
     // remember a NavController for Compose navigation on iOS
     val navController = rememberNavController()
 
@@ -68,10 +76,10 @@ actual fun PlatformApp(showBottomBar: Boolean) {
     } catch (_: Throwable) {
     }
 
-    // Dark mode state (iOS) - load/save using SettingsManager similar to Android
-    var isDarkMode by remember { mutableStateOf(false) }
-    var useSystemDefault by remember { mutableStateOf(true) }
-    
+    // Compose dark-mode state is provided from common `App` via parameters; treat params as source-of-truth
+    // Keep a cached pair to avoid reposting identical dark-mode notifications (prevents flashes)
+    var _lastDarkModePair by remember { mutableStateOf<Pair<Boolean, Boolean>?>(null) }
+
     // Safe area insets from iOS - these will be updated via PlatformBridge
     var topInset by remember { mutableStateOf(0.0) }
     var bottomInset by remember { mutableStateOf(0.0) }
@@ -93,40 +101,97 @@ actual fun PlatformApp(showBottomBar: Boolean) {
         }
     }
 
-    LaunchedEffect(Unit) {
-        try {
-            isDarkMode = SettingsManager.loadDarkMode()
-            useSystemDefault = SettingsManager.loadUseSystemDefault()
-        } catch (_: Throwable) {
-            isDarkMode = false
-            useSystemDefault = true
+    // Observe the native interface style so Compose can follow system appearance when requested
+    DisposableEffect(Unit) {
+        val styleObserver = NSNotificationCenter.defaultCenter.addObserverForName(
+            name = "SystemInterfaceStyleChanged",
+            `object` = null,
+            queue = NSOperationQueue.mainQueue
+        ) { notification: NSNotification? ->
+            val userInfo = notification?.userInfo as? NSDictionary
+            // Swift Boolean may bridge as kotlin.Boolean or NSNumber; handle both
+            val darkAny = userInfo?.objectForKey("dark")
+            val isDarkFromSystem = when (darkAny) {
+                is Boolean -> darkAny as Boolean
+                is NSNumber -> (darkAny as NSNumber).boolValue
+                else -> false
+            }
+            // Only update Compose dark-mode if the user asked to follow the system
+            try {
+                if (useSystemDefault) {
+                    // Call the callback provided by common App to update the shared dark mode state
+                    onDarkModeToggle(isDarkFromSystem)
+                    try {
+                        PlatformBridge.systemInterfaceDark = isDarkFromSystem
+                    } catch (_: Throwable) {}
+                }
+            } catch (_: Throwable) {
+            }
+        }
+        onDispose {
+            NSNotificationCenter.defaultCenter.removeObserver(styleObserver as Any)
         }
     }
 
-    LaunchedEffect(isDarkMode) {
-        try {
-            SettingsManager.saveDarkMode(isDarkMode)
-        } catch (_: Throwable) {
+    // Observe requests from Swift to use the native SwiftUI TabView instead of Compose bottom bar
+    DisposableEffect(Unit) {
+        val tabObserver = NSNotificationCenter.defaultCenter.addObserverForName(
+            name = "UseNativeTabBar",
+            `object` = null,
+            queue = NSOperationQueue.mainQueue
+        ) { notification: NSNotification? ->
+            val userInfo = notification?.userInfo as? NSDictionary
+            val enabledAny = userInfo?.objectForKey("enabled")
+            val enabled = when (enabledAny) {
+                is Boolean -> enabledAny as Boolean
+                is NSNumber -> (enabledAny as NSNumber).boolValue
+                else -> true
+            }
+            try {
+                // In the shared PlatformBridge contract, 'useNativeTabBar' shows native tab bar when true
+                PlatformBridge.useNativeTabBar = enabled
+            } catch (_: Throwable) {
+            }
+        }
+        onDispose {
+            NSNotificationCenter.defaultCenter.removeObserver(tabObserver as Any)
         }
     }
 
-    LaunchedEffect(useSystemDefault) {
-        try {
-            SettingsManager.saveUseSystemDefault(useSystemDefault)
-        } catch (_: Throwable) {
-        }
-    }
-
-    // Notify iOS (Swift) when dark mode or 'use system default' changes so native bars can update
+    // Persist and notify when incoming params change. Note: `isDarkMode` and `useSystemDefault` are
+    // controlled by common `App`; when they change we save them and post a notification for Swift.
     LaunchedEffect(isDarkMode, useSystemDefault) {
         try {
-            NSOperationQueue.mainQueue.addOperationWithBlock {
-                val userInfo: Map<Any?, Any?> = mapOf("dark" to isDarkMode, "useSystem" to useSystemDefault)
-                NSNotificationCenter.defaultCenter.postNotificationName(
-                    aName = "ComposeDarkModeChanged",
-                    `object` = null,
-                    userInfo = userInfo
-                )
+            // Persist to NSUserDefaults directly with keys that Swift ContentView expects
+            try {
+                println("PlatformIos: Saving dark mode preferences -> isDarkMode: $isDarkMode, useSystemDefault: $useSystemDefault")
+                NSUserDefaults.standardUserDefaults.setBool(isDarkMode, forKey = "isDarkMode")
+                NSUserDefaults.standardUserDefaults.setBool(useSystemDefault, forKey = "useSystemDefault")
+                NSUserDefaults.standardUserDefaults.synchronize()
+                println("PlatformIos: Successfully saved to NSUserDefaults")
+            } catch (e: Throwable) {
+                println("PlatformIos: Failed to save to NSUserDefaults: ${e.message}")
+            }
+            
+            // Also save via SettingsManager for backward compatibility
+            try { SettingsManager.saveDarkMode(isDarkMode) } catch (_: Throwable) {}
+            try { SettingsManager.saveUseSystemDefault(useSystemDefault) } catch (_: Throwable) {}
+
+            // Post to Swift only when pair actually changes
+            val newPair = Pair(isDarkMode, useSystemDefault)
+            if (_lastDarkModePair != newPair) {
+                _lastDarkModePair = newPair
+                println("PlatformIos: Posting ComposeDarkModeChanged notification")
+                NSOperationQueue.mainQueue.addOperationWithBlock {
+                    val userInfo: Map<Any?, Any?> = mapOf("dark" to isDarkMode, "useSystem" to useSystemDefault)
+                    NSNotificationCenter.defaultCenter.postNotificationName(
+                        aName = "ComposeDarkModeChanged",
+                        `object` = null,
+                        userInfo = userInfo
+                    )
+                }
+            } else {
+                println("PlatformIos: Dark mode pair unchanged, skipping notification")
             }
         } catch (_: Throwable) {
         }
@@ -297,8 +362,8 @@ actual fun PlatformApp(showBottomBar: Boolean) {
 
                     NSOperationQueue.mainQueue.addOperationWithBlock {
                         val userInfo: Map<Any?, Any?> = mapOf(
-                            "route" to destName, 
-                            "shouldHideTab" to shouldHideTab, 
+                            "route" to destName,
+                            "shouldHideTab" to shouldHideTab,
                             "shouldHideNavigationBar" to shouldHideNav,
                             "shouldShowBackButton" to shouldShowBackButton
                         )
@@ -361,8 +426,11 @@ actual fun PlatformApp(showBottomBar: Boolean) {
 
     // Removed PlatformBridge.useNativeTabBar writes because the binding isn't available reliably here.
 
-    // Set initial Compose Material3 colors based on dark mode state
-    val colors = if (isDarkMode) DarkColors else LightColors
+    // Set Compose Material3 colors based on dark mode state - respect 'use system default' when enabled
+    val effectiveDark = if (useSystemDefault) PlatformBridge.systemInterfaceDark else isDarkMode
+    val colors = remember(isDarkMode, useSystemDefault, PlatformBridge.systemInterfaceDark) {
+        if (effectiveDark) DarkColors else LightColors
+    }
 
     // Main app surface with safe area insets applied
     Surface(
@@ -380,7 +448,14 @@ actual fun PlatformApp(showBottomBar: Boolean) {
         ) {
             // Navigation host for Compose — on iOS we hide Compose's bottom bar because
             // the app uses a native SwiftUI TabView. Pass showBottomBar=false.
-            YourMainNavHost(navController = navController, showBottomBar = false)
-        }
+            YourMainNavHost(
+                navController = navController,
+                showBottomBar = false,
+                isDarkMode = isDarkMode,
+                onDarkModeToggle = onDarkModeToggle,
+                useSystemDefault = useSystemDefault,
+                onUseSystemDefaultToggle = onUseSystemDefaultToggle
+            )
      }
- }
+  }
+  }

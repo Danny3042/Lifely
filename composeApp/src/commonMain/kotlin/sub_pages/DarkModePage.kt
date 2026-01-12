@@ -1,6 +1,7 @@
 package sub_pages
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.compose.foundation.rememberScrollState
@@ -129,26 +131,60 @@ fun DarkModeSettingsPage(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // System option - make whole column clickable for a larger tap target
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clickable(role = Role.RadioButton) {
+                                onUseSystemDefaultToggle(true)
+                                // When switching to system default, delegate to caller to update actual mode
+                            }
+                    ) {
                         RadioButton(
                             selected = useSystemDefault,
-                            onClick = { onUseSystemDefaultToggle(true); onDarkModeToggle(false) }
+                            onClick = {
+                                onUseSystemDefaultToggle(true)
+                            }
                         )
                         Icon(Icons.Default.Brightness4, contentDescription = "System Default", tint = MaterialTheme.colorScheme.onBackground)
                         Text("System", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground)
                     }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+
+                    // Light option
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clickable(role = Role.RadioButton) {
+                                onUseSystemDefaultToggle(false)
+                                onDarkModeToggle(false)
+                            }
+                    ) {
                         RadioButton(
                             selected = !useSystemDefault && !isDarkMode,
-                            onClick = { onUseSystemDefaultToggle(false); onDarkModeToggle(false) }
+                            onClick = {
+                                onUseSystemDefaultToggle(false)
+                                onDarkModeToggle(false)
+                            }
                         )
                         Icon(Icons.Default.Brightness7, contentDescription = "Light Mode", tint = MaterialTheme.colorScheme.onBackground)
                         Text("Light", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground)
                     }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+
+                    // Dark option
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clickable(role = Role.RadioButton) {
+                                onUseSystemDefaultToggle(false)
+                                onDarkModeToggle(true)
+                            }
+                    ) {
                         RadioButton(
                             selected = !useSystemDefault && isDarkMode,
-                            onClick = { onUseSystemDefaultToggle(false); onDarkModeToggle(true) }
+                            onClick = {
+                                onUseSystemDefaultToggle(false)
+                                onDarkModeToggle(true)
+                            }
                         )
                         Icon(Icons.Default.Brightness2, contentDescription = "Dark Mode", tint = MaterialTheme.colorScheme.onBackground)
                         Text("Dark", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground)
