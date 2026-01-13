@@ -531,9 +531,25 @@ struct ContentView: View {
                     .navigationBarTitleDisplayMode(.large)
                     .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
                     .toolbar(composeHidesNavigationBar ? .hidden : .visible, for: .navigationBar)
-                    .preferredColorScheme(preferredColorScheme)
-                    .animation(.easeInOut(duration: 0.2), value: composeHidesTabBar)
-                    .animation(.easeInOut(duration: 0.25), value: preferredColorScheme)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            if router.showBackButton {
+                                Button(action: {
+                                    let impact = UIImpactFeedbackGenerator(style: .light)
+                                    impact.impactOccurred()
+                                    router.nativeBackTapped()
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "chevron.left")
+                                        Text("Back")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                     .preferredColorScheme(preferredColorScheme)
+                     .animation(.easeInOut(duration: 0.2), value: composeHidesTabBar)
+                     .animation(.easeInOut(duration: 0.25), value: preferredColorScheme)
                 }
             } else {
                 NavigationView {
@@ -562,44 +578,16 @@ struct ContentView: View {
                     .navigationBarTitleDisplayMode(.large)
                     .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
                     .preferredColorScheme(preferredColorScheme)
-                    .animation(.easeInOut(duration: 0.2), value: composeHidesTabBar)
-                    .animation(.easeInOut(duration: 0.25), value: preferredColorScheme)
+                     .animation(.easeInOut(duration: 0.2), value: composeHidesTabBar)
+                     .animation(.easeInOut(duration: 0.25), value: preferredColorScheme)
                 }
                 .navigationViewStyle(.stack)
             }
 
-            // Native back button overlay driven by NativeRouter
-            // Only show the overlay when Compose requested a back button AND the native
-            // navigation bar is hidden. This avoids duplicates when SwiftUI's NavigationView
-            // already shows a back button in the navigation bar.
-            if router.showBackButton && router.navigationBarHidden {
-                VStack {
-                    HStack(spacing: 8) {
-                        Button(action: {
-                            // add haptic
-                            let impact = UIImpactFeedbackGenerator(style: .light)
-                            impact.impactOccurred()
-                            router.nativeBackTapped()
-                        }) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 17, weight: .semibold))
-                                Text("Back")
-                                    .font(.system(size: 17))
-                            }
-                            .padding(8)
-                            .background(.ultraThinMaterial)
-                            .cornerRadius(8)
-                        }
-                        Spacer()
-                    }
-                    .padding(.top, 12)
-                    .padding(.leading, 8)
-                    Spacer()
-                }
-                .transition(.opacity.combined(with: .move(edge: .top)))
-                .zIndex(1100)
-            }
+            // Native back button: shown in the navigation bar when Compose requests it
+            // We add a toolbar item on the top-level navigation so it appears as a
+            // native back control instead of a floating overlay.
+            // (Toolbar is added below inside each NavigationStack/NavigationView branch.)
 
             // Snackbar overlay
             if settings.showSnackbar {
