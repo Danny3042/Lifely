@@ -189,14 +189,12 @@ struct SharedComposeHost: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            // Host the shared Compose view controller. Do not apply negative padding here —
-            // the Compose host receives safe area insets via notifications and the Compose
-            // Surface uses top/bottom insets. Removing the negative top padding prevents the
-            // Compose content from drawing behind the native navigation bar and fixes the
-            // large gap/overlap seen in dark mode.
+            // Host the shared Compose view controller
+            // Full screen - Compose handles all its own layout and safe areas
             ComposeViewController(onClose: nil)
-                .edgesIgnoringSafeArea(.bottom)
-        }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.clear)
+         }
         .onAppear {
                     // Only register observer once globally
                     if !observerAdded {
@@ -505,100 +503,103 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            // Native TabView with shared Compose host in each tab
-            TabView(selection: $selectedTab) {
-                NavigationView {
-                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                        .navigationTitle("Home")
-                        .navigationBarTitleDisplayMode(.large)
-                        .navigationBarHidden(composeHidesNavigationBar)
-                }
-                .tabItem {
-                    Label("Home", systemImage: "house")
-                }
-                .tag(0)
+            // Native NavigationStack with TabView
+            if #available(iOS 16.0, *) {
+                NavigationStack {
+                    TabView(selection: $selectedTab) {
+                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                            .tabItem { Label("Home", systemImage: "house") }
+                            .tag(0)
 
-                NavigationView {
-                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                        .navigationTitle("Habits")
-                        .navigationBarTitleDisplayMode(.large)
-                        .navigationBarHidden(composeHidesNavigationBar)
-                }
-                .tabItem {
-                    Label("Habits", systemImage: "checkmark.circle")
-                }
-                .tag(1)
+                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                            .tabItem { Label("Habits", systemImage: "checkmark.circle") }
+                            .tag(1)
 
-                NavigationView {
-                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                        .navigationTitle("Chat")
-                        .navigationBarTitleDisplayMode(.large)
-                        .navigationBarHidden(composeHidesNavigationBar)
-                }
-                .tabItem {
-                    Label("Chat", systemImage: "message")
-                }
-                .tag(2)
+                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                            .tabItem { Label("Chat", systemImage: "message") }
+                            .tag(2)
 
-                NavigationView {
-                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                        .navigationTitle("Meditate")
-                        .navigationBarTitleDisplayMode(.large)
-                        .navigationBarHidden(composeHidesNavigationBar)
-                }
-                .tabItem {
-                    Label("Meditate", systemImage: "apple.meditate.circle.fill")
-                }
-                .tag(3)
+                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                            .tabItem { Label("Meditate", systemImage: "apple.meditate.circle.fill") }
+                            .tag(3)
 
+                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                            .tabItem { Label("Profile", systemImage: "person") }
+                            .tag(4)
+                    }
+                    .navigationTitle(tabTitle(for: selectedTab))
+                    .navigationBarTitleDisplayMode(.large)
+                    .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
+                    .toolbar(composeHidesNavigationBar ? .hidden : .visible, for: .navigationBar)
+                    .preferredColorScheme(preferredColorScheme)
+                    .animation(.easeInOut(duration: 0.2), value: composeHidesTabBar)
+                    .animation(.easeInOut(duration: 0.25), value: preferredColorScheme)
+                }
+            } else {
                 NavigationView {
-                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                        .navigationTitle("Profile")
-                        .navigationBarTitleDisplayMode(.large)
-                        .navigationBarHidden(composeHidesNavigationBar)
+                    TabView(selection: $selectedTab) {
+                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                            .tabItem { Label("Home", systemImage: "house") }
+                            .tag(0)
+
+                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                            .tabItem { Label("Habits", systemImage: "checkmark.circle") }
+                            .tag(1)
+
+                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                            .tabItem { Label("Chat", systemImage: "message") }
+                            .tag(2)
+
+                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                            .tabItem { Label("Meditate", systemImage: "apple.meditate.circle.fill") }
+                            .tag(3)
+
+                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                            .tabItem { Label("Profile", systemImage: "person") }
+                            .tag(4)
+                    }
+                    .navigationTitle(tabTitle(for: selectedTab))
+                    .navigationBarTitleDisplayMode(.large)
+                    .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
+                    .preferredColorScheme(preferredColorScheme)
+                    .animation(.easeInOut(duration: 0.2), value: composeHidesTabBar)
+                    .animation(.easeInOut(duration: 0.25), value: preferredColorScheme)
                 }
-                .tabItem {
-                    Label("Profile", systemImage: "person")
-                }
-                .tag(4)
+                .navigationViewStyle(.stack)
             }
-            .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
-            .preferredColorScheme(preferredColorScheme)
-            .animation(.easeInOut(duration: 0.2), value: composeHidesTabBar)
-            .animation(.easeInOut(duration: 0.25), value: preferredColorScheme)
 
             // Native back button overlay driven by NativeRouter
             // Only show the overlay when Compose requested a back button AND the native
             // navigation bar is hidden. This avoids duplicates when SwiftUI's NavigationView
             // already shows a back button in the navigation bar.
             if router.showBackButton && router.navigationBarHidden {
-                 VStack {
-                     HStack(spacing: 8) {
-                         Button(action: {
-                             // add haptic
-                             let impact = UIImpactFeedbackGenerator(style: .light)
-                             impact.impactOccurred()
-                             router.nativeBackTapped()
-                         }) {
-                             HStack(spacing: 6) {
-                                 Image(systemName: "chevron.left")
-                                     .font(.system(size: 17, weight: .semibold))
-                                 Text("Back")
-                                     .font(.system(size: 17))
-                             }
-                             .padding(8)
-                             .background(.ultraThinMaterial)
-                             .cornerRadius(8)
-                         }
-                         Spacer()
-                     }
-                     .padding(.top, 12)
-                     .padding(.leading, 8)
-                     Spacer()
-                 }
-                 .transition(.opacity.combined(with: .move(edge: .top)))
-                 .zIndex(1100)
-             }
+                VStack {
+                    HStack(spacing: 8) {
+                        Button(action: {
+                            // add haptic
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            router.nativeBackTapped()
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 17, weight: .semibold))
+                                Text("Back")
+                                    .font(.system(size: 17))
+                            }
+                            .padding(8)
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(8)
+                        }
+                        Spacer()
+                    }
+                    .padding(.top, 12)
+                    .padding(.leading, 8)
+                    Spacer()
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+                .zIndex(1100)
+            }
 
             // Snackbar overlay
             if settings.showSnackbar {
@@ -614,44 +615,44 @@ struct ContentView: View {
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            
+
             // FAB (Floating Action Button) - only show on home page (tab 0)
             if selectedTab == 0 && isSignedIn && !composeHidesTabBar {
-                 VStack {
-                     Spacer()
-                     HStack {
-                         Spacer()
-                         Button(action: {
-                             // Add haptic feedback
-                             let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                             impactFeedback.impactOccurred()
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            // Add haptic feedback
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                            impactFeedback.impactOccurred()
 
-                             // Post notification that Compose listens to in order to show the add dialog.
-                             // Compose registers a listener for "ComposeShowAddDialog" and will set showAddDialog = true.
-                             NotificationCenter.default.post(
-                                 name: Notification.Name("ComposeShowAddDialog"),
-                                 object: nil
-                             )
-                         }) {
-                             Image(systemName: "plus")
-                                 .font(.system(size: 24, weight: .semibold))
-                                 .foregroundColor(.white)
-                                 .frame(width: 56, height: 56)
-                                 .background(
-                                     Circle()
-                                         .fill(Color(red: 0.4, green: 0.2, blue: 0.6))
-                                         .shadow(color: Color(red: 0.4, green: 0.2, blue: 0.6).opacity(0.5), radius: 8, x: 0, y: 4)
-                                 )
-                         }
-                         .padding(.trailing, 20)
-                         // Raise the FAB well above the tab bar
-                         .padding(.bottom, 90)
-                         .zIndex(1000)
-                         .accessibilityLabel("Add card")
-                         .accessibilityAddTraits(.isButton)
-                     }
-                 }
-             }
+                            // Post notification that Compose listens to in order to show the add dialog.
+                            // Compose registers a listener for "ComposeShowAddDialog" and will set showAddDialog = true.
+                            NotificationCenter.default.post(
+                                name: Notification.Name("ComposeShowAddDialog"),
+                                object: nil
+                            )
+                        }) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 56, height: 56)
+                                .background(
+                                    Circle()
+                                        .fill(Color(red: 0.4, green: 0.2, blue: 0.6))
+                                        .shadow(color: Color(red: 0.4, green: 0.2, blue: 0.6).opacity(0.5), radius: 8, x: 0, y: 4)
+                                )
+                        }
+                        .padding(.trailing, 20)
+                        // Raise the FAB well above the tab bar
+                        .padding(.bottom, 90)
+                        .zIndex(1000)
+                        .accessibilityLabel("Add card")
+                        .accessibilityAddTraits(.isButton)
+                    }
+                }
+            }
         }
         .sheet(isPresented: $showImagePicker) {
             ImagePicker(selectedImage: $selectedImage, onImageSelected: { image in
@@ -916,6 +917,18 @@ struct ContentView: View {
                     }
                 }
             }
+        }
+    }
+    
+    // Helper function to get the title for each tab
+    private func tabTitle(for index: Int) -> String {
+        switch index {
+        case 0: return "Home"
+        case 1: return "Habits"
+        case 2: return "Chat"
+        case 3: return "Meditate"
+        case 4: return "Profile"
+        default: return "HealthApp"
         }
     }
     

@@ -85,7 +85,15 @@ struct iOSApp: App {
         // Dark mode is fully controlled by ContentView's .preferredColorScheme() modifier
         // Make hosting window backgrounds clear so Compose window underlay can show through
         UIWindow.appearance().backgroundColor = .clear
-        
+        // Ensure tab bar uses system background so it matches light/dark mode by default
+        let tabAppearance = UITabBarAppearance()
+        tabAppearance.configureWithDefaultBackground()
+        tabAppearance.backgroundColor = UIColor.systemBackground
+        UITabBar.appearance().standardAppearance = tabAppearance
+        if #available(iOS 15.0, *) {
+            UITabBar.appearance().scrollEdgeAppearance = tabAppearance
+        }
+
         logInitialEvent()
     }
     
@@ -305,4 +313,3 @@ extension UIApplication {
         sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
-
