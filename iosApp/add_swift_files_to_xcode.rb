@@ -8,11 +8,17 @@ require 'xcodeproj'
 require 'pathname'
 
 # CONFIG: path to the .xcodeproj file (relative to this script)
-PROJECT_PATH = 'iosApp/iosApp.xcodeproj'
+PROJECT_PATH = 'iosApp.xcodeproj'
 
 # The list of files (relative to the project folder) you want to ensure are part of the app target
 SWIFT_FILES = [
   'ContentView.swift',
+  'ContentViewImpl.swift',
+  'ComposeBridge.swift',
+  'SharedComposeHost.swift',
+  'ComposeViewController.swift',
+  'Helpers.swift',
+  'ChartSupport.swift',
   'LoginView.swift',
   'HeroTabView.swift',
   'HabitTrackerView.swift',

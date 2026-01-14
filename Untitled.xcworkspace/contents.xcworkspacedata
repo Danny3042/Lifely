@@ -5,24 +5,9 @@
       location = "container:iosApp/iosApp.xcodeproj">
    </FileRef>
    <FileRef
-      location = "group:CRASH_FIX_GUIDE.md">
-   </FileRef>
-   <FileRef
-      location = "group:DIAGNOSTIC_CHECKLIST.md">
-   </FileRef>
-   <FileRef
       location = "group:MeditationCrashTests.swift">
    </FileRef>
    <FileRef
-      location = "group:NOTIFIER_FIX.md">
-   </FileRef>
-   <FileRef
       location = "group:KotlinExceptionHandler.swift">
-   </FileRef>
-   <FileRef
-      location = "group:TAB_NAVIGATION_DEBUG.md">
-   </FileRef>
-   <FileRef
-      location = "group:TAB_NAVIGATION_FIX.md">
    </FileRef>
 </Workspace>
