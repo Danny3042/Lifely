@@ -181,27 +181,8 @@ fun HomePage(
 
         // keep the page content in a column inside the Box
         Column(modifier = Modifier.fillMaxSize()) {
-            // Greeting at top (ensure visible)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                    .heightIn(min = 80.dp)
-            ) {
-                RealTimeGreeting()
-            }
-
-            // Row with personalization label remains below the greeting
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // The top row no longer shows the add button; the FAB handles adding
-                Spacer(modifier = Modifier.size(40.dp))
-            }
+            // Main scrollable content — greeting and the top row are now part of the LazyColumn
+            // so they will scroll together with the rest of the page content.
 
             // Add-card dialog: choose type of card to add
             if (showAddDialog) {
@@ -269,13 +250,39 @@ fun HomePage(
                 items.toList()
             }
 
-            // Main scrollable content — greeting is the first item so it's always visible in the scroll area
+            // Main scrollable content — greeting is now the first item so it scrolls with the page
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 16.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = (88.dp + bottomInsetDp))
             ) {
+                // Greeting at top (now scrolls)
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .heightIn(min = 80.dp)
+                    ) {
+                        RealTimeGreeting()
+                    }
+                }
+
+                // Row with personalization label below the greeting (now scrolls)
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // The top row no longer shows the add button; the FAB handles adding
+                        Spacer(modifier = Modifier.size(40.dp))
+                    }
+                }
+
                 // Quick actions / placeholder (second section) — now personalized
                 item {
                     AnimatedSection(visible = !loading) {

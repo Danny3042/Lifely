@@ -162,7 +162,9 @@ fun ChatScreen(
                      snackbarHostState = snackbarHostState,
                      onNewChat = { chatViewModel.newChat() },
                  )
-                Spacer(modifier = Modifier.height(56.dp)) // Height of your bottom nav bar
+                // Reserve minimal vertical space on iOS: use the platform safe area bottom so the input
+                // sits closer to the bottom edge (lower) compared to the previous extra offset.
+                Spacer(modifier = if (isAndroid()) Modifier.height(56.dp) else Modifier.height(platformBottomInset.toFloat().dp))
             }
             // Floating action button for New Chat anchored above the input on the bottom end
             FloatingActionButton(

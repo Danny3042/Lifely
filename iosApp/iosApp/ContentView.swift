@@ -380,7 +380,7 @@ struct ComposeViewController: UIViewControllerRepresentable {
             placeholder.view.backgroundColor = .clear
             return placeholder
         }
-        
+
         // Return the shared instance if it exists
         if let existing = ComposeViewController.sharedComposeVC {
             return existing
@@ -394,11 +394,15 @@ struct ComposeViewController: UIViewControllerRepresentable {
         // Enable user interaction for scrolling
         composeVC.view.isUserInteractionEnabled = true
 
+        // Wrap the Kotlin compose VC in our appearance-forwarding container so traitCollection changes
+        // are observed and sent to Compose/PlatformIos.
+        let container = AppearanceForwardingViewController(child: composeVC)
+
         // Store as singleton
-        ComposeViewController.sharedComposeVC = composeVC
+        ComposeViewController.sharedComposeVC = container
         ComposeViewController.isCreating = false
 
-        return composeVC
+        return container
     }
 
     // Ensure the shared compose VC is visible and in front of other UI layers
@@ -993,6 +997,49 @@ struct ImagePicker: UIViewControllerRepresentable {
     }
     
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+}
+
+// Helper container that forwards traitCollection changes to Compose via NotificationCenter
+final class AppearanceForwardingViewController: UIViewController {
+    private let childController: UIViewController
+    private var lastInterfaceStyleIsDark: Bool?
+
+    init(child: UIViewController) {
+        self.childController = child
+        super.init(nibName: nil, bundle: nil)
+        self.view.backgroundColor = .clear
+
+        // Add child VC
+        addChild(childController)
+        childController.view.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(childController.view)
+        NSLayoutConstraint.activate([
+            childController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            childController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            childController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            childController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        ])
+        childController.didMove(toParent: self)
+
+        // Record initial style and post initial notification
+        let isDark = traitCollection.userInterfaceStyle == .dark
+        lastInterfaceStyleIsDark = isDark
+        NotificationCenter.default.post(name: Notification.Name("SystemInterfaceStyleChanged"), object: nil, userInfo: ["dark": isDark])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        let isDark = traitCollection.userInterfaceStyle == .dark
+        // Only post when the value actually changes
+        if lastInterfaceStyleIsDark == nil || lastInterfaceStyleIsDark != isDark {
+            lastInterfaceStyleIsDark = isDark
+            NotificationCenter.default.post(name: Notification.Name("SystemInterfaceStyleChanged"), object: nil, userInfo: ["dark": isDark])
+        }
+    }
 }
 
 // --- Begin embedded Chart support (moved here so ContentView can always reference ChartView) ---
