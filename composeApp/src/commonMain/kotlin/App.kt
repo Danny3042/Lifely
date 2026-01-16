@@ -30,7 +30,8 @@ fun App() {
 }
 
 // Platform-specific entry point. Implementations should live in androidMain and iosMain.
-expect @Composable fun PlatformApp(
+@Composable
+expect fun PlatformApp(
     showBottomBar: Boolean,
     isDarkMode: Boolean,
     onDarkModeToggle: (Boolean) -> Unit,

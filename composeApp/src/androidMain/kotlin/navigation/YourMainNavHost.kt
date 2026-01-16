@@ -41,7 +41,7 @@ import config.VERSION_NUMBER
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
-fun YourMainNavHost(navController: NavHostController, showBottomBar: Boolean = true) {
+fun YourMainNavHost(navController: NavHostController, showBottomBar: Boolean = true, isDarkMode: Boolean, onDarkModeToggle: (Boolean) -> Unit, useSystemDefault: Boolean, onUseSystemDefaultToggle: (Boolean) -> Unit) {
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
 
     LaunchedEffect(currentBackStackEntry) {
