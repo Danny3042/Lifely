@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -101,7 +102,7 @@ fun ProfilePage(navController: NavController) {
                         }
                     }
                 }
-                Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
             }
             item {
                 SettingsListItem(
@@ -114,7 +115,7 @@ fun ProfilePage(navController: NavController) {
                         )
                     }
                 )
-                Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
             }
             item {
                 SettingsListItem(
@@ -124,7 +125,7 @@ fun ProfilePage(navController: NavController) {
                         Icon(Icons.Outlined.Info, contentDescription = "About Icon")
                     }
                 )
-                Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
             }
             item {
                 SettingsListItem(
@@ -140,7 +141,7 @@ fun ProfilePage(navController: NavController) {
                         Icon(Icons.Outlined.DarkMode, contentDescription = "Dark Mode Icon")
                     }
                 )
-                Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
             }
             // Developer mode toggle (runtime persisted)
             item {
@@ -207,7 +208,7 @@ fun ProfilePage(navController: NavController) {
                             }
                         }
                     )
-                    Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
                 }
             }
         }
