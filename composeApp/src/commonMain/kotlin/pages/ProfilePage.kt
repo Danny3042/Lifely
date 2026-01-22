@@ -143,40 +143,6 @@ fun ProfilePage(navController: NavController) {
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
             }
-            // Developer mode toggle (runtime persisted)
-            item {
-                SettingsListItem(
-                    title = "Developer",
-                    onClick = { /* no-op, toggle in content */ },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Badge, contentDescription = "Developer Icon")
-                    }
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Enable Dev Mode")
-                        Switch(
-                            checked = devModeEnabled,
-                            onCheckedChange = { checked ->
-                                devModeEnabled = checked
-                                coroutineScope.launch {
-                                    try {
-                                        SettingsManager.saveDevMode(checked)
-                                    } catch (_: Exception) {
-                                        // ignore
-                                    }
-                                }
-                            }
-                        )
-                    }
-                }
-                Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-            }
             if (showDeleteDialog) {
                 item {
                     AlertDialog(
