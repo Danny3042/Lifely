@@ -79,8 +79,6 @@ struct iOSApp: App {
     @StateObject private var router = NativeRouter()
     
     init() {
-        FirebaseApp.configure()
-        
         // Pure SwiftUI approach - no UIKit appearance configuration
         // Dark mode is fully controlled by ContentView's .preferredColorScheme() modifier
         // Make hosting window backgrounds clear so Compose window underlay can show through
@@ -94,7 +92,9 @@ struct iOSApp: App {
             UITabBar.appearance().scrollEdgeAppearance = tabAppearance
         }
 
-        logInitialEvent()
+        // Do not configure Firebase here: defer to AppDelegate after requesting
+        // AppTrackingTransparency permission so SDKs that access IDFA do not run
+        // before the system prompt and the Info.plist key is present.
     }
     
     var body: some Scene {
@@ -145,10 +145,33 @@ struct iOSApp: App {
             
             // Setup dark mode observer
             setupDarkModeObserver()
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                self.requestTrackingPermission()
+
+            // Request AppTrackingTransparency permission before configuring
+            // Firebase/Analytics so SDKs that may access IDFA do not run first.
+            if #available(iOS 14, *) {
+                ATTrackingManager.requestTrackingAuthorization { status in
+                    DispatchQueue.main.async {
+                        // Configure Firebase after the user has been prompted for tracking
+                        FirebaseApp.configure()
+                        // Log app open now that Analytics is configured
+                        Analytics.logEvent(AnalyticsEventAppOpen, parameters: nil)
+                        // Keep a record of the status if needed
+                        switch status {
+                        case .authorized:
+                            break
+                        case .denied:
+                            Analytics.setAnalyticsCollectionEnabled(false)
+                        default:
+                            break
+                        }
+                    }
+                }
+            } else {
+                // iOS versions <14: configure Firebase immediately
+                FirebaseApp.configure()
+                Analytics.logEvent(AnalyticsEventAppOpen, parameters: nil)
             }
+
             return true
         }
         
