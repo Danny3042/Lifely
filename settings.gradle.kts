@@ -14,17 +14,17 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
 
 dependencyResolutionManagement {
     repositories {
-        google {
-            mavenContent {
-                includeGroupAndSubgroups("androidx")
-                includeGroupAndSubgroups("com.android")
-                includeGroupAndSubgroups("com.google")
-            }
-            mavenCentral()
-        }
+        // Standard public repositories first
+        google()
+        mavenCentral()
+
+        // Optional private GitHub Packages repository (kept after public repos)
         maven {
             url = uri("https://maven.pkg.github.com/vitoksmile/HealthKMP")
             name = "GitHubPackages"
@@ -34,9 +34,9 @@ dependencyResolutionManagement {
                 username = properties["GITHUB_USERNAME"].toString()
                 password = properties["GITHUB_TOKEN"].toString()
             }
-            mavenCentral()
         }
     }
-
-    include(":composeApp")
 }
+
+// Include projects at top-level
+include(":composeApp")

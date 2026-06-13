@@ -151,7 +151,7 @@ android {
         applicationId = "org.danielramzani.HealthCompose"
         minSdk = 31
         targetSdk = 35
-        versionCode = 12
+        versionCode = 13
         versionName = "1.0"
     }
     packaging {
@@ -160,8 +160,26 @@ android {
         }
     }
     buildTypes {
+        // Load keystore properties from a root-level `keystore.properties` file (keep this out of VCS)
+        val keystoreProperties = Properties().apply {
+            val propsFile = rootProject.file("keystore.properties")
+            if (propsFile.exists()) load(propsFile.inputStream())
+        }
+
+        signingConfigs {
+            create("release") {
+                // If the file/values are missing the values default to empty strings to avoid build crashes
+                storeFile = keystoreProperties["storeFile"]?.toString()?.let { file(it) }
+                storePassword = keystoreProperties["storePassword"]?.toString() ?: ""
+                keyAlias = keystoreProperties["keyAlias"]?.toString() ?: ""
+                keyPassword = keystoreProperties["keyPassword"]?.toString() ?: ""
+            }
+        }
+
         getByName("release") {
             isMinifyEnabled = false
+            // Use the release signing config when present
+            signingConfig = signingConfigs.findByName("release")
         }
     }
     compileOptions {

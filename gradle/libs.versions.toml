@@ -1,6 +1,6 @@
 [versions]
 accompanistDrawablepainter = "0.34.0"
-agp = "9.0.0"
+agp = "9.2.1"
 android-compileSdk = "34"
 android-minSdk = "24"
 android-targetSdk = "34"
@@ -18,6 +18,7 @@ connectClient = "1.1.0-rc01"
 datastorePreferences = "1.1.7"
 firebaseAnalyticsKtx = "22.0.0"
 firebaseAuth = "1.12.0"
+firebaseAppCheckPlayIntegrity = "17.1.1"
 generativeai = "0.9.0"
 generativeaiGoogle = "0.5.0-1.0.0"
 glanceAppwidget = "1.1.1"
@@ -58,7 +59,7 @@ androidx-datastore-preferences = { module = "androidx.datastore:datastore-prefer
 androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glanceAppwidget" }
 androidx-glance-material3 = { module = "androidx.glance:glance-material3", version.ref = "glanceAppwidget" }
 firebase-analytics-ktx-v2200 = { module = "com.google.firebase:firebase-analytics-ktx", version.ref = "firebaseAnalyticsKtx" }
-firebase-appcheck-playintegrity = { module = "com.google.firebase:firebase-appcheck-playintegrity" }
+firebase-appcheck-playintegrity = { module = "com.google.firebase:firebase-appcheck-playintegrity", version.ref = "firebaseAppCheckPlayIntegrity" }
 firebase-auth = { module = "dev.gitlive:firebase-auth", version.ref = "firebaseAuth" }
 generativeai = { module = "com.google.ai.client.generativeai:generativeai", version.ref = "generativeai" }
 generativeai-google = { module = "dev.shreyaspatil.generativeai:generativeai-google", version.ref = "generativeaiGoogle" }

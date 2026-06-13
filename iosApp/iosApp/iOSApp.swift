@@ -146,20 +146,24 @@ struct iOSApp: App {
             // Setup dark mode observer
             setupDarkModeObserver()
 
-            // Request AppTrackingTransparency permission before configuring
-            // Firebase/Analytics so SDKs that may access IDFA do not run first.
+            // Configure Firebase immediately so Auth and other services work
+            // Note: We configure first, but delay Analytics events until after tracking permission
+            FirebaseApp.configure()
+            
+            // Request AppTrackingTransparency permission before logging Analytics events
+            // This ensures IDFA-related tracking only happens after user consent
             if #available(iOS 14, *) {
                 ATTrackingManager.requestTrackingAuthorization { status in
                     DispatchQueue.main.async {
-                        // Configure Firebase after the user has been prompted for tracking
-                        FirebaseApp.configure()
-                        // Log app open now that Analytics is configured
+                        // Log app open now that the user has been prompted for tracking
                         Analytics.logEvent(AnalyticsEventAppOpen, parameters: nil)
                         // Keep a record of the status if needed
                         switch status {
                         case .authorized:
+                            // Tracking authorized - Analytics will work normally
                             break
                         case .denied:
+                            // Disable analytics collection if tracking denied
                             Analytics.setAnalyticsCollectionEnabled(false)
                         default:
                             break
@@ -167,8 +171,7 @@ struct iOSApp: App {
                     }
                 }
             } else {
-                // iOS versions <14: configure Firebase immediately
-                FirebaseApp.configure()
+                // iOS versions <14: log Analytics event immediately
                 Analytics.logEvent(AnalyticsEventAppOpen, parameters: nil)
             }
 
