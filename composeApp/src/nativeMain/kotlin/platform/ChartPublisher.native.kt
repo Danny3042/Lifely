@@ -1,6 +1,6 @@
 package platform
 
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSOperationQueue
 

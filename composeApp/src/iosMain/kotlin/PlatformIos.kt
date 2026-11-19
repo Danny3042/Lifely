@@ -211,6 +211,14 @@ actual fun PlatformApp(
                     launchSingleTop = true
                     restoreState = true
                 }
+            } catch (_: IllegalArgumentException) {
+                // Unknown route from the native side: fall back to HeroScreen
+                // (replaces the old "{any}" catch-all destination, which hijacked real routes)
+                println("PlatformIos: unknown route requested -> $route, showing HeroScreen")
+                try {
+                    navController.navigate("HeroScreen") { launchSingleTop = true }
+                } catch (_: Throwable) {
+                }
             } catch (_: Throwable) {
             }
             // clear pendingRoute so future identical requests will re-trigger navigation if needed

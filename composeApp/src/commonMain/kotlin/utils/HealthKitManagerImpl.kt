@@ -1,7 +1,7 @@
 package utils
 
 import kotlinx.coroutines.flow.Flow
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 
 expect interface HealthKitService {

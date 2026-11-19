@@ -16,7 +16,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,7 +29,7 @@ import com.mmk.kmpnotifier.notification.NotifierManager
 import utils.SettingsManager
 import components.TimeEditDialog
 import kotlinx.coroutines.delay
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
 import utils.Session
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -207,7 +206,7 @@ fun MeditationPage(
                             .size(96.dp)
                             .indication(
                                 interactionSource = remember { MutableInteractionSource() },
-                                indication = rememberRipple(bounded = true, color = Color.White)
+                                indication = ripple(bounded = true, color = Color.White)
                             )
                     ) {
                         Icon(
@@ -228,7 +227,7 @@ fun MeditationPage(
                         .size(96.dp)
                         .indication(
                             interactionSource = remember { MutableInteractionSource() },
-                            indication = rememberRipple(bounded = true, color = MaterialTheme.colorScheme.primary)
+                            indication = ripple(bounded = true, color = MaterialTheme.colorScheme.primary)
                         ),
 
                 ) {

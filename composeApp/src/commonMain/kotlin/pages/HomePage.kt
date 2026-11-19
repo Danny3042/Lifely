@@ -68,7 +68,7 @@ import utils.isAndroid
 import platform.PlatformBridge
 import androidx.lifecycle.viewmodel.compose.viewModel
 import utils.InsightsViewModel
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 import utils.HabitRepository

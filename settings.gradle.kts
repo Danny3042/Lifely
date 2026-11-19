@@ -40,3 +40,4 @@ dependencyResolutionManagement {
 
 // Include projects at top-level
 include(":composeApp")
+include(":androidApp")

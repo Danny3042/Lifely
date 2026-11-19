@@ -21,7 +21,7 @@ import utils.HealthData
 import utils.HealthKitService
 import utils.InsightsViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import utils.isAndroid

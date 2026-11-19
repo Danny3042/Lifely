@@ -101,16 +101,5 @@ fun YourMainNavHost(navController: NavHostController, showBottomBar: Boolean = t
         composable(STRESS_MANAGEMENT_PAGE_ROUTE) { StressManagementPage(navController) }
         composable(InsightsPageScreen) { InsightsPage(insightsViewModel = viewModel()) }
         composable(ChartsPageScreen) { ChartsPage(navController = navController) }
-
-        composable("{any}") { backStackEntry ->
-            val route = backStackEntry.arguments?.getString("any")
-            LaunchedEffect(route) {
-                if (!route.isNullOrEmpty()) {
-                    navController.navigate("HeroScreen") {
-                        popUpTo("HeroScreen") { inclusive = true }
-                    }
-                }
-            }
-        }
     }
 }

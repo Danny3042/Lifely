@@ -4,7 +4,7 @@ import Health.HealthConnectUtils
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 actual class iOSHealthKitManager actual constructor() : HealthKitService {
     actual override fun requestAuthorization(): Boolean {

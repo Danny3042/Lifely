@@ -165,17 +165,5 @@ fun YourMainNavHost(
         composable(InsightsPageScreen) { InsightsPage(insightsViewModel = viewModel()) }
         composable(ChartsPageScreen) { ChartsPage(navController = navController) }
 
-        // Catch-all unknown routes
-        composable("{any}") { backStackEntry ->
-            val route = backStackEntry.arguments?.getString("any")
-            LaunchedEffect(route) {
-                if (!route.isNullOrEmpty()) {
-                    println("YourMainNavHost: unknown route requested -> $route")
-                    navController.navigate("HeroScreen") {
-                        popUpTo("HeroScreen") { inclusive = true }
-                    }
-                }
-            }
-        }
     }
 }

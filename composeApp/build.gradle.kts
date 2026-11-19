@@ -1,32 +1,36 @@
 import com.codingfeline.buildkonfig.compiler.FieldSpec
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 import java.util.Properties
 
+// Shared KMP module. Under AGP 9 it can no longer apply com.android.application,
+// so it is an Android-KMP library and the APK is built by :androidApp.
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidApplication)
+    alias(libs.plugins.androidMultiplatformLibrary)
     alias(libs.plugins.jetbrainsCompose)
     alias(libs.plugins.compose.compiler)
-    alias(libs.plugins.sqlDelight)
-    alias(libs.plugins.googleServices)
     alias(libs.plugins.kotlinSerialization)
-    alias(libs.plugins.google.firebase.crashlytics)
     alias(libs.plugins.buildkonfig)
-
+    // google-services + crashlytics moved to :androidApp (they need the application plugin).
+    // sqlDelight plugin removed: there are no .sq files, only the runtime/driver libraries are used.
 }
 
 kotlin {
-    androidTarget {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-            compilations.all {
+    androidLibrary {
+        // Same namespace as before, so existing `org.danielramzani.HealthCompose.R` imports keep working.
+        namespace = "org.danielramzani.HealthCompose"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
 
-            }
+        // Needed for src/androidMain/res and Compose Multiplatform resources.
+        androidResources {
+            enable = true
         }
     }
 
+    // iosX64 (Intel simulator) removed: Compose Multiplatform 1.12 no longer publishes it.
     listOf(
-        iosX64(),
         iosArm64(),
         iosSimulatorArm64()
     ).forEach { iosTarget ->
@@ -37,14 +41,19 @@ kotlin {
     }
 
     sourceSets {
+        // kotlinx-datetime 0.7 moved Clock/Instant to kotlin.time
+        all { languageSettings.optIn("kotlin.time.ExperimentalTime") }
+
 
         androidMain.dependencies {
+            // GitLive firebase-* 2.x takes the Android Firebase SDK versions from the BoM
+            implementation(project.dependencies.platform(libs.firebase.bom))
             implementation(libs.compose.ui.tooling.preview)
             implementation(libs.androidx.activity.compose)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.sqldelight.androidDriver)
-            implementation (libs.firebase.analytics.ktx.v2200)
-            implementation (libs.androidx.connect.client)
+            implementation(libs.firebase.analytics.ktx.v2200)
+            implementation(libs.androidx.connect.client)
             implementation(libs.androidx.appcompat)
             implementation(libs.firebase.appcheck.playintegrity)
             implementation(libs.integrity)
@@ -53,20 +62,18 @@ kotlin {
             implementation(libs.calf.filepicker)
             implementation(libs.androidx.glance.appwidget)
             implementation(libs.androidx.glance.material3)
-
-
-
-
-
-
+            // Previously in the top-level dependencies {} block
+            implementation(libs.firebase.common.ktx)
+            implementation(libs.play.services.measurement.api)
+            implementation(libs.firebase.crashlytics)
         }
         commonMain.dependencies {
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material)
-            implementation(compose.ui)
-            implementation(compose.components.resources)
-            implementation(compose.components.uiToolingPreview)
+            implementation(libs.cmp.runtime)
+            implementation(libs.cmp.foundation)
+            implementation(libs.cmp.material)
+            implementation(libs.cmp.ui)
+            implementation(libs.cmp.components.resources)
+            implementation(libs.cmp.ui.tooling.preview)
             // Ktor
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.content.negotiation)
@@ -74,8 +81,6 @@ kotlin {
             // SQLDelight
             implementation(libs.sqldelight.coroutines)
             implementation(libs.sqldelight.primitiveAdapters)
-            // resources
-            implementation(compose.components.resources)
             // Firebase
             implementation(libs.firebase.auth)
             api(libs.kmpnotifier)
@@ -92,6 +97,7 @@ kotlin {
             implementation(libs.kmpauth.google) //Google One Tap Sign-In
             implementation(libs.kmpauth.firebase) //Integrated Authentications with Firebase
             implementation(libs.kmpauth.uihelper) //UiHelper SignIn buttons (AppleSignIn, GoogleSignInButton)
+            // Still uses the plugin alias so the plugin picks the Material3 build that matches this CMP release
             implementation(compose.material3)
             implementation(libs.androidx.datastore.preferences)
             implementation(libs.health.kmp)
@@ -99,9 +105,6 @@ kotlin {
             implementation(libs.generativeai.google)
             implementation(libs.calf.filepicker)
             api(libs.kmpnotifier.v121) // in iOS export this library
-
-
-
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
@@ -138,60 +141,13 @@ buildkonfig {
     }
 }
 
-
-android {
-    namespace = "org.danielramzani.HealthCompose"
-    compileSdk = 36
-
-    sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
-    sourceSets["main"].res.srcDirs("src/androidMain/res")
-    sourceSets["main"].resources.srcDirs("src/commonMain/resources")
-
-    defaultConfig {
-        applicationId = "org.danielramzani.HealthCompose"
-        minSdk = 31
-        targetSdk = 35
-        versionCode = 13
-        versionName = "1.0"
-    }
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
-    buildTypes {
-        // Load keystore properties from a root-level `keystore.properties` file (keep this out of VCS)
-        val keystoreProperties = Properties().apply {
-            val propsFile = rootProject.file("keystore.properties")
-            if (propsFile.exists()) load(propsFile.inputStream())
-        }
-
-        signingConfigs {
-            create("release") {
-                // If the file/values are missing the values default to empty strings to avoid build crashes
-                storeFile = keystoreProperties["storeFile"]?.toString()?.let { file(it) }
-                storePassword = keystoreProperties["storePassword"]?.toString() ?: ""
-                keyAlias = keystoreProperties["keyAlias"]?.toString() ?: ""
-                keyPassword = keystoreProperties["keyPassword"]?.toString() ?: ""
-            }
-        }
-
-        getByName("release") {
-            isMinifyEnabled = false
-            // Use the release signing config when present
-            signingConfig = signingConfigs.findByName("release")
-        }
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-    dependencies {
-        debugImplementation(libs.compose.ui.tooling)
-    }
-}
 dependencies {
-    implementation(libs.firebase.common.ktx)
-    implementation(libs.play.services.measurement.api)
-    implementation(libs.firebase.crashlytics)
+    // The Android-KMP library plugin has no build types, so debugImplementation is replaced by this
+    // (keeps Compose previews working in Android Studio).
+    "androidRuntimeClasspath"(libs.compose.ui.tooling)
+}
+
+// Target-level compilerOptions isn't available in the androidLibrary {} DSL, so set the JVM target on the tasks.
+tasks.withType<KotlinJvmCompile>().configureEach {
+    compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
 }
