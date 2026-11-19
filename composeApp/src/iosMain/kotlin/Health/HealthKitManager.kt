@@ -65,14 +65,11 @@ class HealthKitManager {
         val startDate = calendar.dateByAddingComponents(components, toDate = now, options = 0u)
         val predicate = HKQuery.predicateForSamplesWithStartDate(startDate, endDate = now, options = HKQueryOptionNone)
 
-        val query = dataType?.let {
-            HKSampleQuery(sampleType = it, predicate = predicate, limit = 0u, sortDescriptors = null) { query, results, error ->
-                val data = results?.sumByDouble { (it as HKQuantitySample).quantity.doubleValueForUnit(
-                    HKUnit.countUnit()) }
-                completion(data?.toInt().toString())
-            }
+        val query = HKSampleQuery(sampleType = dataType, predicate = predicate, limit = 0u, sortDescriptors = null) { _, results, _ ->
+            val data = results?.sumOf { (it as HKQuantitySample).quantity.doubleValueForUnit(HKUnit.countUnit()) }
+            completion(data?.toInt().toString())
         }
 
-        query?.let { healthStore.executeQuery(it) }
+        healthStore.executeQuery(query)
     }
 }

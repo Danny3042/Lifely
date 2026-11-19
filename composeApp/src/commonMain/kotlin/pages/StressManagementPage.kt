@@ -12,7 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SelfImprovement
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -91,7 +91,7 @@ fun StressManagementPage(navController: NavController) {
         }
     }
 
-    // Perform the navigation as a side-effect when requested
+    // Perform the navigation as a side effect when requested
     LaunchedEffect(navigateToMeditation) {
         if (navigateToMeditation) {
             // Log current navController state for debugging
@@ -196,7 +196,7 @@ fun StressManagementPage(navController: NavController) {
                     enabled = userActivity.isNotBlank() && !isLoading
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Send,
+                        imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = "Send Activity"
                     )
                 }

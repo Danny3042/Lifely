@@ -6,16 +6,21 @@ import platform.Foundation.NSHomeDirectory
 import platform.Foundation.NSOperationQueue
 import kotlin.random.Random
 import kotlin.io.encoding.Base64
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class IosTtsService : TtsService {
+    // Scope for fire-and-forget TTS requests (replaces GlobalScope)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     override fun speak(text: String, useGemini: Boolean, voice: String?) {
         if (useGemini) {
             // Try to fetch TTS audio via Google TTS REST and play it via native side
             val apiKey = BuildKonfig.GEMINI_API_KEY
             // Use a coroutine to call the suspend synth function
-            GlobalScope.launch {
+            scope.launch {
                 try {
                     val base64 = synthesizeGoogleTtsBase64(apiKey, text, voice)
                     if (!base64.isNullOrBlank()) {

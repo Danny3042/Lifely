@@ -508,84 +508,51 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             // Native NavigationStack with TabView
-            if #available(iOS 16.0, *) {
-                NavigationStack {
-                    TabView(selection: $selectedTab) {
-                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                            .tabItem { Label("Home", systemImage: "house") }
-                            .tag(0)
+            NavigationStack {
+                TabView(selection: $selectedTab) {
+                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                        .tabItem { Label("Home", systemImage: "house") }
+                        .tag(0)
 
-                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                            .tabItem { Label("Habits", systemImage: "checkmark.circle") }
-                            .tag(1)
+                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                        .tabItem { Label("Habits", systemImage: "checkmark.circle") }
+                        .tag(1)
 
-                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                            .tabItem { Label("Chat", systemImage: "message") }
-                            .tag(2)
+                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                        .tabItem { Label("Chat", systemImage: "message") }
+                        .tag(2)
 
-                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                            .tabItem { Label("Meditate", systemImage: "apple.meditate.circle.fill") }
-                            .tag(3)
+                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                        .tabItem { Label("Meditate", systemImage: "apple.meditate.circle.fill") }
+                        .tag(3)
 
-                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                            .tabItem { Label("Profile", systemImage: "person") }
-                            .tag(4)
-                    }
-                    .navigationTitle(tabTitle(for: selectedTab))
-                    .navigationBarTitleDisplayMode(.large)
-                    .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
-                    .toolbar(composeHidesNavigationBar ? .hidden : .visible, for: .navigationBar)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarLeading) {
-                            if router.showBackButton {
-                                Button(action: {
-                                    let impact = UIImpactFeedbackGenerator(style: .light)
-                                    impact.impactOccurred()
-                                    router.nativeBackTapped()
-                                }) {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "chevron.left")
-                                        Text("Back")
-                                    }
+                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                        .tabItem { Label("Profile", systemImage: "person") }
+                        .tag(4)
+                }
+                .navigationTitle(tabTitle(for: selectedTab))
+                .navigationBarTitleDisplayMode(.large)
+                .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
+                .toolbar(composeHidesNavigationBar ? .hidden : .visible, for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        if router.showBackButton {
+                            Button(action: {
+                                let impact = UIImpactFeedbackGenerator(style: .light)
+                                impact.impactOccurred()
+                                router.nativeBackTapped()
+                            }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "chevron.left")
+                                    Text("Back")
                                 }
                             }
                         }
                     }
-                     .preferredColorScheme(preferredColorScheme)
-                     .animation(.easeInOut(duration: 0.2), value: composeHidesTabBar)
-                     .animation(.easeInOut(duration: 0.25), value: preferredColorScheme)
                 }
-            } else {
-                NavigationView {
-                    TabView(selection: $selectedTab) {
-                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                            .tabItem { Label("Home", systemImage: "house") }
-                            .tag(0)
-
-                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                            .tabItem { Label("Habits", systemImage: "checkmark.circle") }
-                            .tag(1)
-
-                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                            .tabItem { Label("Chat", systemImage: "message") }
-                            .tag(2)
-
-                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                            .tabItem { Label("Meditate", systemImage: "apple.meditate.circle.fill") }
-                            .tag(3)
-
-                        SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                            .tabItem { Label("Profile", systemImage: "person") }
-                            .tag(4)
-                    }
-                    .navigationTitle(tabTitle(for: selectedTab))
-                    .navigationBarTitleDisplayMode(.large)
-                    .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
-                    .preferredColorScheme(preferredColorScheme)
-                     .animation(.easeInOut(duration: 0.2), value: composeHidesTabBar)
-                     .animation(.easeInOut(duration: 0.25), value: preferredColorScheme)
-                }
-                .navigationViewStyle(.stack)
+                 .preferredColorScheme(preferredColorScheme)
+                 .animation(.easeInOut(duration: 0.2), value: composeHidesTabBar)
+                 .animation(.easeInOut(duration: 0.25), value: preferredColorScheme)
             }
 
             // Native back button: shown in the navigation bar when Compose requests it
@@ -657,23 +624,7 @@ struct ContentView: View {
         .sheet(isPresented: $showChartsSheet) {
             NavigationView {
                 Group {
-                    if #available(iOS 16.0, *) {
-                        ChartView()
-                            .navigationTitle("Charts")
-                            .navigationBarTitleDisplayMode(.large)
-                            .toolbar {
-                                ToolbarItem(placement: .navigationBarTrailing) {
-                                    Button("Done") {
-                                        showChartsSheet = false
-                                    }
-                                }
-                            }
-                    } else {
-                        VStack {
-                            Text("Charts require iOS 16 or newer")
-                                .multilineTextAlignment(.center)
-                                .padding()
-                        }
+                    ChartView()
                         .navigationTitle("Charts")
                         .navigationBarTitleDisplayMode(.large)
                         .toolbar {
@@ -683,7 +634,6 @@ struct ContentView: View {
                                 }
                             }
                         }
-                    }
                 }
             }
         }
@@ -1064,7 +1014,7 @@ class ChartDataModel: ObservableObject {
                 self.update(fromMaps: arr)
             } else if let arrNS = payloadAny as? NSArray {
                 self.update(from: arrNS)
-            } else if let dict = note.userInfo as? [AnyHashable: Any], let arr = dict["data"] as? NSArray {
+            } else if let dict = note.userInfo, let arr = dict["data"] as? NSArray {
                 self.update(from: arr)
             }
         }

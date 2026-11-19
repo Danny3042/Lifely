@@ -112,8 +112,8 @@ actual fun PlatformApp(
             // Swift Boolean may bridge as kotlin.Boolean or NSNumber; handle both
             val darkAny = userInfo?.objectForKey("dark")
             val isDarkFromSystem = when (darkAny) {
-                is Boolean -> darkAny as Boolean
-                is NSNumber -> (darkAny as NSNumber).boolValue
+                is Boolean -> darkAny
+                is NSNumber -> darkAny.boolValue
                 else -> false
             }
             // Only update Compose dark-mode if the user asked to follow the system
@@ -143,8 +143,8 @@ actual fun PlatformApp(
             val userInfo = notification?.userInfo as? NSDictionary
             val enabledAny = userInfo?.objectForKey("enabled")
             val enabled = when (enabledAny) {
-                is Boolean -> enabledAny as Boolean
-                is NSNumber -> (enabledAny as NSNumber).boolValue
+                is Boolean -> enabledAny
+                is NSNumber -> enabledAny.boolValue
                 else -> true
             }
             try {

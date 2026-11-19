@@ -20,7 +20,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -67,7 +67,7 @@ fun ChartsPage(
                     title = { Text("Key metrics", style = MaterialTheme.typography.titleLarge) },
                     navigationIcon = {
                         IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 )
@@ -142,7 +142,7 @@ fun MetricDetailCard(title: String, subtitle: String, values: List<Float>) {
             }
             SimpleLineChart(values = values, modifier = Modifier.fillMaxWidth().height(160.dp), smooth = true)
 
-            // day labels (Mon..Sun)
+            // day labels (Mon to Sun)
             Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 listOf("M","T","W","T","F","S","S").forEach { d ->
                     Text(d, style = MaterialTheme.typography.bodySmall)

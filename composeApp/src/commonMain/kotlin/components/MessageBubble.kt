@@ -36,7 +36,7 @@ import com.mikepenz.markdown.model.markdownColor
 import model.Message
 
 @Composable
-inline fun MessageBubble(message: Message, modifier: Modifier = Modifier) {
+fun MessageBubble(message: Message, modifier: Modifier = Modifier) {
 val bubbleColor = if (message.isBotMessage) Color.DarkGray else Color.LightGray
     var visibility by remember { mutableStateOf(false) }
 

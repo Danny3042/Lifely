@@ -15,12 +15,7 @@ import androidx.navigation.NavHostController
 
 class HabitsTab(private val navcontroller: NavHostController) : Tab {
 
-    private lateinit var healthKitService: HealthKitService
-
-    init {
-        val healthKitManager = iOSHealthKitManager()
-        healthKitService = HealthKitServiceImpl(healthKitManager)
-    }
+    private val healthKitService: HealthKitService = HealthKitServiceImpl(iOSHealthKitManager())
     override val options: TabOptions
         @Composable
         get() {

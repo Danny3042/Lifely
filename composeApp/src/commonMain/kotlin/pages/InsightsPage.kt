@@ -87,7 +87,7 @@ fun InsightsPage(
                     val sessions = sessionsPerDay.getOrNull(index) ?: emptyList()
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            "$day\n${date.dayOfMonth} ${date.month.name.take(3)}",
+                            "$day\n${date.day} ${date.month.name.take(3)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = if (index == currentDayIndex) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                         )
@@ -124,7 +124,7 @@ fun InsightsPage(
                 ) {
                     if (sessions.isNotEmpty()) {
                         Text(
-                            "$day, ${date.dayOfMonth} ${date.month.name.take(3)}",
+                            "$day, ${date.day} ${date.month.name.take(3)}",
                             style = MaterialTheme.typography.titleSmall,
                             modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
                         )

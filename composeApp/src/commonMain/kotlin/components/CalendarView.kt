@@ -357,7 +357,7 @@ fun ContentItem(
                 style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                text = date.date.dayOfMonth.toString(),
+                text = date.date.day.toString(),
                 modifier = Modifier.align(Alignment.CenterHorizontally),
                 style = MaterialTheme.typography.bodySmall,
             )

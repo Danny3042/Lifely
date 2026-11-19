@@ -14,8 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material3.ElevatedCard
@@ -140,7 +140,7 @@ actual fun MessageInput(
                                     localScope.launch { host.showSnackbar(msg) }
                                 }
                             }) {
-                                val ic = if (TtsSettings.enabled) Icons.Filled.VolumeUp else Icons.Filled.VolumeOff
+                                val ic = if (TtsSettings.enabled) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff
                                 Icon(ic, contentDescription = if (TtsSettings.enabled) "TTS enabled" else "TTS disabled")
                             }
 

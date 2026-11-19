@@ -243,7 +243,6 @@ func installComposeObservers(tabBarController: UITabBarController?, navigationCo
                     print("✅ Adding back button")
                     // Create back button with closure-based action
                     let backItem = UIBarButtonItem(title: "Back", style: .plain, target: nil, action: nil)
-                    let tapRecognizer = UITapGestureRecognizer(target: nil, action: nil)
                     
                     // Use a helper class to hold the action
                     let helper = BackButtonHelper()

@@ -42,6 +42,7 @@ kotlin {
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
             isStatic = true
+            binaryOption("bundleId", "org.danielramzani.HealthCompose.ComposeApp")
         }
     }
 

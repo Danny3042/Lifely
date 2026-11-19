@@ -25,7 +25,6 @@
 		08DBFD912EF72EF000CCB6B3 /* SafeAreaHelper.kt in Resources */ = {isa = PBXBuildFile; fileRef = 08DBFD902EF72EF000CCB6B3 /* SafeAreaHelper.kt */; };
 		11D975B877485487ECF8CE18 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9ADFC5CF1EEB008FA5CFBBB /* ProfileView.swift */; };
 		2152FB042600AC8F00CF470E /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2152FB032600AC8F00CF470E /* iOSApp.swift */; };
-		290F02A9194979C5BC459F4D /* ResetPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E5998051657DCC1905FC61C /* ResetPasswordView.swift */; };
 		5B82680352B7629EF01DAADE /* HabitTrackerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77DB1ADDE43B01D3CE686819 /* HabitTrackerView.swift */; };
 		6DFC66CBE1BD1D7726073B6E /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F0B7DD8A4785B4B0561ECA2 /* ChatView.swift */; };
 		7555FF83242A565900829871 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7555FF82242A565900829871 /* ContentView.swift */; };
@@ -33,7 +32,6 @@
 		7E7ECA1A11330A497E2CEF2B /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EBE72B78D2F17121FAE95DF /* AuthManager.swift */; };
 		8184AE2A02BB85A5EE3C081C /* StressManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC261745F742E979D8616BD8 /* StressManagementView.swift */; };
 		9D9BB4BA477F86A64EDEF86E /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECD4BA3927B146147BE5C613 /* LoginView.swift */; };
-		BC49C432D198A98DEDF2EB09 /* SignUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F225380A4599325A5F6CAF09 /* SignUpView.swift */; };
 		BD43E0CE05D2A5BB6BDAA62C /* MeditationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3128225D7AA2A8125DC51CC5 /* MeditationView.swift */; };
 		CAB727CFD7E2ED3BAC58EE86 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778ECC663B9304975B6D68DF /* AppSettings.swift */; };
 		F30FFFEAD8DC3DBC46A59E01 /* HeroTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F246AD5AA2D4656298A31CC /* HeroTabView.swift */; };
@@ -96,7 +94,6 @@
 		08D7A4B92EF76CFD00F44193 /* NAVIGATION_SETUP.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = NAVIGATION_SETUP.md; sourceTree = "<group>"; };
 		08DBFD902EF72EF000CCB6B3 /* SafeAreaHelper.kt */ = {isa = PBXFileReference; lastKnownFileType = text; path = SafeAreaHelper.kt; sourceTree = "<group>"; };
 		1958CFAA761ACF86E9DC48CF /* SignUpView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SignUpView.swift; sourceTree = "<group>"; };
-		1E5998051657DCC1905FC61C /* ResetPasswordView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ResetPasswordView.swift; sourceTree = "<group>"; };
 		2152FB032600AC8F00CF470E /* iOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp.swift; sourceTree = "<group>"; };
 		3128225D7AA2A8125DC51CC5 /* MeditationView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeditationView.swift; sourceTree = "<group>"; };
 		6EBE72B78D2F17121FAE95DF /* AuthManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
@@ -112,7 +109,6 @@
 		AC261745F742E979D8616BD8 /* StressManagementView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StressManagementView.swift; sourceTree = "<group>"; };
 		D9ADFC5CF1EEB008FA5CFBBB /* ProfileView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		ECD4BA3927B146147BE5C613 /* LoginView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
-		F225380A4599325A5F6CAF09 /* SignUpView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SignUpView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -208,8 +204,6 @@
 				778ECC663B9304975B6D68DF /* AppSettings.swift */,
 				1958CFAA761ACF86E9DC48CF /* SignUpView.swift */,
 				7374BDE92C7730FC1E6252FF /* ResetPasswordView.swift */,
-				F225380A4599325A5F6CAF09 /* SignUpView.swift */,
-				1E5998051657DCC1905FC61C /* ResetPasswordView.swift */,
 				6EBE72B78D2F17121FAE95DF /* AuthManager.swift */,
 				08DBFD902EF72EF000CCB6B3 /* SafeAreaHelper.kt */,
 				08D7A4B72EF76CE200F44193 /* ComposeNavigationBridge.kt */,
@@ -351,6 +345,7 @@
 /* Begin PBXShellScriptBuildPhase section */
 		082828A72D2C8929006C1EE3 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
@@ -369,10 +364,11 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Type a script or drag a script file from your workspace to insert its path.\n\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\n";
+			shellScript = "# Upload dSYMs to Crashlytics (Release only; Debug builds use plain DWARF and have no dSYM)\nif [ \"${CONFIGURATION}\" != \"Release\" ]; then\n  echo \"Skipping Crashlytics dSYM upload for ${CONFIGURATION}\"\n  exit 0\nfi\n\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\n";
 		};
 		F36B1CEB2AD83DDC00CB74D5 /* Compile Kotlin Framework */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
@@ -411,8 +407,6 @@
 				CAB727CFD7E2ED3BAC58EE86 /* AppSettings.swift in Sources */,
 				07820EF87E937D98C7FA701F /* SignUpView.swift in Sources */,
 				7B94900377F39A5B1817D642 /* ResetPasswordView.swift in Sources */,
-				BC49C432D198A98DEDF2EB09 /* SignUpView.swift in Sources */,
-				290F02A9194979C5BC459F4D /* ResetPasswordView.swift in Sources */,
 				7E7ECA1A11330A497E2CEF2B /* AuthManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -455,7 +449,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -550,7 +544,7 @@
 				DEVELOPMENT_TEAM = 49BZF93FUP;
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
-					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)\n$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
+					"$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
 				);
 				INFOPLIST_FILE = iosApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MyHealthBuddy;
@@ -588,7 +582,7 @@
 				DEVELOPMENT_TEAM = 49BZF93FUP;
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
-					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)\n$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
+					"$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
 				);
 				INFOPLIST_FILE = iosApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MyHealthBuddy;

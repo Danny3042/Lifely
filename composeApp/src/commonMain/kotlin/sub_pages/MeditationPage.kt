@@ -1,7 +1,6 @@
 package sub_pages
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -12,7 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
@@ -30,6 +29,7 @@ import utils.SettingsManager
 import components.TimeEditDialog
 import kotlinx.coroutines.delay
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.datetime.TimeZone
 import utils.Session
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -37,7 +37,6 @@ import utils.InsightsViewModel
 import kotlinx.datetime.toLocalDateTime
 
 const val MEDITATION_PAGE_ROUTE = "meditation"
-@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun MeditationPage(
     onBack: (() -> Unit)? = null,
@@ -63,7 +62,7 @@ fun MeditationPage(
 
     LaunchedEffect(isRunning) {
         while (isRunning && timeLeft > 0) {
-            delay(1000)
+            delay(1.seconds)
             timeLeft -= 1
         }
         if (timeLeft == 0 && isRunning) {
@@ -91,7 +90,7 @@ fun MeditationPage(
             if (onMeditationComplete != null) {
                 try {
                     onMeditationComplete.invoke()
-                } catch (e: Throwable) {
+                } catch (_: Throwable) {
                     // If the completion handler fails, fallback to insights navigation
                     onNavigateToInsights?.invoke()
                 }
@@ -152,7 +151,7 @@ fun MeditationPage(
                     modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ArrowBack,
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back"
                     )
                 }
