@@ -157,7 +157,7 @@ fun HomePage(
 
         // Health data states (populated on Android via HealthConnect)
         // Stats derived from shared InsightsViewModel so they reflect real meditation sessions
-        val insightsViewModel: InsightsViewModel = if (isAndroid()) viewModel() else InsightsViewModel()
+        val insightsViewModel: InsightsViewModel = viewModel { InsightsViewModel() }
         val sessionsPerDay by insightsViewModel.sessionsPerDay
 
         // compute totals per day (last 7 days) and aggregated stats

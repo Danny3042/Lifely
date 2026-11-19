@@ -40,7 +40,6 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.todayIn
 import utils.InsightsViewModel
-import utils.isAndroid
 
 const val InsightsPageScreen = "Insights"
 
@@ -54,7 +53,7 @@ fun InsightsPage(
     modifier: Modifier = Modifier,
     insightsViewModel: InsightsViewModel? = null
 ) {
-    val insightsViewModel: InsightsViewModel = insightsViewModel ?: if (isAndroid()) viewModel() else InsightsViewModel()
+    val insightsViewModel: InsightsViewModel = insightsViewModel ?: viewModel { InsightsViewModel() }
 
     val sessionsPerDay by insightsViewModel.sessionsPerDay
     val today = Clock.System.todayIn(TimeZone.currentSystemDefault())

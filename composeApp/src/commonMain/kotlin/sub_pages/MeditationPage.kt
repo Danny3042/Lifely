@@ -35,7 +35,6 @@ import utils.Session
 import androidx.lifecycle.viewmodel.compose.viewModel
 import utils.InsightsViewModel
 import kotlinx.datetime.toLocalDateTime
-import utils.isAndroid
 
 const val MEDITATION_PAGE_ROUTE = "meditation"
 @OptIn(ExperimentalAnimationApi::class)
@@ -47,12 +46,7 @@ fun MeditationPage(
     insightsViewModelParam: InsightsViewModel? = null
 ) {
     // Use provided view model if given; otherwise use platform-appropriate creation.
-    val insightsViewModel: InsightsViewModel = insightsViewModelParam ?: if (isAndroid()) {
-        viewModel()
-    } else {
-        // On iOS, avoid ViewModelProvider; instantiate directly
-        InsightsViewModel()
-    }
+    val insightsViewModel: InsightsViewModel = insightsViewModelParam ?: viewModel { InsightsViewModel() }
 
     var totalTime by remember { mutableStateOf(5 * 60) }
     var timeLeft by remember { mutableStateOf(totalTime) }

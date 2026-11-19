@@ -43,7 +43,7 @@ fun ChartsPage(
     insightsViewModelParam: InsightsViewModel? = null,
     navController: NavHostController? = null
 ) {
-    val insightsViewModel: InsightsViewModel = insightsViewModelParam ?: if (isAndroid()) viewModel() else InsightsViewModel()
+    val insightsViewModel: InsightsViewModel = insightsViewModelParam ?: viewModel { InsightsViewModel() }
 
     val sessionsPerDay by insightsViewModel.sessionsPerDay
 

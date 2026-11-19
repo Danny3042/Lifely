@@ -17,6 +17,11 @@ plugins {
 }
 
 kotlin {
+    compilerOptions {
+        // The project uses expect/actual classes (still Beta in Kotlin); silence the per-file warning
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+
     androidLibrary {
         // Same namespace as before, so existing `org.danielramzani.HealthCompose.R` imports keep working.
         namespace = "org.danielramzani.HealthCompose"

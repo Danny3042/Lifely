@@ -46,6 +46,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import keyboardUtil.hideKeyboard
 import keyboardUtil.onDoneHideKeyboardAction
 import utils.isAndroid
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 const val Timer = "timer"
 @Composable
@@ -87,7 +88,7 @@ fun CircularTimer(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimerScreenContent(onBack: () -> Unit ) {
-    val timerViewModel = remember { TimerViewModel() }
+    val timerViewModel = viewModel { TimerViewModel() }
     val timerValue by timerViewModel.timer.collectAsState()
     var showDialog by remember { mutableStateOf(false) }
 
