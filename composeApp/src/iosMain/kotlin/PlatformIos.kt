@@ -25,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import config.VERSION_NUMBER
 import kotlinx.coroutines.flow.collectLatest
 import pages.ChartsPage
 import pages.ChartsPageScreen

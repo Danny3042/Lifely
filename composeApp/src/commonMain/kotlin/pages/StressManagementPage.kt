@@ -1,28 +1,38 @@
 package pages
 
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.Spa
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
+import components.ui.CoachPromptCard
+import components.ui.CoachTipCard
+import components.ui.IconBadge
+import components.ui.PagePadding
+import components.ui.QuoteCard
+import components.ui.SectionHeader
 import components.ui.ContentWidth
 import components.ui.centeredMaxWidth
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SelfImprovement
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,23 +43,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import keyboardUtil.hideKeyboard
-import keyboardUtil.onDoneHideKeyboardAction
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import service.GenerativeAiService
 import sub_pages.MEDITATION_PAGE_ROUTE
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.ImeAction
 import platform.PlatformBridge
 import utils.isAndroid
 
 const val STRESS_MANAGEMENT_PAGE_ROUTE = "stress_management"
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StressManagementPage(navController: NavController) {
     val scope = rememberCoroutineScope()
@@ -63,7 +68,7 @@ fun StressManagementPage(navController: NavController) {
 
     fun generateTipAndAddActivity() {
         try {
-            if (userActivity.isBlank()) return
+            if (userActivity.isBlank() || isLoading) return
             // hideKeyboard may throw on some platforms; protect it
             runCatching { hideKeyboard() }.onFailure { println("StressManagementPage: hideKeyboard failed: ${it.message}") }
 
@@ -144,113 +149,105 @@ fun StressManagementPage(navController: NavController) {
         }
     }
 
+    val quickIdeas = listOf("Deep breathing", "A short walk", "Journaling", "Calming music")
+
     Column(
         modifier = Modifier
-            .centeredMaxWidth(ContentWidth.Wide)
+            .centeredMaxWidth(ContentWidth.Reading)
             .verticalScroll(scrollState)
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(start = PagePadding, end = PagePadding, top = 16.dp, bottom = 32.dp),
     ) {
+        // Primary action: the guided meditation timer
+        MeditationHeroCard(onStart = { navigateToMeditation = true })
 
-        Icon(
-            painter = rememberVectorPainter(Icons.Default.SelfImprovement),
-            contentDescription = "Stress Management",
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(48.dp)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text("Stress Management", style = MaterialTheme.typography.headlineSmall)
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Surface(
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                "Tip: Take deep breaths and give yourself a short break when feeling overwhelmed.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.padding(12.dp)
-            )
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
+        SectionHeader("Ask your stress coach")
+        CoachPromptCard(
+            title = "Find what helps you unwind",
+            subtitle = "Pick an idea or type your own, and get a practical tip for using it.",
+            icon = Icons.Outlined.Spa,
             value = userActivity,
             onValueChange = { userActivity = it },
-            label = { Text("What stress relief activity do you want to try?") },
-            modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
-            keyboardActions = onDoneHideKeyboardAction(onDone = {
-                // keep existing behavior: keep keyboard hidden and do not auto-submit (Button handles it)
-            }),
-            trailingIcon = {
-                IconButton(
-                    onClick = {
-                        println("StressManagementPage: Send icon clicked. userActivity='$userActivity'")
-                        runCatching { hideKeyboard() }.onFailure { println("StressManagementPage: hideKeyboard failed on send icon: ${it.message}") }
-                        generateTipAndAddActivity()
-                    },
-                    enabled = userActivity.isNotBlank() && !isLoading
+            placeholder = "e.g. Stretching before bed",
+            buttonLabel = "Get a tip",
+            isLoading = isLoading,
+            onSubmit = ::generateTipAndAddActivity,
+            extraContent = {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "Send Activity"
+                    quickIdeas.forEach { idea ->
+                        SuggestionChip(
+                            onClick = {
+                                userActivity = idea
+                                generateTipAndAddActivity()
+                            },
+                            enabled = !isLoading,
+                            label = { Text(idea) },
+                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                            ),
+                        )
+                    }
+                }
+            },
+        )
+
+        Spacer(Modifier.height(12.dp))
+        CoachTipCard(
+            tip = aiTip,
+            isLoading = isLoading,
+            error = error,
+            emptyText = "Feeling overwhelmed? Slow your breathing and give yourself a short break. Your coach's tips will appear here.",
+        )
+
+        Spacer(Modifier.height(16.dp))
+        QuoteCard("You can't always control what goes on outside. But you can always control what goes on inside.")
+    }
+}
+
+@Composable
+private fun MeditationHeroCard(onStart: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Take a mindful break", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "A guided timer to help you slow down and breathe.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
                     )
                 }
+                Spacer(Modifier.width(12.dp))
+                IconBadge(
+                    icon = Icons.Filled.SelfImprovement,
+                    containerColor = MaterialTheme.colorScheme.tertiary,
+                    contentColor = MaterialTheme.colorScheme.onTertiary,
+                    size = 52.dp,
+                )
             }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text("AI Coach", style = MaterialTheme.typography.titleMedium)
-        Spacer(modifier = Modifier.height(8.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            Box(modifier = Modifier.padding(12.dp)) {
-                when {
-                    isLoading -> Text("Loading AI tip...")
-                    error != null -> Text("Error: $error", color = MaterialTheme.colorScheme.error)
-                    aiTip != null -> Text(aiTip!!, style = MaterialTheme.typography.bodyMedium)
-                    else -> Text("No tip available.")
-                }
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = onStart,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.tertiary,
+                    contentColor = MaterialTheme.colorScheme.onTertiary,
+                ),
+            ) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Start meditation")
             }
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Button(
-            onClick = {
-                println("StressManagementPage: Button clicked. userActivity='$userActivity'")
-                runCatching { hideKeyboard() }.onFailure { println("StressManagementPage: hideKeyboard failed on button: ${it.message}") }
-                generateTipAndAddActivity()
-            },
-            enabled = userActivity.isNotBlank() && !isLoading
-        ) {
-            Text("Get AI Tip & Add Activity")
-        }
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Replace with your own tracker for stress activities
-        // StressTrackerPage(activities = trackedActivities, onActivityCompleted = { ... })
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Surface(
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                "\"You can't always control what goes on outside. But you can always control what goes on inside.\"",
-                style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(12.dp)
-            )
         }
     }
 }

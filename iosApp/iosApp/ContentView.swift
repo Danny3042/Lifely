@@ -290,15 +290,13 @@ struct SharedComposeHost: View {
                     requestRoute(route)
                 }
                 .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
+            // .cancellationAction is the placement Apple asks custom back buttons to use: on iPhone Duo
+            // it puts the button in the side column with the tab bar (outer display and landscape);
+            // elsewhere it sits at the leading edge of the navigation bar as before.
+            ToolbarItem(placement: .cancellationAction) {
                 if showBackButton {
                     Button(action: handleBackButton) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 17, weight: .semibold))
-                            Text("Back")
-                                .font(.system(size: 17))
-                        }
+                        Label("Back", systemImage: "chevron.left")
                     }
                     .transition(.opacity.combined(with: .scale))
                 }
@@ -533,7 +531,7 @@ struct ContentView: View {
                         .tag(0)
 
                     SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                        .tabItem { Label("Habits", systemImage: "checkmark.circle") }
+                        .tabItem { Label("Habits", systemImage: "checklist") }
                         .tag(1)
 
                     SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
@@ -553,17 +551,15 @@ struct ContentView: View {
                 .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
                 .toolbar(composeHidesNavigationBar ? .hidden : .visible, for: .navigationBar)
                 .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
+                    // .cancellationAction: on iPhone Duo the back button joins the tab bar's side column
+                    ToolbarItem(placement: .cancellationAction) {
                         if router.showBackButton {
                             Button(action: {
                                 let impact = UIImpactFeedbackGenerator(style: .light)
                                 impact.impactOccurred()
                                 router.nativeBackTapped()
                             }) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "chevron.left")
-                                    Text("Back")
-                                }
+                                Label("Back", systemImage: "chevron.left")
                             }
                         }
                     }

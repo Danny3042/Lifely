@@ -23,7 +23,7 @@ struct HeroTabView: View {
 
             TransparentTabContent()
                 .onAppear { selectTab(1) }
-                .tabItem { Label("Habits", systemImage: "checkmark.circle") }
+                .tabItem { Label("Habits", systemImage: "checklist") }
                 .tag(1)
 
             TransparentTabContent()

@@ -3,25 +3,36 @@ package utils
 import androidx.compose.runtime.mutableStateListOf
 
 object HabitRepository {
-    // Use a SnapshotStateList so Compose observers recompose when this changes
-    var completedHabits = mutableStateListOf<String>().apply { addAll(HabitStorage.loadHabits()) }
-    val habits: List<String> get() = completedHabits
+    // SnapshotStateLists so Compose recomposes when they change
 
-    fun addCompletedHabit(habit: String) {
-        if (!completedHabits.contains(habit)) {
-            completedHabits.add(habit)
-            HabitStorage.saveHabits(completedHabits)
-        }
-    }
+    /** Habits the user is working on. */
+    val activeHabits = mutableStateListOf<String>().apply { addAll(HabitStorage.loadHabits()) }
+
+    /** Habits the user has ticked off (shown on Completed Habits and Home's recent activity). */
+    val completedHabits = mutableStateListOf<String>().apply { addAll(HabitStorage.loadCompletedHabits()) }
+
+    val habits: List<String> get() = activeHabits
 
     fun addHabit(habit: String) {
-        if (habit.isNotBlank() && !habits.contains(habit)) {
-            completedHabits.add(habit)
-            HabitStorage.saveHabits(completedHabits)
+        if (habit.isNotBlank() && !activeHabits.contains(habit)) {
+            activeHabits.add(habit)
+            HabitStorage.saveHabits(activeHabits)
         }
     }
+
+    /** Ticks a habit off: moves it from the active list to the completed list. */
+    fun completeHabit(habit: String) {
+        if (activeHabits.remove(habit)) HabitStorage.saveHabits(activeHabits)
+        if (!completedHabits.contains(habit)) {
+            completedHabits.add(habit)
+            HabitStorage.saveCompletedHabits(completedHabits)
+        }
+    }
+
+    fun addCompletedHabit(habit: String) = completeHabit(habit)
+
     fun removeHabit(habit: String) {
-        completedHabits.remove(habit)
-        HabitStorage.saveHabits(completedHabits)
+        activeHabits.remove(habit)
+        HabitStorage.saveHabits(activeHabits)
     }
 }

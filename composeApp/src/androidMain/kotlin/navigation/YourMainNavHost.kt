@@ -37,7 +37,7 @@ import sub_pages.ReflectionPage
 import tabs.HomeTab
 import utils.HealthKitServiceImpl
 import utils.iOSHealthKitManager
-import config.VERSION_NUMBER
+import config.appVersionName
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
@@ -71,7 +71,7 @@ fun YourMainNavHost(navController: NavHostController, showBottomBar: Boolean = t
         composable("meditation") { HomeTab.Content() }
         composable("profile") { HomeTab.Content() }
 
-        composable(AboutPageScreen) { AboutPage(navController, versionNumber = VERSION_NUMBER) }
+        composable(AboutPageScreen) { AboutPage(navController, versionNumber = appVersionName()) }
         composable(NotificationPageScreen) { NotificationPage(navController) }
         composable(DarkModeSettingsPageScreen) {
             DarkModeSettingsPage(
