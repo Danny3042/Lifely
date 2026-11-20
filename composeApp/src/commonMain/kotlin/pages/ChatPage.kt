@@ -1,4 +1,10 @@
 import androidx.compose.foundation.layout.Box
+import components.ui.platformScaffoldInsets
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.foundation.layout.fillMaxWidth
+import components.ui.ContentWidth
+import components.ui.centeredMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.text.style.TextAlign
 import components.ui.IconBadge
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -14,7 +20,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -26,9 +31,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -37,14 +39,10 @@ import components.MessageInput
 import kotlinx.coroutines.launch
 import model.ChatViewModel
 import service.GenerativeAiService
-import utils.isAndroid
 import components.ModelChatMessage
 import tts.getTtsService
 import tts.TtsSettings
 import platform.registerComposeNewChatListener
-import platform.PlatformBridge
-import kotlinx.coroutines.flow.collectLatest
-import androidx.compose.runtime.snapshotFlow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,14 +65,6 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     // removed unused showNewMessageChip state (not used currently)
     val messages = chatUiState.messages
-    // Observe platform safe area bottom (iOS) so FAB can be offset dynamically above the home indicator/tab bar
-    var platformBottomInset by remember { mutableStateOf(0.0) }
-    LaunchedEffect(Unit) {
-        snapshotFlow { PlatformBridge.safeAreaBottom }.collectLatest { value ->
-            platformBottomInset = value
-        }
-    }
-
     // When messages change, auto-scroll only if the user is already near the bottom.
     LaunchedEffect(messages.size, TtsSettings.enabled) {
         if (messages.isEmpty()) return@LaunchedEffect
@@ -99,6 +89,7 @@ fun ChatScreen(
     }
 
     Scaffold(
+        contentWindowInsets = platformScaffoldInsets(),
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         // The app shell (HeroScreen) already shows the "Chat" title bar on Android.
     ) { paddingValues ->
@@ -108,11 +99,12 @@ fun ChatScreen(
                 .fillMaxSize()
         ) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                // Keep messages at a readable width on tablets
+                modifier = Modifier.centeredMaxWidth(ContentWidth.Wide).fillMaxSize(),
                 state = listState,
                 reverseLayout = false,
-                // Keep the last message clear of the floating input bar
-                contentPadding = PaddingValues(top = 8.dp, bottom = 128.dp),
+                // Keep the last message clear of the input bar and the New chat button above it
+                contentPadding = PaddingValues(top = 8.dp, bottom = 176.dp),
             ) {
                 items(
                     items = chatUiState.messages,
@@ -132,7 +124,27 @@ fun ChatScreen(
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .widthIn(max = ContentWidth.Wide)
             ) {
+                // "New chat" sits just above the input's trailing end, so it moves with the input
+                // on every screen size instead of floating at the window edge. Hidden while the
+                // chat is empty, where it would do nothing and cover the "Ask Gemini" prompt.
+                if (messages.isNotEmpty()) {
+                    SmallFloatingActionButton(
+                        onClick = {
+                            chatViewModel.newChat()
+                            coroutineScope.launch { snackbarHostState.showSnackbar("New chat started") }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .padding(end = 16.dp, bottom = 8.dp),
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = "New chat")
+                    }
+                }
                 // TTS toggle moved into the message input box (MessageInput.trailings)
                 // New chat is provided inside the MessageInput now
                 MessageInput(
@@ -149,23 +161,9 @@ fun ChatScreen(
                      snackbarHostState = snackbarHostState,
                      onNewChat = { chatViewModel.newChat() },
                  )
-                // Reserve minimal vertical space on iOS: use the platform safe area bottom so the input
-                // sits closer to the bottom edge (lower) compared to the previous extra offset.
-                Spacer(modifier = Modifier.height(if (isAndroid()) 8.dp else platformBottomInset.toFloat().dp))
-            }
-            // Floating action button for New Chat anchored above the input on the bottom end
-            FloatingActionButton(
-                onClick = {
-                    chatViewModel.newChat()
-                    coroutineScope.launch { snackbarHostState.showSnackbar("New chat started") }
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = (100.dp + platformBottomInset.toFloat().dp)),
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "New chat")
+                // Small breathing room under the input. The bottom safe area is already applied by the
+                // app shell on both platforms, so it isn't added again here.
+                Spacer(modifier = Modifier.height(8.dp))
             }
          }
      }

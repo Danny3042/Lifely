@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -65,11 +66,15 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
+import components.ui.ContentWidth
 import components.ui.IconBadge
+import components.ui.LocalWindowSize
+import components.ui.centeredMaxWidth
 import components.ui.ListRowCard
 import components.ui.PagePadding
 import components.ui.SectionHeader
@@ -188,11 +193,12 @@ fun HomePage(
         )
     }
 
-    Box(modifier = modifier.fillMaxSize().padding(top = effectiveTopPadding)) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = PagePadding, end = PagePadding, bottom = 96.dp + bottomInsetDp),
-        ) {
+    val windowSize = LocalWindowSize.current
+    val twoPane = windowSize.useTwoPane
+    val listPadding = PaddingValues(start = PagePadding, end = PagePadding, bottom = 96.dp + bottomInsetDp)
+
+    // Greeting, today's progress, stats and the weekly trend
+    val summarySection: LazyListScope.() -> Unit = {
             // Greeting + date
             item {
                 Column(modifier = Modifier.padding(top = 8.dp, bottom = 20.dp)) {
@@ -261,7 +267,10 @@ fun HomePage(
                     WeekTrendCard(totals = totals, onClick = onChartClick)
                 }
             }
+    }
 
+    // Shortcuts and recent activity
+    val activitySection: LazyListScope.() -> Unit = {
             // User-added shortcut cards
             if (customCards.isNotEmpty()) {
                 item { SectionHeader("Shortcuts") }
@@ -313,6 +322,33 @@ fun HomePage(
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                 }
+            }
+    }
+
+    Box(modifier = modifier.fillMaxSize().padding(top = effectiveTopPadding)) {
+        if (twoPane) {
+            // Wide screens and landscape: two independently scrolling columns
+            Row(
+                modifier = Modifier.centeredMaxWidth(ContentWidth.Dashboard).fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                LazyColumn(modifier = Modifier.weight(1f).fillMaxSize(), contentPadding = listPadding) {
+                    summarySection()
+                }
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxSize(),
+                    contentPadding = PaddingValues(start = PagePadding, end = PagePadding, top = 8.dp, bottom = 96.dp + bottomInsetDp),
+                ) {
+                    activitySection()
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.centeredMaxWidth(ContentWidth.Reading).fillMaxSize(),
+                contentPadding = listPadding,
+            ) {
+                summarySection()
+                activitySection()
             }
         }
 
@@ -390,7 +426,7 @@ private fun TodayHeroCard(todayMinutes: Int, onStart: () -> Unit) {
             ) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Start meditation", style = MaterialTheme.typography.titleMedium)
+                Text("Start meditation", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

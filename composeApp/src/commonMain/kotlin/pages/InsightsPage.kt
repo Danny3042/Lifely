@@ -1,5 +1,7 @@
 package pages
 
+import components.ui.ContentWidth
+import components.ui.centeredMaxWidth
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -83,6 +85,7 @@ fun InsightsPage(
 
     Column(
         modifier = modifier
+            .centeredMaxWidth(ContentWidth.Wide)
             .fillMaxSize()
             .verticalScroll(scrollState)
             .padding(horizontal = PagePadding, vertical = 16.dp),

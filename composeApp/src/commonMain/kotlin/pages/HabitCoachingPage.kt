@@ -1,5 +1,7 @@
 package pages
 
+import components.ui.ContentWidth
+import components.ui.centeredMaxWidth
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.lazy.LazyColumn
@@ -81,7 +83,7 @@ fun HabitCoachingPage(navcontroller: NavController) {
     }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.centeredMaxWidth(ContentWidth.Wide).fillMaxSize(),
         contentPadding = PaddingValues(16.dp)
     ) {
         item {

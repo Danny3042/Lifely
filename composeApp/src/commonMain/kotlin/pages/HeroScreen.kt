@@ -1,4 +1,13 @@
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.ui.unit.dp
+import components.ui.LocalWindowSize
+import components.ui.platformScaffoldInsets
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
@@ -110,32 +119,62 @@ fun HeroScreen(navController: NavHostController, showBottomBar: Boolean = true) 
                 }
         }
 
-        Scaffold(
-            topBar = {
-                if (isAndroid()) {
-                    TopAppBar(title = { Text(text = tabNavigator.current.options.title) })
-                }
-            },
-            content = { innerPadding ->
-                // Keep tab content clear of the Android top bar and bottom navigation bar
-                Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-                    CurrentTab()
-                }
-            },
-            bottomBar = {
-                // Show Compose bottom bar only when requested by caller (iOS host will handle native tabs)
-                if (showBottomBar) {
-                    NavigationBar {
-                        TabNavigationItem(homeTab)
-                        TabNavigationItem(habitsTab)
-                        TabNavigationItem(chatTab)
-                        TabNavigationItem(meditateTab)
-                        TabNavigationItem(profileTab)
-                    }
+        val windowSize = LocalWindowSize.current
+        val tabs = listOf(homeTab, habitsTab, chatTab, meditateTab, profileTab)
+        // Phones in portrait get a bottom bar; tablets, foldables and landscape get a side rail
+        val useRail = showBottomBar && windowSize.useNavigationRail
+
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (useRail) {
+                NavigationRail(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    header = { Spacer(Modifier.height(8.dp)) },
+                ) {
+                    Spacer(Modifier.weight(1f))
+                    tabs.forEach { TabRailItem(it) }
+                    Spacer(Modifier.weight(1f))
                 }
             }
-        )
+
+            Scaffold(
+                modifier = Modifier.weight(1f),
+                // On iOS the SwiftUI host already pads Compose for every safe-area edge (including the
+                // side tab bar, camera and fold on iPhone Duo), so don't apply the side insets twice.
+                contentWindowInsets = platformScaffoldInsets(),
+                topBar = {
+                    // Landscape phones are short on height; the rail already shows the current tab
+                    if (isAndroid() && !windowSize.isCompactHeight) {
+                        TopAppBar(title = { Text(text = tabNavigator.current.options.title) })
+                    }
+                },
+                content = { innerPadding ->
+                    // Keep tab content clear of the Android top bar and bottom navigation bar
+                    Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                        CurrentTab()
+                    }
+                },
+                bottomBar = {
+                    // Show Compose bottom bar only when requested by caller (iOS host will handle native tabs)
+                    if (showBottomBar && !useRail) {
+                        NavigationBar {
+                            tabs.forEach { TabNavigationItem(it) }
+                        }
+                    }
+                }
+            )
+        }
     }
+}
+
+@Composable
+private fun TabRailItem(tab: Tab) {
+    val tabNavigator = LocalTabNavigator.current
+    NavigationRailItem(
+        selected = tabNavigator.current.key == tab.key,
+        onClick = { tabNavigator.current = tab },
+        icon = { Icon(painter = tab.options.icon!!, contentDescription = tab.options.title) },
+        label = { Text(text = tab.options.title) },
+    )
 }
 
 @Composable

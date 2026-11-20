@@ -1,5 +1,7 @@
 package Authentication
 
+import components.ui.ContentWidth
+import components.ui.centeredMaxWidth
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material.icons.filled.Spa
@@ -120,6 +122,7 @@ class Authentication {
                 val scrollState = rememberScrollState()
                 Column(
                     modifier = Modifier
+                        .centeredMaxWidth(ContentWidth.Form)
                         .fillMaxSize()
                         .verticalScroll(scrollState)
                         .padding(horizontal = 24.dp, vertical = 32.dp),
@@ -236,6 +239,7 @@ class Authentication {
                 val keyboardController = LocalSoftwareKeyboardController.current
                 Column(
                     modifier = Modifier
+                        .centeredMaxWidth(ContentWidth.Form)
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
                         .padding(16.dp),
@@ -325,6 +329,7 @@ class Authentication {
         ) {
             Column(
                 modifier = Modifier
+                    .centeredMaxWidth(ContentWidth.Form)
                     .fillMaxSize()
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,

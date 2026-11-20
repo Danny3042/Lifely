@@ -150,6 +150,8 @@ fun HealthAppTheme(
         motionScheme = MotionScheme.expressive(),
         shapes = AppShapes,
         typography = AppTypography,
-        content = content,
-    )
+    ) {
+        // Make the current window size class available to every screen
+        components.ui.ProvideWindowSize(content)
+    }
 }

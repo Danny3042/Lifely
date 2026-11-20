@@ -1,4 +1,5 @@
 
+import androidx.compose.foundation.layout.absolutePadding
 import Authentication.LoginScreen
 import Authentication.ResetPasswordScreen
 import Authentication.SignUpScreen
@@ -84,6 +85,10 @@ actual fun PlatformApp(
     // Safe area insets from iOS - these will be updated via PlatformBridge
     var topInset by remember { mutableStateOf(0.0) }
     var bottomInset by remember { mutableStateOf(0.0) }
+    // Left/right insets matter on iPhone Duo: the camera, status column, fold and a
+    // side-mounted tab bar can all reserve space on one edge only.
+    var leftInset by remember { mutableStateOf(0.0) }
+    var rightInset by remember { mutableStateOf(0.0) }
 
     // Listen for safe area changes from iOS
     DisposableEffect(Unit) {
@@ -95,6 +100,8 @@ actual fun PlatformApp(
             val userInfo = notification?.userInfo as? NSDictionary
             topInset = (userInfo?.objectForKey("top") as? Double) ?: 0.0
             bottomInset = (userInfo?.objectForKey("bottom") as? Double) ?: 0.0
+            leftInset = (userInfo?.objectForKey("leading") as? Double) ?: 0.0
+            rightInset = (userInfo?.objectForKey("trailing") as? Double) ?: 0.0
         }
         onDispose {
             // removeObserver expects a non-null observer reference
@@ -445,8 +452,10 @@ actual fun PlatformApp(
     Surface(
         modifier = Modifier
             .fillMaxSize()
-            .padding(
+            .absolutePadding(
+                left = leftInset.dp,
                 top = topInset.dp,
+                right = rightInset.dp,
                 bottom = bottomInset.dp
             ),
         color = colors.background

@@ -505,12 +505,51 @@ struct ContentView: View {
     // Reference to ComposeBridge for coordination
     private let composeBridge = ComposeBridge.shared
 
+    /// Native "Add card" button shown on the Home tab.
+    private var addCardButton: some View {
+        Button(action: {
+            // Add haptic feedback
+            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+            impactFeedback.impactOccurred()
+
+            // Post notification that Compose listens to in order to show the add dialog.
+            // Compose registers a listener for "ComposeShowAddDialog" and will set showAddDialog = true.
+            NotificationCenter.default.post(
+                name: Notification.Name("ComposeShowAddDialog"),
+                object: nil
+            )
+        }) {
+            Image(systemName: "plus")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 56, height: 56)
+                .background(
+                    Circle()
+                        .fill(Color(red: 0.4, green: 0.2, blue: 0.6))
+                        .shadow(color: Color(red: 0.4, green: 0.2, blue: 0.6).opacity(0.5), radius: 8, x: 0, y: 4)
+                )
+        }
+        .zIndex(1000)
+        .accessibilityLabel("Add card")
+        .accessibilityAddTraits(.isButton)
+    }
+
     var body: some View {
         ZStack {
             // Native NavigationStack with TabView
             NavigationStack {
                 TabView(selection: $selectedTab) {
                     SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                        // Overlay on the tab's content (not the whole screen) so the button stays inside
+                        // the safe area wherever the system puts the tab bar — bottom on iPhone,
+                        // the side on iPhone Duo — and clear of the fold and camera regions.
+                        .overlay(alignment: .bottomTrailing) {
+                            if selectedTab == 0 && isSignedIn && !composeHidesTabBar {
+                                addCardButton
+                                    .padding(.trailing, 20)
+                                    .padding(.bottom, 20)
+                            }
+                        }
                         .tabItem { Label("Home", systemImage: "house") }
                         .tag(0)
 
@@ -575,43 +614,6 @@ struct ContentView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // FAB (Floating Action Button) - only show on home page (tab 0)
-            if selectedTab == 0 && isSignedIn && !composeHidesTabBar {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            // Add haptic feedback
-                            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                            impactFeedback.impactOccurred()
-
-                            // Post notification that Compose listens to in order to show the add dialog.
-                            // Compose registers a listener for "ComposeShowAddDialog" and will set showAddDialog = true.
-                            NotificationCenter.default.post(
-                                name: Notification.Name("ComposeShowAddDialog"),
-                                object: nil
-                            )
-                        }) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 24, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 56, height: 56)
-                                .background(
-                                    Circle()
-                                        .fill(Color(red: 0.4, green: 0.2, blue: 0.6))
-                                        .shadow(color: Color(red: 0.4, green: 0.2, blue: 0.6).opacity(0.5), radius: 8, x: 0, y: 4)
-                                )
-                        }
-                        .padding(.trailing, 20)
-                        // Raise the FAB well above the tab bar
-                        .padding(.bottom, 90)
-                        .zIndex(1000)
-                        .accessibilityLabel("Add card")
-                        .accessibilityAddTraits(.isButton)
-                    }
-                }
-            }
         }
         .sheet(isPresented: $showImagePicker) {
             ImagePicker(selectedImage: $selectedImage, onImageSelected: { image in
@@ -979,6 +981,30 @@ final class AppearanceForwardingViewController: UIViewController {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    // Safe areas change when iPhone Duo opens or closes, when it rotates, and when the
+    // tab bar moves to the side. They are often asymmetric (camera, status column, fold),
+    // so forward every edge to Compose whenever they change.
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        let insets = view.safeAreaInsets
+        NotificationCenter.default.post(
+            name: Notification.Name("SafeAreaInsetsChanged"),
+            object: nil,
+            userInfo: [
+                "top": insets.top,
+                "bottom": insets.bottom,
+                "leading": insets.left,
+                "trailing": insets.right
+            ]
+        )
+        PlatformBridge.shared.setSafeAreaInsets(
+            top: Double(insets.top),
+            bottom: Double(insets.bottom),
+            leading: Double(insets.left),
+            trailing: Double(insets.right)
+        )
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {

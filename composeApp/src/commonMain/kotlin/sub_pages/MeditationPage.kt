@@ -1,5 +1,8 @@
 package sub_pages
 
+import components.ui.ContentWidth
+import components.ui.LocalWindowSize
+import components.ui.centeredMaxWidth
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -116,111 +119,161 @@ fun MeditationPage(
     val seconds = timeLeft % 60
     val timeText = "${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            if (onBack != null) {
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    IconButton(onClick = { onBack.invoke() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            }
+    val windowSize = LocalWindowSize.current
+    val sideBySide = windowSize.useTwoPane
+    // Shrink the ring when height is tight (landscape phones) so everything fits
+    val ringSize = if (windowSize.isCompactHeight) (windowSize.height - 72.dp).coerceIn(160.dp, 280.dp) else 280.dp
 
-            Spacer(Modifier.height(8.dp))
+    val header: @Composable () -> Unit = {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("Meditate", style = MaterialTheme.typography.headlineLarge)
             Text(
                 text = if (isRunning) "Breathe in… and out" else "Find a comfortable position",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
 
-            Spacer(Modifier.height(40.dp))
-
-            // Timer ring
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(280.dp)) {
-                val ringStroke = with(LocalDensity.current) { Stroke(width = 12.dp.toPx(), cap = StrokeCap.Round) }
-                CircularWavyProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.primaryContainer,
-                    stroke = ringStroke,
-                    trackStroke = ringStroke,
-                )
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    AnimatedContent(
-                        targetState = timeText,
-                        transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(250)) },
-                    ) { text ->
-                        Text(text, style = MaterialTheme.typography.displayLarge)
-                    }
+    val ring: @Composable () -> Unit = {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(ringSize)) {
+            val ringStroke = with(LocalDensity.current) { Stroke(width = 12.dp.toPx(), cap = StrokeCap.Round) }
+            CircularWavyProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.primaryContainer,
+                stroke = ringStroke,
+                trackStroke = ringStroke,
+            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                AnimatedContent(
+                    targetState = timeText,
+                    transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(250)) },
+                ) { text ->
                     Text(
-                        text = if (isRunning) "remaining" else "${totalTime / 60} min session",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text,
+                        style = if (ringSize < 220.dp) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displayLarge,
                     )
                 }
-            }
-
-            Spacer(Modifier.height(40.dp))
-
-            // Controls: reset · play/stop · duration
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FilledTonalIconButton(
-                    onClick = {
-                        isRunning = false
-                        timeLeft = totalTime
-                    },
-                    modifier = Modifier.size(64.dp),
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Reset", modifier = Modifier.size(28.dp))
-                }
-
-                LargeFloatingActionButton(
-                    onClick = {
-                        if (isRunning) isRunning = false else if (timeLeft > 0) isRunning = true
-                    },
-                    containerColor = if (isRunning) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.primary,
-                    contentColor = if (isRunning) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimary,
-                ) {
-                    Icon(
-                        imageVector = if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
-                        contentDescription = if (isRunning) "Stop" else "Start",
-                        modifier = Modifier.size(40.dp),
-                    )
-                }
-
-                FilledTonalIconButton(
-                    onClick = { showEditDialog = true },
-                    modifier = Modifier.size(64.dp),
-                ) {
-                    Icon(Icons.Default.Timer, contentDescription = "Set duration", modifier = Modifier.size(28.dp))
-                }
-            }
-
-            Spacer(Modifier.height(40.dp))
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-            ) {
                 Text(
-                    text = "Take a deep breath and relax. Focus on your breathing; when your mind wanders, gently bring it back.",
-                    style = MaterialTheme.typography.bodyLarge,
+                    text = if (isRunning) "remaining" else "${totalTime / 60} min session",
+                    style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(20.dp),
                 )
+            }
+        }
+    }
+
+    // Controls: reset · play/stop · duration
+    val controls: @Composable () -> Unit = {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FilledTonalIconButton(
+                onClick = {
+                    isRunning = false
+                    timeLeft = totalTime
+                },
+                modifier = Modifier.size(64.dp),
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = "Reset", modifier = Modifier.size(28.dp))
+            }
+
+            LargeFloatingActionButton(
+                onClick = {
+                    if (isRunning) isRunning = false else if (timeLeft > 0) isRunning = true
+                },
+                containerColor = if (isRunning) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.primary,
+                contentColor = if (isRunning) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimary,
+            ) {
+                Icon(
+                    imageVector = if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
+                    contentDescription = if (isRunning) "Stop" else "Start",
+                    modifier = Modifier.size(40.dp),
+                )
+            }
+
+            FilledTonalIconButton(
+                onClick = { showEditDialog = true },
+                modifier = Modifier.size(64.dp),
+            ) {
+                Icon(Icons.Default.Timer, contentDescription = "Set duration", modifier = Modifier.size(28.dp))
+            }
+        }
+    }
+
+    val tip: @Composable () -> Unit = {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        ) {
+            Text(
+                text = "Take a deep breath and relax. Focus on your breathing; when your mind wanders, gently bring it back.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(20.dp),
+            )
+        }
+    }
+
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (sideBySide) {
+                // Landscape / tablet: timer on the left, title, controls and tip on the right
+                Row(
+                    modifier = Modifier
+                        .centeredMaxWidth(ContentWidth.Dashboard)
+                        .fillMaxSize()
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(32.dp),
+                ) {
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) { ring() }
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .widthIn(max = ContentWidth.Form)
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(24.dp),
+                    ) {
+                        header()
+                        controls()
+                        tip()
+                    }
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .centeredMaxWidth(ContentWidth.Reading)
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    if (onBack != null) Spacer(Modifier.height(48.dp))
+                    Spacer(Modifier.height(8.dp))
+                    header()
+                    Spacer(Modifier.height(40.dp))
+                    ring()
+                    Spacer(Modifier.height(40.dp))
+                    controls()
+                    Spacer(Modifier.height(40.dp))
+                    tip()
+                }
+            }
+
+            if (onBack != null) {
+                IconButton(
+                    onClick = { onBack.invoke() },
+                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
             }
         }
     }

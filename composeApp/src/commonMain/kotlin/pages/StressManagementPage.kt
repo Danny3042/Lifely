@@ -1,6 +1,8 @@
 package pages
 
 
+import components.ui.ContentWidth
+import components.ui.centeredMaxWidth
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -144,7 +146,7 @@ fun StressManagementPage(navController: NavController) {
 
     Column(
         modifier = Modifier
-            .fillMaxWidth()
+            .centeredMaxWidth(ContentWidth.Wide)
             .verticalScroll(scrollState)
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally

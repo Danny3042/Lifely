@@ -1,5 +1,7 @@
 package pages
 
+import components.ui.ContentWidth
+import components.ui.centeredMaxWidth
 import Authentication.LoginScreen
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -73,7 +75,7 @@ fun ProfilePage(navController: NavController) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.centeredMaxWidth(ContentWidth.Reading).fillMaxSize(),
             contentPadding = PaddingValues(horizontal = PagePadding, vertical = 16.dp),
         ) {
             // Profile header

@@ -88,7 +88,9 @@ class ChatViewModel(private val aiService: GenerativeAiService) {
                     _uiState.canSendMessage = true
                 }
                 .catch {
-                    _uiState.setLastMessageAsError(it.toString())
+                    println("ChatViewModel: Gemini request failed: ${describeError(it)}")
+                    it.printStackTrace()
+                    _uiState.setLastMessageAsError(describeError(it))
                     _uiState.canSendMessage = true
                 },
         )
@@ -167,4 +169,18 @@ class ChatViewModel(private val aiService: GenerativeAiService) {
     fun onCleared() {
         coroutineScope.cancel()
     }
+}
+
+/**
+ * The Gemini SDK wraps many failures as "Something unexpected happened." and keeps the real reason
+ * in the cause chain. Walk the chain so the chat shows (and the console logs) what actually went wrong.
+ */
+internal fun describeError(error: Throwable): String {
+    val chain = generateSequence(error) { it.cause }.take(6).toList()
+    val root = chain.last()
+    val outer = error.message?.takeIf { it.isNotBlank() } ?: (error::class.simpleName ?: "Error")
+    if (root === error) return outer
+    val rootText = listOfNotNull(root::class.simpleName, root.message?.takeIf { it.isNotBlank() })
+        .joinToString(": ")
+    return "$outer\nCause: $rootText"
 }

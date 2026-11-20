@@ -1,5 +1,6 @@
 package pages
 
+import components.ui.platformScaffoldInsets
 import TimerViewModel
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
@@ -93,6 +94,7 @@ fun TimerScreenContent(onBack: () -> Unit ) {
     var showDialog by remember { mutableStateOf(false) }
 
     Scaffold(
+        contentWindowInsets = platformScaffoldInsets(),
         topBar = {
             if (isAndroid()) {
                 TopAppBar(
