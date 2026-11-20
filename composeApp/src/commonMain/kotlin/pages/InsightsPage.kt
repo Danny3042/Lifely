@@ -40,6 +40,15 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.todayIn
 import utils.InsightsViewModel
+import components.ui.ListRowCard
+import components.ui.PagePadding
+import components.ui.SectionHeader
+import components.ui.StatTile
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.SelfImprovement
+import androidx.compose.material.icons.filled.Spa
 
 const val InsightsPageScreen = "Insights"
 
@@ -68,89 +77,134 @@ fun InsightsPage(
         showCardsAnim = true
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .verticalScroll(scrollState)
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Top,
-            horizontalAlignment = Alignment.CenterHorizontally
+    val weekMinutes = sessionsPerDay.sumOf { day -> day.sumOf { it.duration } }
+    val weekSessions = sessionsPerDay.sumOf { it.size }
+    val activeDays = sessionsPerDay.count { it.isNotEmpty() }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(horizontal = PagePadding, vertical = 16.dp),
+    ) {
+        Text("This week", style = MaterialTheme.typography.headlineMedium)
+        Text(
+            "${weekDates.first().day} ${weekDates.first().month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }} – " +
+                "${weekDates.last().day} ${weekDates.last().month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }}",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(Modifier.height(20.dp))
+
+        // Week strip: one column per day, sized to fit any phone width
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         ) {
-            // Week Header
             Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.Top
+                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 daysOfWeek.forEachIndexed { index, day ->
                     val date = weekDates[index]
-                    val sessions = sessionsPerDay.getOrNull(index) ?: emptyList()
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    val count = sessionsPerDay.getOrNull(index)?.size ?: 0
+                    val isToday = index == currentDayIndex
+                    val (container, content) = when {
+                        count > 0 -> MaterialTheme.colorScheme.primary to MaterialTheme.colorScheme.onPrimary
+                        isToday -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+                        else -> MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
                         Text(
-                            "$day\n${date.day} ${date.month.name.take(3)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (index == currentDayIndex) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            day.take(1),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Surface(
-                            shape = CircleShape,
-                            color = when {
-                                index == currentDayIndex -> MaterialTheme.colorScheme.secondary
-                                sessions.isNotEmpty() -> MaterialTheme.colorScheme.primary
-                                else -> MaterialTheme.colorScheme.surfaceVariant
-                            },
-                            modifier = Modifier.size(40.dp)
-                        ) {
+                        Spacer(Modifier.height(8.dp))
+                        Surface(shape = CircleShape, color = container, contentColor = content, modifier = Modifier.size(36.dp)) {
                             Box(contentAlignment = Alignment.Center) {
                                 Text(
-                                    text = sessions.size.toString(),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onPrimary
+                                    text = if (count > 0) count.toString() else date.day.toString(),
+                                    style = MaterialTheme.typography.labelLarge,
                                 )
-                            }
-                        }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Animated Session Cards for each day
-            daysOfWeek.forEachIndexed { index, day ->
-                val date = weekDates[index]
-                val sessions = sessionsPerDay.getOrNull(index) ?: emptyList()
-                AnimatedVisibility(
-                    visible = showCardsAnim,
-                    enter = slideInVertically(initialOffsetY = { 40 * (index + 1) }) + fadeIn()
-                ) {
-                    if (sessions.isNotEmpty()) {
-                        Text(
-                            "$day, ${date.day} ${date.month.name.take(3)}",
-                            style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
-                        )
-                        sessions.forEach { session ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .padding(16.dp)
-                                        .fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Time: ${session.time}", style = MaterialTheme.typography.bodyLarge)
-                                    Text("${session.duration} min", style = MaterialTheme.typography.bodyLarge)
-                                }
                             }
                         }
                     }
                 }
             }
         }
+
+        Spacer(Modifier.height(12.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            StatTile(
+                label = "Minutes",
+                value = "$weekMinutes",
+                icon = Icons.Filled.SelfImprovement,
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.weight(1f),
+            )
+            StatTile(
+                label = "Sessions",
+                value = "$weekSessions",
+                icon = Icons.Filled.CheckCircle,
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.weight(1f),
+            )
+            StatTile(
+                label = "Active days",
+                value = "$activeDays/7",
+                icon = Icons.Filled.CalendarMonth,
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        SectionHeader("Sessions")
+
+        if (weekSessions == 0) {
+            ListRowCard(
+                title = "No sessions yet this week",
+                subtitle = "Complete a meditation and it will appear here.",
+                icon = Icons.Filled.Spa,
+            )
+        }
+
+        daysOfWeek.forEachIndexed { index, day ->
+            val date = weekDates[index]
+            val sessions = sessionsPerDay.getOrNull(index) ?: emptyList()
+            AnimatedVisibility(
+                visible = showCardsAnim && sessions.isNotEmpty(),
+                enter = slideInVertically(initialOffsetY = { 40 * (index + 1) }) + fadeIn(),
+            ) {
+                Column {
+                    Text(
+                        "$day, ${date.day} ${date.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }}",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
+                    )
+                    sessions.forEach { session ->
+                        ListRowCard(
+                            title = "${session.duration} min meditation",
+                            subtitle = "Started at ${session.time}",
+                            icon = Icons.Filled.SelfImprovement,
+                            iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            iconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
     }
 }

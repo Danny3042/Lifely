@@ -3,6 +3,7 @@ import Authentication.LoginScreen
 import Authentication.ResetPasswordScreen
 import Authentication.SignUpScreen
 import Colors.DarkColors
+import Colors.HealthAppTheme
 import Colors.LightColors
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -450,10 +451,8 @@ actual fun PlatformApp(
             ),
         color = colors.background
     ) {
-        // Apply MaterialTheme with dynamic colors
-        MaterialTheme(
-            colorScheme = colors
-        ) {
+        // App-wide Material 3 Expressive theme
+        HealthAppTheme(darkTheme = effectiveDark) {
             // Navigation host for Compose — on iOS we hide Compose's bottom bar because
             // the app uses a native SwiftUI TabView. Pass showBottomBar=false.
             YourMainNavHost(

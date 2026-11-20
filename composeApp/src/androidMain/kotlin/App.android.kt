@@ -1,7 +1,5 @@
-import Colors.DarkColors
-import Colors.LightColors
+import Colors.HealthAppTheme
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,9 +26,7 @@ actual fun PlatformApp(
                 LaunchedEffect(useSystemDefault) { try { SettingsManager.saveUseSystemDefault(useSystemDefault) } catch (_: Throwable) {} }
 
                 val darkMode = if (useSystemDefault) isSystemInDarkTheme() else isDarkMode
-                val colors = if (darkMode) DarkColors else LightColors
-
-                MaterialTheme(colorScheme = colors) {
+                HealthAppTheme(darkTheme = darkMode) {
                     val navController = rememberNavController()
 
                     LaunchedEffect(Unit) {

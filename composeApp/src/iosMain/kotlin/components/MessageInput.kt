@@ -1,5 +1,11 @@
 package components
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TextField
+import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,10 +20,8 @@ import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Cancel
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -96,9 +100,9 @@ actual fun MessageInput(
         }
     }
 
-    ElevatedCard(
-        modifier = Modifier
-            .fillMaxWidth(),
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainer,
     ) {
         Column {
             // Simple attached image indicator
@@ -115,14 +119,23 @@ actual fun MessageInput(
             }
             Row(
                 modifier = Modifier
-                    .padding(16.dp)
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                OutlinedTextField(
+                TextField(
                     value = userMessage,
-                    label = { Text("Talk to AI...") },
+                    placeholder = { Text("Message Gemini…") },
+                    shape = MaterialTheme.shapes.extraLarge,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent,
+                    ),
                     onValueChange = { userMessage = it },
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Sentences,
@@ -158,7 +171,7 @@ actual fun MessageInput(
                                 Icon(ic, if (TtsSettings.enabled) "TTS enabled" else "TTS disabled")
                             }
 
-                            IconButton(
+                            FilledIconButton(
                                 enabled = enabled,
                                 onClick = {
                                     if (userMessage.isNotBlank() || selectedImage != null) {

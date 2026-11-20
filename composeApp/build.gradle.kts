@@ -103,8 +103,8 @@ kotlin {
             implementation(libs.kmpauth.google) //Google One Tap Sign-In
             implementation(libs.kmpauth.firebase) //Integrated Authentications with Firebase
             implementation(libs.kmpauth.uihelper) //UiHelper SignIn buttons (AppleSignIn, GoogleSignInButton)
-            // Still uses the plugin alias so the plugin picks the Material3 build that matches this CMP release
-            implementation(compose.material3)
+            // Material 3 (Expressive-capable build for CMP 1.12)
+            implementation(libs.cmp.material3)
             implementation(libs.androidx.datastore.preferences)
             implementation(libs.health.kmp)
             // Gemini API

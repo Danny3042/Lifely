@@ -1,4 +1,8 @@
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.text.style.TextAlign
+import components.ui.IconBadge
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,7 +12,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -18,8 +21,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -99,26 +100,7 @@ fun ChatScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        topBar = {
-            if (isAndroid()) {
-                TopAppBar(
-                    title = { Text("Gemini Chat") },
-                    navigationIcon = {
-                        Icon(
-                            Icons.Default.AutoAwesome,
-                            "Gemini Chat",
-                            modifier = Modifier.padding(4.dp)
-                        )
-                    },
-                    // removed external New chat action - new chat is now in the message input
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                    ),
-                )
-            }
-        },
+        // The app shell (HeroScreen) already shows the "Chat" title bar on Android.
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -129,6 +111,8 @@ fun ChatScreen(
                 modifier = Modifier.fillMaxSize(),
                 state = listState,
                 reverseLayout = false,
+                // Keep the last message clear of the floating input bar
+                contentPadding = PaddingValues(top = 8.dp, bottom = 128.dp),
             ) {
                 items(
                     items = chatUiState.messages,
@@ -141,6 +125,9 @@ fun ChatScreen(
                         chatViewModel.retryMessage(id, text, null)
                     }
                 }
+            }
+            if (messages.isEmpty()) {
+                ChatEmptyState(modifier = Modifier.align(Alignment.Center).padding(bottom = 96.dp))
             }
             Column(
                 modifier = Modifier
@@ -164,7 +151,7 @@ fun ChatScreen(
                  )
                 // Reserve minimal vertical space on iOS: use the platform safe area bottom so the input
                 // sits closer to the bottom edge (lower) compared to the previous extra offset.
-                Spacer(modifier = if (isAndroid()) Modifier.height(56.dp) else Modifier.height(platformBottomInset.toFloat().dp))
+                Spacer(modifier = Modifier.height(if (isAndroid()) 8.dp else platformBottomInset.toFloat().dp))
             }
             // Floating action button for New Chat anchored above the input on the bottom end
             FloatingActionButton(
@@ -175,10 +162,36 @@ fun ChatScreen(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = 16.dp, bottom = (100.dp + platformBottomInset.toFloat().dp)),
-                containerColor = MaterialTheme.colorScheme.primary,
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
             ) {
                 Icon(Icons.Filled.Add, contentDescription = "New chat")
             }
          }
      }
  }
+
+@Composable
+private fun ChatEmptyState(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.padding(horizontal = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        IconBadge(
+            icon = Icons.Filled.AutoAwesome,
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            size = 72.dp,
+            shape = MaterialTheme.shapes.extraLarge,
+        )
+        Spacer(Modifier.height(16.dp))
+        Text("Ask Gemini", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Get tips on sleep, stress, habits and more. Attach a photo for extra context.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}

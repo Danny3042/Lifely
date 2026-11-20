@@ -1,4 +1,8 @@
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -112,8 +116,11 @@ fun HeroScreen(navController: NavHostController, showBottomBar: Boolean = true) 
                     TopAppBar(title = { Text(text = tabNavigator.current.options.title) })
                 }
             },
-            content = {
-                CurrentTab()
+            content = { innerPadding ->
+                // Keep tab content clear of the Android top bar and bottom navigation bar
+                Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                    CurrentTab()
+                }
             },
             bottomBar = {
                 // Show Compose bottom bar only when requested by caller (iOS host will handle native tabs)

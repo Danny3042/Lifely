@@ -10,9 +10,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
@@ -36,16 +33,10 @@ fun RealTimeGreeting(modifier: Modifier = Modifier) {
         else -> "Good evening"
     }
 
-    // Use a high-contrast color on Android to ensure visibility; otherwise use theme onSurface
-    val textColor = if (isAndroid()) Color(0xFF000000) else MaterialTheme.colorScheme.onSurface
-
     Text(
         text = greeting,
-        color = textColor,
-        style = MaterialTheme.typography.headlineSmall.copy(
-            fontSize = 34.sp,
-            fontWeight = FontWeight.Bold
-        ),
+        color = MaterialTheme.colorScheme.onSurface,
+        style = MaterialTheme.typography.displaySmall,
         modifier = modifier.fillMaxWidth()
     )
 }

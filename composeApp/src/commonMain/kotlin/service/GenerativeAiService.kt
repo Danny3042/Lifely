@@ -59,7 +59,9 @@ class GenerativeAiService(
         var GEMINI_API_KEY: String = BuildKonfig.GEMINI_API_KEY
 
         // Runtime-configurable model name. You can change this at runtime via `setModelName("...")`.
-        var MODEL_NAME: String = "gemini-2.5-flash"
+        // Gemini 3.8 Flash: Google's current recommended Flash model (GA since Sep 2026).
+        // Gemini 3+ ignores temperature/top_p/top_k and rejects prefilled model turns, so don't add them.
+        var MODEL_NAME: String = "gemini-3.8-flash"
 
         // Backing instance that can be recreated if model name is changed.
         private var _instance: GenerativeAiService? = null

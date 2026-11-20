@@ -28,12 +28,8 @@ class ChatViewModel(private val aiService: GenerativeAiService) {
     private val coroutineScope = MainScope()
 
     // make the chat session mutable so we can reset for a new conversation
-    private var chat = aiService.startChat(
-        history = listOf(
-            content(role = "user") { text("Hello AI.") },
-            content(role = "model") { text("Great to meet you. What would you like to know?") },
-        ),
-    )
+    // Start with an empty history (same as "New chat"). Gemini 3+ models reject scripted/prefilled model turns.
+    private var chat = aiService.startChat(history = emptyList<Content>())
 
     private val _uiState = MutableChatUiState()
     val uiState: ChatUiState = _uiState

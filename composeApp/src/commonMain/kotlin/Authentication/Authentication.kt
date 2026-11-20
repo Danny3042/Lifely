@@ -1,5 +1,16 @@
 package Authentication
 
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.material.icons.filled.Spa
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Row
 import HeroScreen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -13,7 +24,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.ContentAlpha
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -101,11 +111,7 @@ class Authentication {
             authready = true
         }
 
-        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            if (snackbarMessage.isNotEmpty()) {
-                Text(snackbarMessage, color = MaterialTheme.colorScheme.error)
-            }
-
+        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
             if (firebaseUser != null) {
                 navController.navigate(HomePageScreen)
             }
@@ -116,114 +122,93 @@ class Authentication {
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(scrollState)
-                        .padding(16.dp),
+                        .padding(horizontal = 24.dp, vertical = 32.dp),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    val keyboardController = LocalSoftwareKeyboardController.current
-                    TextField(
+                    AuthHeader(title = "Welcome back", subtitle = "Sign in to continue your wellness journey")
+
+                    if (snackbarMessage.isNotEmpty()) {
+                        AuthError(snackbarMessage)
+                    }
+
+                    OutlinedTextField(
                         value = userEmail,
                         onValueChange = { userEmail = it },
-                        label = { Text("Email address") },
-                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
-                        keyboardActions = onDoneHideKeyboardAction(onDone = {}),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surface,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                            cursorColor = MaterialTheme.colorScheme.onSurface,
-                            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                            unfocusedIndicatorColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
+                        label = { Text("Email") },
+                        leadingIcon = { Icon(Icons.Outlined.Email, contentDescription = null) },
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.medium,
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+                        modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    TextField(
+                    OutlinedTextField(
                         value = userPassword,
                         onValueChange = { userPassword = it },
-                        placeholder = { Text("Password") },
-                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
+                        label = { Text("Password") },
+                        leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null) },
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.medium,
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                         keyboardActions = onDoneHideKeyboardAction(onDone = {}),
                         visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
-                            val image =
-                                if (isPasswordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
+                            val image = if (isPasswordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
                             IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
                                 Icon(image, contentDescription = "Toggle password visibility")
                             }
                         },
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surface,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                            cursorColor = MaterialTheme.colorScheme.onSurface,
-                            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                            unfocusedIndicatorColor = MaterialTheme.colorScheme.onSurface.copy(alpha = ContentAlpha.disabled)
-                        )
+                        modifier = Modifier.fillMaxWidth(),
                     )
+                    TextButton(
+                        onClick = { navController.navigate(ResetPasswordScreen) },
+                        modifier = Modifier.align(Alignment.End),
+                    ) { Text("Forgot password?") }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            hideKeyboard()
+                            scope.launch {
+                                try {
+                                    val result = auth.signInWithEmailAndPassword(
+                                        email = userEmail,
+                                        password = userPassword
+                                    )
+                                    firebaseUser = result.user
+                                } catch (e: FirebaseAuthInvalidUserException) {
+                                    snackbarMessage = "No account found with this email. Please sign up."
+                                    showSnackbar = true
+                                } catch (e: FirebaseAuthInvalidCredentialsException) {
+                                    snackbarMessage = "Invalid password, please try again"
+                                    showSnackbar = true
+                                } catch (e: Exception) {
+                                    snackbarMessage = "An error occurred: ${e.message}"
+                                    showSnackbar = true
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                    ) {
+                        Text("Sign in", style = MaterialTheme.typography.titleMedium)
+                    }
+
+                    if (authready) {
+                        OrDivider()
+                        GoogleButtonUiContainerFirebase(onResult = onFirebaseResult) {
+                            GoogleSignInButton(modifier = Modifier.fillMaxWidth().height(52.dp), fontSize = 16.sp) { this.onClick() }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        AppleButtonUiContainer(onResult = onFirebaseResult) {
+                            AppleSignInButton(modifier = Modifier.fillMaxWidth().height(52.dp)) { this.onClick() }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(24.dp))
-
-                    var errorMessage by remember { mutableStateOf<String?>(null) }
-                    if (errorMessage != null) {
-                        Text(errorMessage!!)
-                    }
-                    Button(onClick = {
-                        hideKeyboard()
-                        scope.launch {
-                            try {
-                                val result = auth.signInWithEmailAndPassword(
-                                    email = userEmail,
-                                    password = userPassword
-                                )
-                                firebaseUser = result.user
-                            } catch (e: FirebaseAuthInvalidUserException) {
-                                snackbarMessage =
-                                    "No account found with this email. Please sign up."
-                                showSnackbar = true
-                            } catch (e: FirebaseAuthInvalidCredentialsException) {
-                                snackbarMessage = "Invalid password, please try again"
-                                showSnackbar = true
-                            } catch (e: Exception) {
-                                snackbarMessage = "An error occurred: ${e.message}"
-                                showSnackbar = true
-                            }
-                        }
-                    }) {
-                        Text("Sign in")
-                    }
-                    OutlinedButton(onClick = {
-                        navController.navigate(SignUpScreen)
-                    }) {
-                        Text("Sign Up")
-                    }
-
-                    OutlinedButton(onClick = {
-                        navController.navigate(ResetPasswordScreen)
-                    }) {
-                        Text("Forgot Password")
-                    }
-                    if (authready) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            contentAlignment = Alignment.BottomCenter
-                        ) {
-                            GoogleButtonUiContainerFirebase(onResult = onFirebaseResult) {
-                                GoogleSignInButton(fontSize = 19.sp) { this.onClick() }
-                            }
-                        }
-                    }
-                    if (authready) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            contentAlignment = Alignment.BottomCenter
-                        ) {
-
-                            AppleButtonUiContainer(onResult = onFirebaseResult) {
-                                AppleSignInButton(modifier = Modifier.fillMaxWidth()) { this.onClick() }
-                            }
-                        }
-
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("New here?", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(onClick = { navController.navigate(SignUpScreen) }) { Text("Create an account") }
                     }
                 }
             }
@@ -268,7 +253,7 @@ class Authentication {
                             unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                             cursorColor = MaterialTheme.colorScheme.onSurface,
                             focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                            unfocusedIndicatorColor = MaterialTheme.colorScheme.onSurface.copy(alpha = ContentAlpha.disabled)
+                            unfocusedIndicatorColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                         )
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -291,7 +276,7 @@ class Authentication {
                             unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                             cursorColor = MaterialTheme.colorScheme.onSurface,
                             focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                            unfocusedIndicatorColor = MaterialTheme.colorScheme.onSurface.copy(alpha = ContentAlpha.disabled)
+                            unfocusedIndicatorColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                         ),
                     )
                     Spacer(modifier = Modifier.height(24.dp))
@@ -392,5 +377,58 @@ class Authentication {
             trySend(Result.failure(e))
         }
         close() // Close the flow after emitting the result
+    }
+}
+
+@Composable
+private fun AuthHeader(title: String, subtitle: String) {
+    Surface(
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        modifier = Modifier.size(80.dp),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Spa, contentDescription = null, modifier = Modifier.size(40.dp))
+        }
+    }
+    Spacer(modifier = Modifier.height(24.dp))
+    Text(title, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
+    Spacer(modifier = Modifier.height(4.dp))
+    Text(
+        subtitle,
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+    )
+    Spacer(modifier = Modifier.height(32.dp))
+}
+
+@Composable
+private fun AuthError(message: String) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+    ) {
+        Text(message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
+    }
+}
+
+@Composable
+private fun OrDivider() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
+        Text(
+            "or continue with",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
     }
 }

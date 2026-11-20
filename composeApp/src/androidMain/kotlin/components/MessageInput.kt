@@ -1,5 +1,11 @@
 package components
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TextField
+import androidx.compose.material3.Surface
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -18,10 +24,8 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Cancel
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -78,9 +82,9 @@ actual fun MessageInput(
         }
     }
 
-    ElevatedCard(
-        modifier = Modifier
-            .fillMaxWidth(),
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainer,
     ) {
         Column {
             selectedImageBitmap?.let { image ->
@@ -103,13 +107,22 @@ actual fun MessageInput(
             }
             Row(
                 modifier = Modifier
-                    .padding(16.dp)
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedTextField(
+                TextField(
                     value = userMessage,
-                    label = { Text("Talk to AI...") },
+                    placeholder = { Text("Message Gemini…") },
+                    shape = MaterialTheme.shapes.extraLarge,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent,
+                    ),
                     onValueChange = { userMessage = it },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                         capitalization = KeyboardCapitalization.Sentences,
@@ -146,7 +159,7 @@ actual fun MessageInput(
 
                             // onNewChat is intentionally handled outside the input (FAB in ChatScreen)
 
-                            IconButton(
+                            FilledIconButton(
                                 enabled = enabled,
                                 onClick = {
                                     if (userMessage.isNotBlank() || selectedImage != null) {
@@ -165,7 +178,7 @@ actual fun MessageInput(
                             }
                         }
                     },
-                    modifier = Modifier
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }

@@ -5,8 +5,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.indication
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -15,14 +13,15 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.mmk.kmpnotifier.notification.NotifierManager
 import utils.SettingsManager
@@ -37,6 +36,7 @@ import utils.InsightsViewModel
 import kotlinx.datetime.toLocalDateTime
 
 const val MEDITATION_PAGE_ROUTE = "meditation"
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MeditationPage(
     onBack: (() -> Unit)? = null,
@@ -57,8 +57,6 @@ fun MeditationPage(
     }
     var showEditDialog by remember { mutableStateOf(false) }
 
-    val primary = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-    val secondary = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f)
 
     LaunchedEffect(isRunning) {
         while (isRunning && timeLeft > 0) {
@@ -114,132 +112,116 @@ fun MeditationPage(
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Blurred gradient background
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawBehind {
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(primary, secondary)
-                        ),
-                        size = size
-                    )
-                }
-                .blur(40.dp)
-        )
-        // Foreground content
-        val scrollState = rememberScrollState()
+    val minutes = timeLeft / 60
+    val seconds = timeLeft % 60
+    val timeText = "${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
+
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Top,
-            horizontalAlignment = Alignment.CenterHorizontally
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Back button row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = { onBack?.invoke() },
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back"
-                    )
-                }
-                Spacer(modifier = Modifier.weight(1f))
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Meditation Timer", style = MaterialTheme.typography.headlineMedium)
-            Spacer(modifier = Modifier.height(32.dp))
-            Box(contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.size(180.dp),
-                    strokeWidth = 8.dp
-                )
-                AnimatedContent(
-                    targetState = timeLeft,
-                    transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) }
-                ) { remainingTime ->
-                    Text(
-                        text = "${(remainingTime / 60).toString().padStart(2, '0')}:${(remainingTime % 60).toString().padStart(2, '0')}",
-                        style = MaterialTheme.typography.displayLarge
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(32.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                AnimatedContent(
-                    targetState = isRunning,
-                    transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) }
-                ) { running ->
-                    FloatingActionButton(
-                        onClick = {
-                            if (running) {
-                                isRunning = false
-                            } else if (timeLeft > 0) {
-                                isRunning = true
-                            }
-                        },
-                        containerColor = if (running) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                        contentColor = Color.White,
-                        modifier = Modifier
-                            .size(96.dp)
-                            .indication(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = ripple(bounded = true, color = Color.White)
-                            )
-                    ) {
-                        Icon(
-                            imageVector = if (running) Icons.Default.Stop else Icons.Default.PlayArrow,
-                            contentDescription = if (running) "Stop" else "Start",
-                            modifier = Modifier.size(56.dp)
-                        )
+            if (onBack != null) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    IconButton(onClick = { onBack.invoke() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
-                FloatingActionButton(
+            }
+
+            Spacer(Modifier.height(8.dp))
+            Text("Meditate", style = MaterialTheme.typography.headlineLarge)
+            Text(
+                text = if (isRunning) "Breathe in… and out" else "Find a comfortable position",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(Modifier.height(40.dp))
+
+            // Timer ring
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(280.dp)) {
+                val ringStroke = with(LocalDensity.current) { Stroke(width = 12.dp.toPx(), cap = StrokeCap.Round) }
+                CircularWavyProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.primaryContainer,
+                    stroke = ringStroke,
+                    trackStroke = ringStroke,
+                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    AnimatedContent(
+                        targetState = timeText,
+                        transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(250)) },
+                    ) { text ->
+                        Text(text, style = MaterialTheme.typography.displayLarge)
+                    }
+                    Text(
+                        text = if (isRunning) "remaining" else "${totalTime / 60} min session",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(40.dp))
+
+            // Controls: reset · play/stop · duration
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FilledTonalIconButton(
                     onClick = {
                         isRunning = false
                         timeLeft = totalTime
                     },
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .size(96.dp)
-                        .indication(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = ripple(bounded = true, color = MaterialTheme.colorScheme.primary)
-                        ),
+                    modifier = Modifier.size(64.dp),
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Reset", modifier = Modifier.size(28.dp))
+                }
 
+                LargeFloatingActionButton(
+                    onClick = {
+                        if (isRunning) isRunning = false else if (timeLeft > 0) isRunning = true
+                    },
+                    containerColor = if (isRunning) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.primary,
+                    contentColor = if (isRunning) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimary,
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Reset",
-                        modifier = Modifier.size(56.dp)
+                        imageVector = if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
+                        contentDescription = if (isRunning) "Stop" else "Start",
+                        modifier = Modifier.size(40.dp),
                     )
                 }
+
+                FilledTonalIconButton(
+                    onClick = { showEditDialog = true },
+                    modifier = Modifier.size(64.dp),
+                ) {
+                    Icon(Icons.Default.Timer, contentDescription = "Set duration", modifier = Modifier.size(28.dp))
+                }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = { showEditDialog = true }
-            ) { Text("Edit") }
-            Spacer(modifier = Modifier.height(32.dp))
-            Text(
-                text = "Take a deep breath and relax.\nFocus on your breathing.",
-                style = MaterialTheme.typography.bodyLarge
-            )
+
+            Spacer(Modifier.height(40.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            ) {
+                Text(
+                    text = "Take a deep breath and relax. Focus on your breathing; when your mind wanders, gently bring it back.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(20.dp),
+                )
+            }
         }
     }
 }

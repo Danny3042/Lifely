@@ -30,14 +30,20 @@ fun ChatBubbleItem(chatMessage: ChatMessage, onRetry: ((id: String, text: String
     val backgroundColor = when (chatMessage) {
         is ModelChatMessage.ErrorMessage -> MaterialTheme.colorScheme.errorContainer
         is ModelChatMessage.LoadingModelMessage, is ModelChatMessage.LoadedModelMessage ->
-            MaterialTheme.colorScheme.primaryContainer
-        is UserChatMessage -> MaterialTheme.colorScheme.tertiaryContainer
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        is UserChatMessage -> MaterialTheme.colorScheme.primary
+    }
+    val contentColor = when (chatMessage) {
+        is ModelChatMessage.ErrorMessage -> MaterialTheme.colorScheme.onErrorContainer
+        is ModelChatMessage.LoadingModelMessage, is ModelChatMessage.LoadedModelMessage ->
+            MaterialTheme.colorScheme.onSurface
+        is UserChatMessage -> MaterialTheme.colorScheme.onPrimary
     }
 
     val bubbleShape = if (isModelMessage) {
-        RoundedCornerShape(4.dp, 20.dp, 20.dp, 20.dp)
+        RoundedCornerShape(topStart = 6.dp, topEnd = 24.dp, bottomEnd = 24.dp, bottomStart = 24.dp)
     } else {
-        RoundedCornerShape(20.dp, 4.dp, 20.dp, 20.dp)
+        RoundedCornerShape(topStart = 24.dp, topEnd = 6.dp, bottomEnd = 24.dp, bottomStart = 24.dp)
     }
 
     val horizontalAlignment = if (isModelMessage) Alignment.Start else Alignment.End
@@ -45,22 +51,23 @@ fun ChatBubbleItem(chatMessage: ChatMessage, onRetry: ((id: String, text: String
     Column(
         horizontalAlignment = horizontalAlignment,
         modifier = Modifier
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp)
             .fillMaxWidth(),
     ) {
         Text(
-            text = if (chatMessage.isModelMessage()) "AI" else "You",
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(bottom = 4.dp),
+            text = if (chatMessage.isModelMessage()) "Gemini" else "You",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 4.dp),
         )
 
         // Place bubble and status indicator in a Row so the status doesn't overlap the card
         Row(verticalAlignment = Alignment.CenterVertically) {
             BoxWithConstraints {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = backgroundColor),
+                    colors = CardDefaults.cardColors(containerColor = backgroundColor, contentColor = contentColor),
                     shape = bubbleShape,
-                    modifier = Modifier.widthIn(0.dp, maxWidth * 0.9f),
+                    modifier = Modifier.widthIn(0.dp, maxWidth * 0.85f),
                 ) {
                     when (chatMessage) {
                         is ModelChatMessage.ErrorMessage -> Text(
@@ -105,7 +112,7 @@ fun ChatBubbleItem(chatMessage: ChatMessage, onRetry: ((id: String, text: String
                                 .padding(start = 8.dp)
                                 .size(18.dp),
                             strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                     MessageStatus.FAILED -> {
