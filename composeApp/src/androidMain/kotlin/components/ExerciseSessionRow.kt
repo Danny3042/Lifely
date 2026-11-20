@@ -70,7 +70,7 @@ fun ExerciseSessionRowPreview() {
             UUID.randomUUID().toString(),
             "Running",
             sourceAppName = "My Fitness app",
-            sourceAppIcon = context.getDrawable(R.drawable.ic_launcher_foreground)
+            sourceAppIcon = context.getDrawable(R.mipmap.ic_launcher)
         )
     }
 }
