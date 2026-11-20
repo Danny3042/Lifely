@@ -25,7 +25,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -46,6 +45,7 @@ import androidx.navigation.NavController
 import components.ui.ContentWidth
 import components.ui.IconBadge
 import components.ui.PagePadding
+import components.ui.PlatformSwitch
 import components.ui.SectionHeader
 import components.ui.centeredMaxWidth
 import kotlinx.coroutines.launch
@@ -141,8 +141,13 @@ fun NotificationPage(navController: NavController) {
                             )
                         }
                         Spacer(Modifier.width(12.dp))
-                        // The row handles the toggle; the switch just shows the state
-                        Switch(checked = isOn, onCheckedChange = null, enabled = enabled != null)
+                        // Android: the row handles taps and the switch just shows the state.
+                        // iOS: the native switch takes its own taps so its Liquid Glass thumb responds.
+                        PlatformSwitch(
+                            checked = isOn,
+                            onCheckedChange = if (isAndroid()) null else ::setEnabled,
+                            enabled = enabled != null,
+                        )
                     }
                 }
 

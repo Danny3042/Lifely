@@ -1,0 +1,106 @@
+{
+  "fill": {
+    "linear-gradient": [
+      "srgb:0.35686,0.30980,0.81176,1.00000",
+      "srgb:0.94902,0.62745,0.56078,1.00000"
+    ]
+  },
+  "groups": [
+    {
+      "name": "Hill-front",
+      "layers": [
+        {
+          "image-name": "hill-front.svg",
+          "name": "hill-front"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    },
+    {
+      "name": "Hill-middle",
+      "layers": [
+        {
+          "image-name": "hill-middle.svg",
+          "name": "hill-middle"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    },
+    {
+      "name": "Hill-back",
+      "layers": [
+        {
+          "image-name": "hill-back.svg",
+          "name": "hill-back"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    },
+    {
+      "name": "Sun & Moon",
+      "layers": [
+        {
+          "image-name": "moon.svg",
+          "name": "moon",
+          "hidden-specializations": [
+            {
+              "value": true
+            },
+            {
+              "appearance": "dark",
+              "value": false
+            }
+          ]
+        },
+        {
+          "image-name": "sun.svg",
+          "name": "sun",
+          "hidden-specializations": [
+            {
+              "value": false
+            },
+            {
+              "appearance": "dark",
+              "value": true
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}
