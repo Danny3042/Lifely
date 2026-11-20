@@ -19,3 +19,13 @@ captures
 
 # scratch folder from the AGP 9 migration (safe to delete)
 _to_delete/
+
+# Kotlin compiler cache
+.kotlin/
+
+# Build logs and release outputs
+*.log
+composeApp/release/
+
+# Firebase config for the Android app (kept locally, not in the repo)
+androidApp/google-services.json
