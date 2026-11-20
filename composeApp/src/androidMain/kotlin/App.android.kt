@@ -3,6 +3,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.navigation.compose.rememberNavController
@@ -21,9 +23,23 @@ actual fun PlatformApp(
     useSystemDefault: Boolean,
     onUseSystemDefaultToggle: (Boolean) -> Unit
 ) {
-                // Persist incoming state and observe changes to save
-                LaunchedEffect(isDarkMode) { try { SettingsManager.saveDarkMode(isDarkMode) } catch (_: Throwable) {} }
-                LaunchedEffect(useSystemDefault) { try { SettingsManager.saveUseSystemDefault(useSystemDefault) } catch (_: Throwable) {} }
+                // Restore the saved appearance choice once, then save every change after that.
+                // (Saving before restoring would overwrite the user's choice with the defaults.)
+                var appearanceLoaded by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    try {
+                        onDarkModeToggle(SettingsManager.loadDarkMode())
+                        onUseSystemDefaultToggle(SettingsManager.loadUseSystemDefault())
+                    } catch (_: Throwable) {
+                    }
+                    appearanceLoaded = true
+                }
+                LaunchedEffect(isDarkMode, appearanceLoaded) {
+                    if (appearanceLoaded) try { SettingsManager.saveDarkMode(isDarkMode) } catch (_: Throwable) {}
+                }
+                LaunchedEffect(useSystemDefault, appearanceLoaded) {
+                    if (appearanceLoaded) try { SettingsManager.saveUseSystemDefault(useSystemDefault) } catch (_: Throwable) {}
+                }
 
                 val darkMode = if (useSystemDefault) isSystemInDarkTheme() else isDarkMode
                 HealthAppTheme(darkTheme = darkMode) {

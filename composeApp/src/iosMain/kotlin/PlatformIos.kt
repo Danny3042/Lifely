@@ -1,4 +1,5 @@
 
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.foundation.layout.absolutePadding
 import Authentication.LoginScreen
 import Authentication.ResetPasswordScreen
@@ -109,7 +110,10 @@ actual fun PlatformApp(
         }
     }
 
-    // Observe the native interface style so Compose can follow system appearance when requested
+    // Observe the native interface style so Compose can follow system appearance when requested.
+    // rememberUpdatedState: the observer is registered once, so it must read the latest values.
+    val currentUseSystemDefault by rememberUpdatedState(useSystemDefault)
+    val currentOnDarkModeToggle by rememberUpdatedState(onDarkModeToggle)
     DisposableEffect(Unit) {
         val styleObserver = NSNotificationCenter.defaultCenter.addObserverForName(
             name = "SystemInterfaceStyleChanged",
@@ -126,9 +130,9 @@ actual fun PlatformApp(
             }
             // Only update Compose dark-mode if the user asked to follow the system
             try {
-                if (useSystemDefault) {
+                if (currentUseSystemDefault) {
                     // Call the callback provided by common App to update the shared dark mode state
-                    onDarkModeToggle(isDarkFromSystem)
+                    currentOnDarkModeToggle(isDarkFromSystem)
                     try {
                         PlatformBridge.systemInterfaceDark = isDarkFromSystem
                     } catch (_: Throwable) {}
@@ -168,7 +172,22 @@ actual fun PlatformApp(
 
     // Persist and notify when incoming params change. Note: `isDarkMode` and `useSystemDefault` are
     // controlled by common `App`; when they change we save them and post a notification for Swift.
-    LaunchedEffect(isDarkMode, useSystemDefault) {
+    // Restore the saved Appearance choice once at launch. Until that's done, don't save or announce
+    // anything: the defaults App starts with would otherwise overwrite the user's choice.
+    var appearanceLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        try {
+            val defaults = NSUserDefaults.standardUserDefaults
+            val savedUseSystem = if (defaults.objectForKey("useSystemDefault") != null) defaults.boolForKey("useSystemDefault") else true
+            onUseSystemDefaultToggle(savedUseSystem)
+            if (!savedUseSystem) onDarkModeToggle(defaults.boolForKey("isDarkMode"))
+        } catch (_: Throwable) {
+        }
+        appearanceLoaded = true
+    }
+
+    LaunchedEffect(isDarkMode, useSystemDefault, appearanceLoaded) {
+        if (!appearanceLoaded) return@LaunchedEffect
         try {
             // Persist to NSUserDefaults directly with keys that Swift ContentView expects
             try {

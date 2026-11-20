@@ -478,29 +478,8 @@ struct ContentView: View {
     @State private var composeHidesTabBar: Bool = false
     @State private var composeHidesNavigationBar: Bool = false
     @State private var safeAreaBottom: CGFloat = 0
-    @State private var preferredColorScheme: ColorScheme? = {
-        // Initialize from saved preferences immediately
-        let defaults = UserDefaults.standard
-
-        // Check if useSystemDefault is explicitly set
-        let savedUseSystemObj = defaults.object(forKey: "useSystemDefault")
-        let savedUseSystem = (savedUseSystemObj as? Bool) ?? true
-        
-        if savedUseSystem {
-            print("ContentView: Initial state -> following system (nil)")
-            return nil
-        } else {
-            // Only read isDarkMode if not using system default
-            let savedDarkModeObj = defaults.object(forKey: "isDarkMode")
-            let savedDarkMode = (savedDarkModeObj as? Bool) ?? false
-            print("ContentView: Initial state -> dark: \(savedDarkMode)")
-            return savedDarkMode ? .dark : .light
-        }
-    }()
      // Ensure we only sync persisted color scheme once at first appearance to avoid overwriting
      @State private var didInitColorScheme: Bool = false
-    // Debounce work item to avoid rapid preferredColorScheme flips
-    @State private var darkModeDebounceItem: DispatchWorkItem? = nil
 
     // Reference to ComposeBridge for coordination
     private let composeBridge = ComposeBridge.shared
@@ -589,9 +568,7 @@ struct ContentView: View {
                         }
                     }
                 }
-                 .preferredColorScheme(preferredColorScheme)
                  .animation(.easeInOut(duration: 0.2), value: composeHidesTabBar)
-                 .animation(.easeInOut(duration: 0.25), value: preferredColorScheme)
             }
 
             // Native back button: shown in the navigation bar when Compose requests it
@@ -734,81 +711,12 @@ struct ContentView: View {
 
             }
 
-            // Listen for dark mode changes from Compose to update SwiftUI's preferred color scheme
-            // This is the ONLY place where tab bar appearance should be controlled (via .preferredColorScheme)
-            NotificationCenter.default.addObserver(
-                forName: Notification.Name("ComposeDarkModeChanged"),
-                object: nil,
-                queue: .main
-            ) { [self] notification in
-                guard let userInfo = notification.userInfo else { return }
-                let dark = (userInfo["dark"] as? Bool) ?? false
-                let useSystem = (userInfo["useSystem"] as? Bool) ?? true
-
-                // If the incoming notification requests 'useSystem' but the user has explicitly
-                // chosen a manual theme (saved useSystemDefault == false), ignore this notification.
-                let defaults = UserDefaults.standard
-                let currentSavedUseSystem = (defaults.object(forKey: "useSystemDefault") as? Bool) ?? true
-                if useSystem && currentSavedUseSystem == false {
-                    print("ContentView: Ignoring ComposeDarkModeChanged -> useSystem=true but user previously chose manual theme")
-                    return
-                }
-
-                // Calculate the new color scheme
-                let newColorScheme: ColorScheme? = useSystem ? nil : (dark ? .dark : .light)
-
-                print("ContentView: ComposeDarkModeChanged received")
-                print("  - dark: \(dark)")
-                print("  - useSystem: \(useSystem)")
-                print("  - current preferredColorScheme: \(String(describing: self.preferredColorScheme))")
-                print("  - new preferredColorScheme: \(String(describing: newColorScheme))")
-                
-                // Debounce quick successive notifications to avoid flip-flop during tab switches
-                darkModeDebounceItem?.cancel()
-                let work = DispatchWorkItem {
-                    // Only update if it actually changed to prevent unnecessary redraws
-                    guard newColorScheme != self.preferredColorScheme else {
-                        print("  - SKIPPED (no change)")
-                        return
-                    }
-                    print("  - UPDATING preferredColorScheme (debounced)")
-                    self.preferredColorScheme = newColorScheme
-                    // Persist the selection so future onAppear checks won't overwrite it
-                    let defaults = UserDefaults.standard
-                    defaults.set((newColorScheme == .dark), forKey: "isDarkMode")
-                    defaults.set(useSystem, forKey: "useSystemDefault")
-                    // Also notify Compose/Kotlin via PlatformBridge if needed (optional)
-                }
-                darkModeDebounceItem = work
-                // Small delay to coalesce rapid updates (50-120ms is sufficient)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: work)
-            }
+            // Appearance changes from Compose are applied app-wide by AppAppearance (iOSApp.swift).
             
-            // Load initial dark mode preference from UserDefaults (set by Compose/Kotlin)
+            // Apply the saved Appearance choice to the window once it exists
             if !didInitColorScheme {
                 didInitColorScheme = true
-                let defaults = UserDefaults.standard
-                let savedDarkModeObj = defaults.object(forKey: "isDarkMode")
-                let savedUseSystemObj = defaults.object(forKey: "useSystemDefault")
-
-                let savedDarkMode = (savedDarkModeObj as? Bool) ?? false
-                let savedUseSystem = (savedUseSystemObj as? Bool) ?? true
-
-                print("ContentView: onAppear - Loading initial preferences (once)")
-                print("  - isDarkMode key exists: \(savedDarkModeObj != nil)")
-                print("  - useSystemDefault key exists: \(savedUseSystemObj != nil)")
-                print("  - savedDarkMode: \(savedDarkMode)")
-                print("  - savedUseSystem: \(savedUseSystem)")
-                print("  - current preferredColorScheme: \(String(describing: self.preferredColorScheme))")
-
-                // Update if values from UserDefaults differ from initialized state
-                let expectedColorScheme: ColorScheme? = savedUseSystem ? nil : (savedDarkMode ? .dark : .light)
-                if expectedColorScheme != self.preferredColorScheme {
-                    print("  - Updating preferredColorScheme from \(String(describing: self.preferredColorScheme)) to \(String(describing: expectedColorScheme))")
-                    self.preferredColorScheme = expectedColorScheme
-                } else {
-                    print("  - preferredColorScheme matches expected value")
-                }
+                AppAppearance.applySaved()
             }
 
             // Listen for native-host FAB tap to request a new chat (this will be posted by the FAB below)

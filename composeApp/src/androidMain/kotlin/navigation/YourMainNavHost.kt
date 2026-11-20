@@ -75,10 +75,10 @@ fun YourMainNavHost(navController: NavHostController, showBottomBar: Boolean = t
         composable(NotificationPageScreen) { NotificationPage(navController) }
         composable(DarkModeSettingsPageScreen) {
             DarkModeSettingsPage(
-                isDarkMode = false,
-                onDarkModeToggle = {},
-                useSystemDefault = true,
-                onUseSystemDefaultToggle = {},
+                isDarkMode = isDarkMode,
+                onDarkModeToggle = onDarkModeToggle,
+                useSystemDefault = useSystemDefault,
+                onUseSystemDefaultToggle = onUseSystemDefaultToggle,
                 navController = navController
             )
         }

@@ -80,7 +80,7 @@ struct iOSApp: App {
     
     init() {
         // Pure SwiftUI approach - no UIKit appearance configuration
-        // Dark mode is fully controlled by ContentView's .preferredColorScheme() modifier
+        // Light/dark mode is applied to the windows by AppAppearance (see below)
         // Make hosting window backgrounds clear so Compose window underlay can show through
         UIWindow.appearance().backgroundColor = .clear
         // Ensure tab bar uses system background so it matches light/dark mode by default
@@ -222,114 +222,13 @@ struct iOSApp: App {
         }
         
         private func setupDarkModeObserver() {
-            // Observe Compose dark-mode changes so native bars can match the Compose theme
+            // Compose posts this whenever the user changes Appearance (System / Light / Dark).
+            // Apply it to the windows straight away so the native tab bar, navigation bar, sheets
+            // and the Compose content all switch together, with their normal system styling.
             NotificationCenter.default.addObserver(forName: NSNotification.Name("ComposeDarkModeChanged"), object: nil, queue: .main) { notification in
-                let userInfo = notification.userInfo
-                let dark = (userInfo?["dark"] as? Bool) ?? false
-                let useSystem = (userInfo?["useSystem"] as? Bool) ?? true
-                
-                // Prepare new appearances based on flags
-                let newNavAppearance = UINavigationBarAppearance()
-                let newTabAppearance = UITabBarAppearance()
-                
-                if useSystem {
-                    // Let the system decide (follow device appearance)
-                    newNavAppearance.configureWithDefaultBackground()
-                    newTabAppearance.configureWithDefaultBackground()
-                    UINavigationBar.appearance().tintColor = nil
-                    UITabBar.appearance().tintColor = nil
-                    UITabBar.appearance().unselectedItemTintColor = nil
-                    // Ensure backgroundColor for tab bar uses system dynamic default
-                    UITabBar.appearance().backgroundColor = nil
-                } else if dark {
-                    // Force dark styling for bars
-                    newNavAppearance.configureWithOpaqueBackground()
-                    newNavAppearance.backgroundColor = UIColor { trait in
-                        return UIColor.black
-                    }
-                    newNavAppearance.titleTextAttributes = [.foregroundColor: UIColor.white]
-                    newNavAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
-                    
-                    newTabAppearance.configureWithOpaqueBackground()
-                    newTabAppearance.backgroundColor = UIColor.black
-                    UITabBar.appearance().tintColor = UIColor.systemBlue
-                    UITabBar.appearance().unselectedItemTintColor = UIColor.lightGray
-                    UITabBar.appearance().backgroundColor = UIColor.black
-                } else {
-                    // Force light styling for bars
-                    newNavAppearance.configureWithOpaqueBackground()
-                    newNavAppearance.backgroundColor = UIColor.white
-                    newNavAppearance.titleTextAttributes = [.foregroundColor: UIColor.black]
-                    newNavAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor.black]
-                    
-                    newTabAppearance.configureWithOpaqueBackground()
-                    newTabAppearance.backgroundColor = UIColor.white
-                    UITabBar.appearance().tintColor = UIColor.systemBlue
-                    UITabBar.appearance().unselectedItemTintColor = UIColor.gray
-                    UITabBar.appearance().backgroundColor = UIColor.white
-                }
-                
-                // Apply the computed appearances
-                UINavigationBar.appearance().standardAppearance = newNavAppearance
-                UINavigationBar.appearance().compactAppearance = newNavAppearance
-                UINavigationBar.appearance().scrollEdgeAppearance = newNavAppearance
-                
-                UITabBar.appearance().standardAppearance = newTabAppearance
-                if #available(iOS 15.0, *) {
-                    UITabBar.appearance().scrollEdgeAppearance = newTabAppearance
-                }
-                
-                // Determine the override user interface style for windows
-                let overrideStyle: UIUserInterfaceStyle = {
-                    if useSystem { return .unspecified }
-                    return dark ? .dark : .light
-                }()
-                
-                // Force the system to update existing bars and window interface style
-                DispatchQueue.main.async {
-                    for scene in UIApplication.shared.connectedScenes {
-                        if let ws = scene as? UIWindowScene {
-                            for w in ws.windows {
-                                w.overrideUserInterfaceStyle = overrideStyle
-                                w.rootViewController?.setNeedsStatusBarAppearanceUpdate()
-                                w.rootViewController?.view.setNeedsLayout()
-                                // Additionally apply appearance directly to any existing UITabBar instances
-                                if let tbc = w.rootViewController?.tabBarController {
-                                    let tb = tbc.tabBar
-                                    tb.standardAppearance = newTabAppearance
-                                    if #available(iOS 15.0, *) {
-                                        tb.scrollEdgeAppearance = newTabAppearance
-                                    }
-                                    // Ensure background color and tints are applied now
-                                    tb.barStyle = (overrideStyle == .dark) ? .black : .default
-                                    tb.tintColor = UITabBar.appearance().tintColor
-                                    tb.unselectedItemTintColor = UITabBar.appearance().unselectedItemTintColor
-                                    tb.backgroundColor = UITabBar.appearance().backgroundColor
-                                    tb.setNeedsLayout()
-                                    tb.setNeedsDisplay()
-                                } else {
-                                    // Traverse subviews to find any UITabBar and apply appearance
-                                    func traverseApply(_ view: UIView) {
-                                        if let tb = view as? UITabBar {
-                                            tb.standardAppearance = newTabAppearance
-                                            if #available(iOS 15.0, *) {
-                                                tb.scrollEdgeAppearance = newTabAppearance
-                                            }
-                                            tb.barStyle = (overrideStyle == .dark) ? .black : .default
-                                            tb.tintColor = UITabBar.appearance().tintColor
-                                            tb.unselectedItemTintColor = UITabBar.appearance().unselectedItemTintColor
-                                            tb.backgroundColor = UITabBar.appearance().backgroundColor
-                                            tb.setNeedsLayout()
-                                            tb.setNeedsDisplay()
-                                        }
-                                        for sub in view.subviews { traverseApply(sub) }
-                                    }
-                                    traverseApply(w)
-                                }
-                            }
-                        }
-                    }
-                }
+                let dark = (notification.userInfo?["dark"] as? Bool) ?? false
+                let useSystem = (notification.userInfo?["useSystem"] as? Bool) ?? true
+                AppAppearance.apply(dark: dark, useSystem: useSystem)
             }
         }
     }
@@ -337,5 +236,27 @@ struct iOSApp: App {
 extension UIApplication {
     func endEditing() {
         sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+
+/// Applies the app's Appearance setting (System / Light / Dark) to every window.
+/// Setting the window's interface style is the one reliable switch on iOS: system bars, sheets and
+/// the hosted Compose view all follow it, and `.unspecified` hands control back to the device.
+enum AppAppearance {
+    static func apply(dark: Bool, useSystem: Bool) {
+        let style: UIUserInterfaceStyle = useSystem ? .unspecified : (dark ? .dark : .light)
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene else { continue }
+            for window in windowScene.windows where window.overrideUserInterfaceStyle != style {
+                window.overrideUserInterfaceStyle = style
+            }
+        }
+    }
+
+    /// Re-applies the saved choice (keys written by the Compose side).
+    static func applySaved() {
+        let defaults = UserDefaults.standard
+        let useSystem = (defaults.object(forKey: "useSystemDefault") as? Bool) ?? true
+        apply(dark: defaults.bool(forKey: "isDarkMode"), useSystem: useSystem)
     }
 }
