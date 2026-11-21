@@ -1,4 +1,11 @@
 package components
+import components.ui.ExpressiveDialog
+import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.Mood
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.foundation.layout.Spacer
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -17,7 +24,6 @@ import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Today
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -186,35 +192,27 @@ fun EventInputDialog(
     onDismissRequest: () -> Unit
 ) {
     var input by remember { mutableStateOf("") }
-    AlertDialog(
+    ExpressiveDialog(
         onDismissRequest = { onDismissRequest() },
-        title = { Text("New Event") },
-        text = {
-            TextField(
-                value = input,
-                onValueChange = { input = it },
-                label = { Text("Event Title") }
-            )
+        title = "New event",
+        icon = Icons.Outlined.Event,
+        confirmText = "Add",
+        confirmEnabled = input.isNotBlank(),
+        onConfirm = {
+            // hide keyboard when confirming
+            hideKeyboard()
+            onConfirm(input)
         },
-        confirmButton = {
-            Button(
-                onClick = {
-                    // hide keyboard when confirming
-                    hideKeyboard()
-                    onConfirm(input)
-                }
-            ) {
-                Text("Confirm")
-            }
-        },
-        dismissButton = {
-            Button(
-                onClick = { onDismissRequest() }
-            ) {
-                Text("Cancel")
-            }
-        }
-    )
+    ) {
+        OutlinedTextField(
+            value = input,
+            onValueChange = { input = it },
+            label = { Text("Event title") },
+            singleLine = true,
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }
 
 // this card updates the rating for mood and sleep
@@ -288,43 +286,36 @@ fun RatingsDialog(
     onSubmit: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    ExpressiveDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Ratings") },
-        text = {
-            Column {
-                Text("Sleep Rating")
-                Slider(value = sleepRating.toFloat(), onValueChange = { onSleepRatingChange(it.toInt()) }, valueRange = 0f..10f)
-                Text("Mood Rating")
-                Slider(value = moodRating.toFloat(), onValueChange = { onMoodRatingChange(it.toInt()) }, valueRange = 0f..10f)
-            }
-        },
-        confirmButton = {
-            Button(onClick = onSubmit) { Text("Save") }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
+        title = "How was today?",
+        icon = Icons.Outlined.Mood,
+        confirmText = "Save",
+        onConfirm = onSubmit,
+    ) {
+        Text("Sleep: $sleepRating / 10", style = MaterialTheme.typography.titleSmall)
+        Slider(value = sleepRating.toFloat(), onValueChange = { onSleepRatingChange(it.toInt()) }, valueRange = 0f..10f, steps = 9)
+        Spacer(Modifier.height(8.dp))
+        Text("Mood: $moodRating / 10", style = MaterialTheme.typography.titleSmall)
+        Slider(value = moodRating.toFloat(), onValueChange = { onMoodRatingChange(it.toInt()) }, valueRange = 0f..10f, steps = 9)
+    }
 }
 
 @Composable
 fun AdviceTypeDialog(onSelect: (String) -> Unit, onDismiss: () -> Unit) {
-    androidx.compose.material3.AlertDialog(
+    ExpressiveDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Choose Health Advice Type") },
-        text = {
-            Column {
-                listOf("General", "Sleep", "Nutrition", "Stress").forEach { type ->
-                    Button(onClick = { onSelect(type) }, modifier = Modifier.padding(4.dp)) {
-                        Text(type)
-                    }
+        title = "Choose advice type",
+        icon = Icons.Outlined.Lightbulb,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("General", "Sleep", "Nutrition", "Stress").forEach { type ->
+                FilledTonalButton(onClick = { onSelect(type) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(type)
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = {}
-    )
+        }
+    }
 }
 
 @Composable

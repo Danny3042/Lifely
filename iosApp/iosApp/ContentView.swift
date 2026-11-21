@@ -511,11 +511,31 @@ struct ContentView: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    /// Selection for the tab bar. Tapping the tab you're already on closes any sub page
+    /// (Notifications, About, a meditation…) and returns to that tab's main screen, like other iOS apps.
+    private var tabSelection: Binding<Int> {
+        Binding(
+            get: { selectedTab },
+            set: { newValue in
+                if newValue == selectedTab { returnToTabRoot(newValue) }
+                selectedTab = newValue
+            }
+        )
+    }
+
+    private func returnToTabRoot(_ index: Int) {
+        let routes = ["HomePage", "HabitCoachingPage", "ChatScreen", "meditation", "profile"]
+        guard routes.indices.contains(index) else { return }
+        let bridge = PlatformBridge.shared
+        bridge.requestedTabName = routes[index]
+        bridge.requestedTabSignal = bridge.requestedTabSignal + 1
+    }
+
     var body: some View {
         ZStack {
             // Native NavigationStack with TabView
             NavigationStack {
-                TabView(selection: $selectedTab) {
+                TabView(selection: tabSelection) {
                     SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
                         // Overlay on the tab's content (not the whole screen) so the button stays inside
                         // the safe area wherever the system puts the tab bar — bottom on iPhone,

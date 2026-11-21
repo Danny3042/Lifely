@@ -1,4 +1,5 @@
 package pages
+import components.ui.PlatformAlertDialog
 
 import components.ui.ContentWidth
 import components.ui.centeredMaxWidth
@@ -25,7 +26,6 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -173,33 +173,24 @@ fun ProfilePage(navController: NavController) {
         }
 
         if (showDeleteDialog) {
-            AlertDialog(
-                onDismissRequest = { showDeleteDialog = false },
-                icon = { Icon(Icons.Outlined.DeleteForever, contentDescription = null) },
-                title = { Text("Delete your account?") },
-                text = { Text("This permanently removes your account and data. This action cannot be undone.") },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            coroutineScope.launch {
-                                try {
-                                    deleteUser(auth, navController, snackbarHostState)
-                                    navController.navigate(LoginScreen)
-                                } catch (_: Exception) {
-                                    // surfaced by deleteUser via snackbar where possible
-                                }
-                            }
-                            showDeleteDialog = false
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                            contentColor = MaterialTheme.colorScheme.onError,
-                        ),
-                    ) { Text("Delete") }
+            PlatformAlertDialog(
+                title = "Delete your account?",
+                message = "This permanently removes your account and data. This action cannot be undone.",
+                confirmText = "Delete",
+                destructive = true,
+                icon = Icons.Outlined.DeleteForever,
+                onConfirm = {
+                    coroutineScope.launch {
+                        try {
+                            deleteUser(auth, navController, snackbarHostState)
+                            navController.navigate(LoginScreen)
+                        } catch (_: Exception) {
+                            // surfaced by deleteUser via snackbar where possible
+                        }
+                    }
+                    showDeleteDialog = false
                 },
-                dismissButton = {
-                    TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
-                },
+                onDismiss = { showDeleteDialog = false },
             )
         }
 

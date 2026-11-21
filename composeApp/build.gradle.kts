@@ -102,7 +102,8 @@ kotlin {
             implementation(libs.multiplatform.markdown.renderer)
             implementation(libs.kmpauth.google) //Google One Tap Sign-In
             implementation(libs.kmpauth.firebase) //Integrated Authentications with Firebase
-            implementation(libs.kmpauth.uihelper) //UiHelper SignIn buttons (AppleSignIn, GoogleSignInButton)
+            implementation(libs.kmpauth.uihelper) // Google sign-in button (2.0.0 crashed on iOS; 3.0.6 is built against newer Compose)
+            // The app draws its own sign-in buttons (components/ui/SignInButtons.kt).
             // Material 3 (Expressive-capable build for CMP 1.12)
             implementation(libs.cmp.material3)
             implementation(libs.androidx.datastore.preferences)

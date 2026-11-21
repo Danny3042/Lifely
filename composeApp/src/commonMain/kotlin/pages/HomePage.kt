@@ -1,4 +1,5 @@
 package pages
+import components.ui.ExpressiveDialog
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
@@ -35,7 +36,6 @@ import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Spa
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -469,23 +469,23 @@ private fun WeekTrendCard(totals: List<Float>, onClick: () -> Unit) {
 
 @Composable
 private fun AddCardDialog(onDismiss: () -> Unit, onAdd: (String) -> Unit) {
-    AlertDialog(
+    ExpressiveDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add a shortcut") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Pin a shortcut to your Home page.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                listOf(
-                    Triple("Meditation shortcut", Icons.Filled.PlayArrow, "Start a session"),
-                    Triple("Habit shortcut", Icons.AutoMirrored.Filled.List, "Open habits"),
-                    Triple("Charts shortcut", Icons.Filled.Insights, "See your trends"),
-                ).forEach { (title, icon, subtitle) ->
-                    ListRowCard(title = title, subtitle = subtitle, icon = icon, onClick = { onAdd(title) })
-                }
+        title = "Add a shortcut",
+        icon = Icons.Filled.Add,
+        supportingText = "Pin a shortcut to your Home page.",
+        dismissText = "Close",
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(
+                Triple("Meditation shortcut", Icons.Filled.PlayArrow, "Start a session"),
+                Triple("Habit shortcut", Icons.AutoMirrored.Filled.List, "Open habits"),
+                Triple("Charts shortcut", Icons.Filled.Insights, "See your trends"),
+            ).forEach { (title, icon, subtitle) ->
+                ListRowCard(title = title, subtitle = subtitle, icon = icon, onClick = { onAdd(title) })
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-    )
+        }
+    }
 }
 
 /** Fade + slide entrance used for the Home sections once data has loaded. */

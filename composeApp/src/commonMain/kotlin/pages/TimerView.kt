@@ -1,4 +1,7 @@
 package pages
+import components.ui.ExpressiveDialog
+import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material3.OutlinedTextField
 
 import components.ui.platformScaffoldInsets
 import TimerViewModel
@@ -17,7 +20,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -180,33 +182,30 @@ fun SetTimerDialog(
     if (showDialog) {
         var input by remember { mutableStateOf("") }
 
-        AlertDialog(
+        ExpressiveDialog(
             onDismissRequest = onDismiss,
-            title = { Text(text = "Set Timer") },
-            text = {
-                TextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    label = { Text("Enter time in seconds") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                    keyboardActions = onDoneHideKeyboardAction(onDone = {})
-                )
+            title = "Set timer",
+            icon = Icons.Outlined.Timer,
+            supportingText = "Enter the length in seconds.",
+            confirmText = "Start",
+            confirmEnabled = (input.toLongOrNull() ?: 0L) > 0L,
+            onConfirm = {
+                hideKeyboard()
+                onConfirm(input.toLongOrNull() ?: 0L)
+                onDismiss()
             },
-            confirmButton = {
-                Button(onClick = {
-                    hideKeyboard()
-                    onConfirm(input.toLongOrNull() ?: 0L)
-                    onDismiss()
-                }) {
-                    Text("Confirm")
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = onDismiss) {
-                    Text("Cancel")
-                }
-            }
-        )
+        ) {
+            OutlinedTextField(
+                value = input,
+                onValueChange = { input = it.filter { c -> c.isDigit() } },
+                label = { Text("Seconds") },
+                singleLine = true,
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                keyboardActions = onDoneHideKeyboardAction(onDone = {})
+            )
+        }
     }
 }
 

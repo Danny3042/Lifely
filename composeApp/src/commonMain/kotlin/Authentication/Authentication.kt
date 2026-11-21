@@ -55,10 +55,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.mmk.kmpauth.firebase.apple.AppleButtonUiContainer
-import com.mmk.kmpauth.firebase.google.GoogleButtonUiContainerFirebase
-import com.mmk.kmpauth.google.GoogleAuthCredentials
+import com.mmk.kmpauth.google.google
+import com.mmk.kmpauth.google.rememberGoogleAuthState
 import com.mmk.kmpauth.google.GoogleAuthProvider
-import com.mmk.kmpauth.uihelper.apple.AppleSignInButton
+import com.mmk.kmpauth.google.GoogleAuthCredentials
+import com.mmk.kmpauth.core.KMPAuth
+import components.ui.AppleSignInButton
 import com.mmk.kmpauth.uihelper.google.GoogleSignInButton
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseAuthInvalidCredentialsException
@@ -104,14 +106,19 @@ class Authentication {
             }
         }
 
-        LaunchedEffect(Unit) {
-            GoogleAuthProvider.create(
-                credentials = GoogleAuthCredentials(
-                    serverId = "991501394909-ij12drqd040b9766t2t9s5d0itjs46h3.apps.googleusercontent.com"
-                )
-            )
-            authready = true
-        }
+        // KMPAuth 3: configure providers once per app run. The Firebase backend registers itself on
+        // Android/iOS from google-services.json / GoogleService-Info.plist.
+        // Must run during composition, before rememberGoogleAuthState: its effects look up the
+        // Google provider straight away, and a LaunchedEffect here would run too late (that was
+        // the iOS sign-out crash: "Make sure you invoked GoogleAuthProvider #create ...").
+        remember { KmpAuthSetup.ensureInitialized() }
+        LaunchedEffect(Unit) { authready = true }
+
+        // KMPAuth 3 replaced GoogleButtonUiContainerFirebase with rememberGoogleAuthState.
+        // It returns Result<KMPAuthUser>; the Firebase user is in `raw`.
+        val googleSignIn = rememberGoogleAuthState(
+            onResult = { result -> onFirebaseResult(result.map { it.raw as? FirebaseUser }) }
+        )
 
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
             if (firebaseUser != null) {
@@ -199,12 +206,10 @@ class Authentication {
 
                     if (authready) {
                         OrDivider()
-                        GoogleButtonUiContainerFirebase(onResult = onFirebaseResult) {
-                            GoogleSignInButton(modifier = Modifier.fillMaxWidth().height(52.dp), fontSize = 16.sp) { this.onClick() }
-                        }
+                        GoogleSignInButton(modifier = Modifier.fillMaxWidth().height(52.dp), fontSize = 16.sp) { googleSignIn.launch() }
                         Spacer(modifier = Modifier.height(12.dp))
                         AppleButtonUiContainer(onResult = onFirebaseResult) {
-                            AppleSignInButton(modifier = Modifier.fillMaxWidth().height(52.dp)) { this.onClick() }
+                            AppleSignInButton(onClick = { this.onClick() }, modifier = Modifier.fillMaxWidth())
                         }
                     }
 
@@ -435,5 +440,20 @@ private fun OrDivider() {
             modifier = Modifier.padding(horizontal = 12.dp),
         )
         HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
+    }
+}
+
+/** KMPAuth.initialize should run once per process, however many times the Login screen is shown. */
+private object KmpAuthSetup {
+    private var done = false
+
+    fun ensureInitialized() {
+        if (done) return
+        val serverId = "991501394909-ij12drqd040b9766t2t9s5d0itjs46h3.apps.googleusercontent.com"
+        KMPAuth.initialize { google(serverId = serverId) }
+        // Some 3.0.x code paths on iOS still read the legacy provider, so register it too.
+        @Suppress("DEPRECATION")
+        GoogleAuthProvider.create(credentials = GoogleAuthCredentials(serverId = serverId))
+        done = true
     }
 }

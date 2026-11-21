@@ -226,10 +226,38 @@ actual fun PlatformApp(
     // pending route set by native observer; Compose will navigate when this changes
     var pendingRoute by remember { mutableStateOf<String?>(null) }
 
+    // A tab bar tap: close any sub pages (Notifications, About, a meditation…) and show the tab host.
+    // Called straight from the native callbacks rather than through pendingRoute: the tab request
+    // arrives several times in a row, and setting pendingRoute to the same value again doesn't
+    // re-run its effect, so it could get stuck and tab taps stopped closing sub pages.
+    fun showTabHost() {
+        try {
+            val popped = navController.popBackStack("HeroScreen", inclusive = false)
+            if (!popped && navController.currentBackStackEntry?.destination?.route != "HeroScreen") {
+                navController.navigate("HeroScreen") { launchSingleTop = true }
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
     // If a pending route is set (by the NotificationCenter callback), navigate from Compose context
     LaunchedEffect(pendingRoute) {
         val route = pendingRoute
         if (!route.isNullOrEmpty()) {
+            if (route == "HeroScreen") {
+                // A tab bar tap: close any sub pages and go back to the tab host.
+                // This must not use saveState/restoreState: popping with saveState and then
+                // restoring HeroScreen's state puts the sub page straight back on top.
+                try {
+                    val popped = navController.popBackStack("HeroScreen", inclusive = false)
+                    if (!popped && navController.currentBackStackEntry?.destination?.route != "HeroScreen") {
+                        navController.navigate("HeroScreen") { launchSingleTop = true }
+                    }
+                } catch (_: Throwable) {
+                }
+                pendingRoute = null
+                return@LaunchedEffect
+            }
             try {
                 navController.navigate(route) {
                     // Ensure we don't create duplicate HeroScreen entries and restore state when possible
@@ -284,7 +312,7 @@ actual fun PlatformApp(
                          } catch (_: Throwable) {
                          }
                          // Ensure we end up on the HeroScreen where the TabNavigator lives
-                         pendingRoute = "HeroScreen"
+                         showTabHost()
                      } else {
                          // Non-tab routes, navigate normally
                          pendingRoute = route
@@ -307,11 +335,7 @@ actual fun PlatformApp(
             if (!tabName.isNullOrEmpty()) {
                 try {
                     // Ensure app is showing HeroScreen so the Compose TabNavigator can switch tabs
-                    val current = navController.currentBackStackEntry?.destination?.route
-                    if (current != "HeroScreen") {
-                        // Set pendingRoute so the existing pending-route handler navigates to HeroScreen
-                        pendingRoute = "HeroScreen"
-                    }
+                    showTabHost()
 
                     // Also post a notification so the native Swift TabView can switch selection to match
                     NSOperationQueue.mainQueue.addOperationWithBlock {

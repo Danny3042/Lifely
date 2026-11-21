@@ -1,4 +1,5 @@
 package pages
+import components.ui.PlatformAlertDialog
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -210,28 +210,15 @@ fun AlertDialogExample(
     dialogTitle: String,
     dialogText: String,
 ) {
-    AlertDialog(
-        onDismissRequest = { onDismissRequest() },
-        title = { Text(text = dialogTitle) },
-        text = { Text(text = dialogText) },
-        confirmButton = {
-            Button(
-                onClick = {
-                    // logging removed
-                    onConfirmation()
-                    onDismissRequest() },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-            ) {
-                Text("Confirm", color = MaterialTheme.colorScheme.onPrimary)
-            }
+    PlatformAlertDialog(
+        title = dialogTitle,
+        message = dialogText,
+        confirmText = "Confirm",
+        dismissText = "Dismiss",
+        onConfirm = {
+            onConfirmation()
+            onDismissRequest()
         },
-        dismissButton = {
-            OutlinedButton(
-                onClick = { onDismissRequest() },
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.secondary)
-            ) {
-                Text("Dismiss")
-            }
-        }
+        onDismiss = onDismissRequest,
     )
 }
