@@ -1,5 +1,8 @@
 package navigation
 
+import pages.OnboardingRoute
+import pages.OnboardingScreen
+import pages.rememberStartDestination
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,7 +51,7 @@ fun YourMainNavHost(navController: NavHostController, showBottomBar: Boolean = t
         val currentRoute = currentBackStackEntry?.destination?.route ?: "HeroScreen"
 
         val mainTabRoutes = setOf("HomePage", "HabitCoachingPage", "ChatScreen", "meditation", "profile", "HeroScreen")
-        val routesWithHiddenNav = setOf("Login", "SignUp", "ResetPassword")
+        val routesWithHiddenNav = setOf("Login", "SignUp", "ResetPassword", "Onboarding")
 
         val isMainTab = mainTabRoutes.any { currentRoute.startsWith(it) }
         val shouldHideTab = !isMainTab
@@ -59,7 +62,12 @@ fun YourMainNavHost(navController: NavHostController, showBottomBar: Boolean = t
         println("[YourMainNavHost-Android] route=$currentRoute showBack=$shouldShowBackButton isMain=$isMainTab")
     }
 
-    NavHost(navController = navController, startDestination = "HeroScreen") {
+    // First launch opens on onboarding. Draw nothing for the moment it takes to read the flag,
+    // so the tab host doesn't flash up first.
+    val startDestination = rememberStartDestination() ?: return
+
+    NavHost(navController = navController, startDestination = startDestination) {
+        composable(OnboardingScreen) { OnboardingRoute(navController) }
         composable(LoginScreen) { Authentication().Login(navController) }
         composable("HeroScreen") { HeroScreen(navController, showBottomBar = showBottomBar) }
         composable(SignUpScreen) { Authentication().signUp(navController) }

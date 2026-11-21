@@ -58,6 +58,7 @@ import sub_pages.ReflectionPage
 import utils.HealthKitServiceImpl
 import utils.iOSHealthKitManager
 import tabs.HomeTab
+import pages.OnboardingScreen
 import utils.SettingsManager
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -232,6 +233,8 @@ actual fun PlatformApp(
     // re-run its effect, so it could get stuck and tab taps stopped closing sub pages.
     fun showTabHost() {
         try {
+            // The native host asks for a tab at launch; that mustn't skip first-launch onboarding.
+            if (navController.currentBackStackEntry?.destination?.route == OnboardingScreen) return
             val popped = navController.popBackStack("HeroScreen", inclusive = false)
             if (!popped && navController.currentBackStackEntry?.destination?.route != "HeroScreen") {
                 navController.navigate("HeroScreen") { launchSingleTop = true }
@@ -245,6 +248,10 @@ actual fun PlatformApp(
         val route = pendingRoute
         if (!route.isNullOrEmpty()) {
             if (route == "HeroScreen") {
+                if (navController.currentBackStackEntry?.destination?.route == OnboardingScreen) {
+                    pendingRoute = null
+                    return@LaunchedEffect
+                }
                 // A tab bar tap: close any sub pages and go back to the tab host.
                 // This must not use saveState/restoreState: popping with saveState and then
                 // restoring HeroScreen's state puts the sub page straight back on top.
@@ -410,11 +417,12 @@ actual fun PlatformApp(
                     // Routes where we want to show the tab bar
                     val mainRoutes = setOf("HomePage", "HabitCoachingPage", "ChatScreen", "meditation", "profile", "HeroScreen")
                     // Routes where we want to hide the navigation bar
-                    val routesWithHiddenNav = setOf("Login", "SignUp", "ResetPassword")
+                    val routesWithHiddenNav = setOf("Login", "SignUp", "ResetPassword", "Onboarding")
                     
                     val isMain = mainRoutes.contains(destName)
-                    val shouldHideTab = !isMain
                     val shouldHideNav = routesWithHiddenNav.contains(destName)
+                    // Sub pages keep the tab bar (tapping a tab closes them); sign-in and onboarding hide it.
+                    val shouldHideTab = shouldHideNav
                     // Show back button on sub-pages (when tab bar is hidden and nav bar is shown)
                     val shouldShowBackButton = !isMain && !shouldHideNav
 

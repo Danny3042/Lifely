@@ -93,8 +93,6 @@ import kotlin.time.Clock
 
 const val HomePageScreen = "HomePage"
 
-/** Daily mindfulness goal used for the progress indicator on the hero card. */
-private const val DAILY_GOAL_MINUTES = 10
 
 @Composable
 fun HomePage(
@@ -380,7 +378,12 @@ fun HomePage(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun TodayHeroCard(todayMinutes: Int, onStart: () -> Unit) {
-    val progress = (todayMinutes.toFloat() / DAILY_GOAL_MINUTES).coerceIn(0f, 1f)
+    // Daily mindfulness goal, picked during onboarding.
+    var goalMinutes by remember { mutableStateOf(utils.DEFAULT_DAILY_GOAL_MINUTES) }
+    LaunchedEffect(Unit) {
+        goalMinutes = runCatching { utils.SettingsManager.loadDailyGoalMinutes() }.getOrDefault(goalMinutes).coerceAtLeast(1)
+    }
+    val progress = (todayMinutes.toFloat() / goalMinutes).coerceIn(0f, 1f)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
@@ -395,7 +398,7 @@ private fun TodayHeroCard(todayMinutes: Int, onStart: () -> Unit) {
                     Text("Today", style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "$todayMinutes of $DAILY_GOAL_MINUTES min",
+                        text = "$todayMinutes of $goalMinutes min",
                         style = MaterialTheme.typography.headlineMedium,
                     )
                     Text(

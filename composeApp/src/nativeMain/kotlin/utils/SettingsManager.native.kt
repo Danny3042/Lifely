@@ -54,4 +54,30 @@ actual object SettingsManager {
             true
         }
     }
+
+    actual suspend fun saveOnboardingCompleted(completed: Boolean) {
+        NSUserDefaults.standardUserDefaults.setBool(completed, forKey = "onboarding_completed")
+        // Write it out now: this is saved once, right before navigating away, and iOS otherwise
+        // flushes defaults lazily (a quick quit or a re-run from Xcode can lose the value).
+        NSUserDefaults.standardUserDefaults.synchronize()
+    }
+
+    actual suspend fun loadOnboardingCompleted(): Boolean =
+        NSUserDefaults.standardUserDefaults.boolForKey("onboarding_completed")
+
+    actual suspend fun saveDailyGoalMinutes(minutes: Int) {
+        NSUserDefaults.standardUserDefaults.setInteger(minutes.toLong(), forKey = "daily_goal_minutes")
+        // Write it out now: this is saved once, right before navigating away, and iOS otherwise
+        // flushes defaults lazily (a quick quit or a re-run from Xcode can lose the value).
+        NSUserDefaults.standardUserDefaults.synchronize()
+    }
+
+    actual suspend fun loadDailyGoalMinutes(): Int {
+        val defaults = NSUserDefaults.standardUserDefaults
+        return if (defaults.objectForKey("daily_goal_minutes") != null) {
+            defaults.integerForKey("daily_goal_minutes").toInt()
+        } else {
+            DEFAULT_DAILY_GOAL_MINUTES
+        }
+    }
 }

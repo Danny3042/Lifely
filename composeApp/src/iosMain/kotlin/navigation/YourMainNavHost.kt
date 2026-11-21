@@ -1,3 +1,6 @@
+import pages.OnboardingRoute
+import pages.OnboardingScreen
+import pages.rememberStartDestination
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -67,11 +70,12 @@ fun YourMainNavHost(
             "HeroScreen"
         )
 
-        val routesWithHiddenNav = setOf("Login", "SignUp", "ResetPassword")
+        val routesWithHiddenNav = setOf("Login", "SignUp", "ResetPassword", "Onboarding")
 
         val isMainTab = mainTabRoutes.any { currentRoute.startsWith(it) }
-        val shouldHideTab = !isMainTab
         val shouldHideNav = routesWithHiddenNav.contains(currentRoute)
+        // Sub pages keep the tab bar (tapping a tab closes them); sign-in and onboarding hide it.
+        val shouldHideTab = shouldHideNav
         val shouldShowBackButton = !isMainTab && !shouldHideNav && navController.previousBackStackEntry != null
 
         // Post notification to SwiftUI on main thread
@@ -122,7 +126,12 @@ fun YourMainNavHost(
         println("   Is main tab: $isMainTab")
     }
 
-    NavHost(navController = navController, startDestination = "HeroScreen") {
+    // First launch opens on onboarding. Draw nothing for the moment it takes to read the flag,
+    // so the tab host doesn't flash up first.
+    val startDestination = rememberStartDestination() ?: return
+
+    NavHost(navController = navController, startDestination = startDestination) {
+        composable(OnboardingScreen) { OnboardingRoute(navController) }
         composable(LoginScreen) { Authentication().Login(navController) }
         composable("HeroScreen") { HeroScreen(navController, showBottomBar = showBottomBar) }
         composable(SignUpScreen) { Authentication().signUp(navController) }

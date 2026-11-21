@@ -537,6 +537,8 @@ struct ContentView: View {
             NavigationStack {
                 TabView(selection: tabSelection) {
                     SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                        // Must sit on the tab's content: on the TabView itself SwiftUI ignores it.
+                        .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
                         // Overlay on the tab's content (not the whole screen) so the button stays inside
                         // the safe area wherever the system puts the tab bar — bottom on iPhone,
                         // the side on iPhone Duo — and clear of the fold and camera regions.
@@ -551,18 +553,26 @@ struct ContentView: View {
                         .tag(0)
 
                     SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                        // Must sit on the tab's content: on the TabView itself SwiftUI ignores it.
+                        .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
                         .tabItem { Label("Habits", systemImage: "checklist") }
                         .tag(1)
 
                     SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                        // Must sit on the tab's content: on the TabView itself SwiftUI ignores it.
+                        .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
                         .tabItem { Label("Chat", systemImage: "message") }
                         .tag(2)
 
                     SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                        // Must sit on the tab's content: on the TabView itself SwiftUI ignores it.
+                        .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
                         .tabItem { Label("Meditate", systemImage: "apple.meditate.circle.fill") }
                         .tag(3)
 
                     SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                        // Must sit on the tab's content: on the TabView itself SwiftUI ignores it.
+                        .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
                         .tabItem { Label("Profile", systemImage: "person") }
                         .tag(4)
                 }
@@ -662,9 +672,13 @@ struct ContentView: View {
             composeBridge.onBackButtonVisibilityChange = { visible in
                 DispatchQueue.main.async {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        // Update both the local SharedComposeHost state and the router so overlay/back-button shows
-                        self.composeHidesNavigationBar = false
-                        self.composeHidesTabBar = false
+                        // Sub pages (which show a back button) keep both bars. Only reset them then:
+                        // resetting on every route change undid the hide for Login and Onboarding,
+                        // which is why the tab bar stayed on screen there.
+                        if visible {
+                            self.composeHidesNavigationBar = false
+                            self.composeHidesTabBar = false
+                        }
                         // Update router directly (EnvironmentObject)
                         self.router.showBackButton = visible
                     }
