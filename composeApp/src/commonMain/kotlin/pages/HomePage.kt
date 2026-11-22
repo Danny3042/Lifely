@@ -35,6 +35,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Mood
+import androidx.compose.material.icons.filled.CalendarMonth
+import utils.MoodCheckInStore
+import utils.MoodScale
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Spa
@@ -102,8 +106,11 @@ fun HomePage(
     modifier: Modifier = Modifier,
     onNavigateMeditate: () -> Unit = {},
     onNavigateHabits: () -> Unit = {},
-    onChartClick: () -> Unit = {}
+    onChartClick: () -> Unit = {},
+    onCheckIn: () -> Unit = {},
+    onCheckInCalendar: () -> Unit = {},
 ) {
+    LaunchedEffect(Unit) { runCatching { MoodCheckInStore.load() } }
     var loading by remember { mutableStateOf(true) }
     // Custom cards added by the + button
     val customCards = remember { mutableStateListOf<Pair<Int, String>>() }
@@ -258,6 +265,28 @@ fun HomePage(
                             modifier = Modifier.weight(1f),
                         )
                     }
+                }
+            }
+
+            // How are you feeling: opens the check-in without a meditation first
+            item {
+                Spacer(Modifier.height(12.dp))
+                if (!loading) Entrance {
+                    val last = MoodCheckInStore.checkIns.firstOrNull()
+                    ListRowCard(
+                        title = "How are you feeling?",
+                        subtitle = if (last != null) "Last check-in: ${MoodScale.label(last.valence)}" else "Log your mood in a few seconds",
+                        icon = Icons.Filled.Mood,
+                        iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        iconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        onClick = onCheckIn,
+                        trailing = {
+                            // Past check-ins on a calendar
+                            androidx.compose.material3.IconButton(onClick = onCheckInCalendar) {
+                                Icon(Icons.Filled.CalendarMonth, contentDescription = "Check-in calendar", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        },
+                    )
                 }
             }
 

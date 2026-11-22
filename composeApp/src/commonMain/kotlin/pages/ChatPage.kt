@@ -1,3 +1,14 @@
+import androidx.compose.runtime.CompositionLocalProvider
+import components.ui.LocalTopBarOverlap
+import platform.PlatformBridge
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.VerticalDivider
+import components.ChatSidebar
 import components.ui.bottomBarOverlap
 import components.ui.topBarOverlap
 import androidx.compose.foundation.layout.Box
@@ -53,7 +64,7 @@ import tts.getTtsService
 import tts.TtsSettings
 import platform.registerComposeNewChatListener
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(
     chatViewModel: ChatViewModel = remember { ChatViewModel(GenerativeAiService.instance) },
@@ -114,98 +125,161 @@ fun ChatScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         // The app shell (HeroScreen) already shows the "Chat" title bar on Android.
     ) { paddingValues ->
-        Box(
+        // Large screens (tablets, unfolded phones) get the chat list beside the conversation instead
+        // of the Past chats sheet. Measured here, so it's the space the chat page itself has.
+        BoxWithConstraints(
             modifier = Modifier
                 .padding(paddingValues)
                 .fillMaxSize()
         ) {
-            LazyColumn(
-                // Keep messages at a readable width on tablets
-                modifier = Modifier.centeredMaxWidth(ContentWidth.Wide).fillMaxSize(),
-                state = listState,
-                reverseLayout = false,
-                // Keep the last message clear of the input bar and the New chat button above it
-                contentPadding = PaddingValues(top = 8.dp + topBarOverlap(), bottom = 176.dp + bottomBarOverlap()),
-            ) {
-                items(
-                    items = chatUiState.messages,
-                    key = { it.id },
-                ) { message ->
-                    ChatBubbleItem(message) { id, text ->
-                        // find the message and retry via viewModel
-                        // we assume failed messages are user messages and retry will resubmit
-                        // Note: no image support in retry here
-                        chatViewModel.retryMessage(id, text, null)
-                    }
+            val showSidebar = maxWidth >= 760.dp
+            val sidebarWidth = if (maxWidth >= 1000.dp) 320.dp else 280.dp
+            val sendMessage: (String, ByteArray?) -> Unit = { inputText, image ->
+                chatViewModel.sendMessage(inputText, image)
+                // After sending, attempt to scroll to latest (the LaunchedEffect above will also handle this).
+                coroutineScope.launch {
+                    val last = chatUiState.messages.size
+                    if (last > 0) listState.animateScrollToItem(last - 1)
                 }
             }
-            if (messages.isEmpty()) {
-                ChatEmptyState(modifier = Modifier.align(Alignment.Center).padding(bottom = 96.dp + bottomBarOverlap()))
+            val startNewChat: () -> Unit = {
+                chatViewModel.newChat()
+                coroutineScope.launch { snackbarHostState.showSnackbar("New chat started — the last one is in Past chats") }
             }
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .widthIn(max = ContentWidth.Wide)
-            ) {
-                // Past chats and "New chat" sit just above the input's trailing end, so they move
-                // with the input on every screen size. Liquid Glass on iOS, small FABs on Android.
-                // New chat is hidden while the chat is empty (it would do nothing); history shows
-                // once there's something in it.
-                val hasHistory = chatViewModel.savedChats.isNotEmpty()
-                if (messages.isNotEmpty() || hasHistory) {
-                    Row(
-                        modifier = Modifier.align(Alignment.End).padding(end = 16.dp, bottom = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+
+            @Composable
+            fun Conversation(modifier: Modifier) {
+                Box(modifier = modifier) {
+                    LazyColumn(
+                        // Messages stay at a comfortable reading width on large screens
+                        modifier = Modifier.centeredMaxWidth(ContentWidth.Reading).fillMaxSize(),
+                        state = listState,
+                        reverseLayout = false,
+                        // Keep the last message clear of the input bar and the New chat button above it
+                        contentPadding = PaddingValues(top = 8.dp + topBarOverlap(), bottom = 176.dp + bottomBarOverlap()),
                     ) {
-                        if (hasHistory) {
-                            GlassIconButton(
-                                iosSymbol = "clock.arrow.circlepath",
-                                icon = Icons.Outlined.History,
-                                contentDescription = "Past chats",
-                                onClick = { showHistory = true },
-                                prominent = false,
-                            )
-                        }
-                        if (messages.isNotEmpty()) {
-                            GlassIconButton(
-                                iosSymbol = "plus",
-                                icon = Icons.Filled.Add,
-                                contentDescription = "New chat",
-                                onClick = {
-                                    chatViewModel.newChat()
-                                    coroutineScope.launch { snackbarHostState.showSnackbar("New chat started — the last one is in Past chats") }
-                                },
-                            )
+                        items(
+                            items = chatUiState.messages,
+                            key = { it.id },
+                        ) { message ->
+                            ChatBubbleItem(message) { id, text ->
+                                // find the message and retry via viewModel
+                                // we assume failed messages are user messages and retry will resubmit
+                                // Note: no image support in retry here
+                                chatViewModel.retryMessage(id, text, null)
+                            }
                         }
                     }
-                }
-                // TTS toggle moved into the message input box (MessageInput.trailings)
-                // New chat is provided inside the MessageInput now
-                MessageInput(
-                     enabled = chatUiState.canSendMessage,
-                     onSendMessage = { inputText, image ->
-                         chatViewModel.sendMessage(inputText, image)
-                         // After sending, attempt to scroll to latest (the LaunchedEffect above will also handle this).
-                         coroutineScope.launch {
-                            val last = chatUiState.messages.size
-                            if (last > 0) listState.animateScrollToItem(last - 1)
+                    if (messages.isEmpty()) {
+                        ChatEmptyState(
+                            onSuggestion = { prompt -> sendMessage(prompt, null) },
+                            enabled = chatUiState.canSendMessage,
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .widthIn(max = ContentWidth.Reading)
+                                .padding(top = topBarOverlap(), bottom = 96.dp + bottomBarOverlap()),
+                        )
+                    }
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .widthIn(max = ContentWidth.Reading)
+                    ) {
+                        // Past chats and "New chat" sit just above the input's trailing end, so they move
+                        // with the input on every screen size. Liquid Glass on iOS, small FABs on Android.
+                        // New chat is hidden while the chat is empty (it would do nothing); history shows
+                        // once there's something in it. With the sidebar, both live there instead.
+                        val hasHistory = chatViewModel.savedChats.isNotEmpty()
+                        if (!showSidebar && (messages.isNotEmpty() || hasHistory)) {
+                            Row(
+                                modifier = Modifier.align(Alignment.End).padding(end = 16.dp, bottom = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                if (hasHistory) {
+                                    GlassIconButton(
+                                        iosSymbol = "clock.arrow.circlepath",
+                                        icon = Icons.Outlined.History,
+                                        contentDescription = "Past chats",
+                                        onClick = { showHistory = true },
+                                        prominent = false,
+                                    )
+                                }
+                                if (messages.isNotEmpty()) {
+                                    GlassIconButton(
+                                        iosSymbol = "plus",
+                                        icon = Icons.Filled.Add,
+                                        contentDescription = "New chat",
+                                        onClick = startNewChat,
+                                    )
+                                }
+                            }
                         }
-                     },
-                     modifier = Modifier,
-                     snackbarHostState = snackbarHostState,
-                     onNewChat = { chatViewModel.newChat() },
-                 )
-                // Small breathing room under the input, plus the floating tab bar on iOS (pages run
-                // underneath it there, so the input has to sit above it).
-                Spacer(modifier = Modifier.height(8.dp + bottomBarOverlap()))
+                        // TTS toggle moved into the message input box (MessageInput.trailings)
+                        // New chat is provided inside the MessageInput now
+                        MessageInput(
+                            enabled = chatUiState.canSendMessage,
+                            onSendMessage = sendMessage,
+                            modifier = Modifier,
+                            snackbarHostState = snackbarHostState,
+                            onNewChat = { chatViewModel.newChat() },
+                        )
+                        // Small breathing room under the input, plus the floating tab bar on iOS (pages run
+                        // underneath it there, so the input has to sit above it).
+                        Spacer(modifier = Modifier.height(8.dp + bottomBarOverlap()))
+                    }
+                }
             }
-         }
+
+            // With the sidebar only the conversation scrolls, so the shared page title stays large and
+            // fixed (as in Messages or Mail on iPad) instead of collapsing over just one column.
+            DisposableEffect(showSidebar) {
+                PlatformBridge.linkScrollToBars = !showSidebar
+                onDispose { PlatformBridge.linkScrollToBars = true }
+            }
+
+            if (showSidebar) {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    ChatSidebar(
+                        chats = chatViewModel.savedChats,
+                        activeChatId = chatViewModel.chatId,
+                        currentChatHasMessages = messages.isNotEmpty(),
+                        onNewChat = { chatViewModel.newChat() },
+                        onOpen = { id -> chatViewModel.openSavedChat(id) },
+                        onDelete = { id -> chatViewModel.deleteChat(id) },
+                        modifier = Modifier
+                            .width(sidebarWidth)
+                            .fillMaxHeight(),
+                    )
+                    VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    // The conversation starts below the title and scrolls within its own area
+                    val titleSpace = topBarOverlap()
+                    CompositionLocalProvider(LocalTopBarOverlap provides 0.dp) {
+                        Conversation(Modifier.weight(1f).fillMaxHeight().padding(top = titleSpace))
+                    }
+                }
+            } else {
+                Conversation(Modifier.fillMaxSize())
+            }
+        }
      }
  }
 
+/** Starter prompts for an empty chat: one tap sends them. */
+private val chatSuggestions = listOf(
+    "Help me wind down for sleep",
+    "A 2-minute stress reset",
+    "Ideas for a morning routine",
+    "How do I stick to a new habit?",
+)
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ChatEmptyState(modifier: Modifier = Modifier) {
+private fun ChatEmptyState(
+    onSuggestion: (String) -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier.padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -226,5 +300,18 @@ private fun ChatEmptyState(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+        Spacer(Modifier.height(20.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            chatSuggestions.forEach { prompt ->
+                SuggestionChip(
+                    onClick = { onSuggestion(prompt) },
+                    enabled = enabled,
+                    label = { Text(prompt) },
+                )
+            }
+        }
     }
 }

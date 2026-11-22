@@ -149,6 +149,9 @@ struct iOSApp: App {
             // Configure Firebase immediately so Auth and other services work
             // Note: We configure first, but delay Analytics events until after tracking permission
             FirebaseApp.configure()
+
+            // Let the app show its own notifications (e.g. "Meditation complete") while it's open too
+            UNUserNotificationCenter.current().delegate = self
             
             // Request AppTrackingTransparency permission before logging Analytics events
             // This ensures IDFA-related tracking only happens after user consent
@@ -198,6 +201,15 @@ struct iOSApp: App {
         
         
         
+        // A notification arriving while the app is open: show it as a banner with sound, as when closed
+        func userNotificationCenter(
+            _ center: UNUserNotificationCenter,
+            willPresent notification: UNNotification,
+            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+        ) {
+            completionHandler([.banner, .list, .sound])
+        }
+
         private func requestTrackingPermission() {
             ATTrackingManager.requestTrackingAuthorization { status in
                 switch status {

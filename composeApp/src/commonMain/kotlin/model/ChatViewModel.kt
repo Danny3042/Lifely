@@ -33,6 +33,9 @@ import components.SavedChatSummary
 import components.ChatMessage
 import components.UserChatMessage
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 
@@ -47,8 +50,10 @@ class ChatViewModel(private val aiService: GenerativeAiService) {
     private val _uiState = MutableChatUiState()
     val uiState: ChatUiState = _uiState
 
-    /** Id of the open conversation; it keeps this id in the chat history. */
-    private var chatId: String = getUUIDString()
+    /** Id of the open conversation; it keeps this id in the chat history. Observable so the chat list
+     *  on large screens can highlight the open chat. */
+    var chatId: String by mutableStateOf(getUUIDString())
+        private set
 
     /** Past chats for the history sheet, most recent first. */
     val savedChats = mutableStateListOf<SavedChatSummary>()
@@ -65,16 +70,20 @@ class ChatViewModel(private val aiService: GenerativeAiService) {
             // Give Gemini the restored conversation too, so follow-up questions keep their context
             chat.restoreHistory(turnsOf(msgs))
             refreshHistory()
-        }
 
-        // Observe and persist changes to messages list periodically
-        saveScope.launch {
-            // very simple: periodically snapshot messages and save (can be optimized)
+            // Only now start saving. Saving alongside the restore could write the still-empty chat
+            // over the saved one before it was read, losing the conversation on the next launch.
+            var lastSaved: List<ChatMessage> = msgs
+            var lastSavedId: String = chatId
             while (true) {
-                try {
-                    saveChatState(_uiState.messages.toList(), chatId)
-                } catch (_: Throwable) {}
                 kotlinx.coroutines.delay(3000)
+                val snapshot = _uiState.messages.toList()
+                if (snapshot == lastSaved && chatId == lastSavedId) continue
+                try {
+                    saveChatState(snapshot, chatId)
+                    lastSaved = snapshot
+                    lastSavedId = chatId
+                } catch (_: Throwable) {}
             }
         }
     }

@@ -76,7 +76,9 @@ fun DarkModeSettingsPage(
     onDarkModeToggle: (Boolean) -> Unit,
     useSystemDefault: Boolean,
     onUseSystemDefaultToggle: (Boolean) -> Unit,
-    navController: NavController? = null
+    navController: NavController? = null,
+    /** Shown inside another page (the Profile detail pane): no back bar of its own. */
+    embedded: Boolean = false,
 ) {
     val current = when {
         useSystemDefault -> ThemeChoice.System
@@ -106,7 +108,7 @@ fun DarkModeSettingsPage(
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Column(modifier = Modifier.fillMaxSize()) {
-            if (isAndroid()) {
+            if (isAndroid() && !embedded) {
                 TopAppBar(
                     title = { Text("Appearance") },
                     navigationIcon = {
@@ -126,8 +128,8 @@ fun DarkModeSettingsPage(
                     .padding(top = topBarOverlap(), bottom = bottomBarOverlap())
                     .padding(horizontal = PagePadding, vertical = 16.dp),
             ) {
-                if (!isAndroid()) {
-                    // The iOS navigation bar keeps the tab's title, so name the page here
+                if (!isAndroid() || embedded) {
+                    // The iOS navigation bar keeps the tab's title (and a pane has no bar), so name the page here
                     Text("Appearance", style = MaterialTheme.typography.headlineMedium)
                     Spacer(Modifier.height(4.dp))
                 }

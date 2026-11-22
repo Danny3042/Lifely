@@ -560,11 +560,15 @@ actual fun PlatformApp(
     // so the bottom inset isn't padded; pages pad their scrolling content by it instead
     // (LocalBottomBarOverlap). Screens without the tab bar (sign-in, onboarding) keep the padding.
     val tabBarShown = currentEntry?.destination?.route !in setOf("Login", "SignUp", "ResetPassword", OnboardingScreen)
+    // Pages with the bars run under all of them (Swift extends the Compose view to every edge), so the
+    // side insets come from the SwiftUI host too: on iPhone Duo the side tab bar, camera and fold.
+    val sideLeft = if (tabBarShown) maxOf(leftInset, PlatformBridge.barLeftInset) else leftInset
+    val sideRight = if (tabBarShown) maxOf(rightInset, PlatformBridge.barRightInset) else rightInset
     val pagePadding = PaddingValues.Absolute(
-        left = leftInset.dp,
+        left = sideLeft.dp,
         // Pages with the bars run under the navigation bar too and pad their own content (LocalTopBarOverlap)
         top = if (tabBarShown) 0.dp else topInset.dp,
-        right = rightInset.dp,
+        right = sideRight.dp,
         bottom = if (tabBarShown) 0.dp else bottomInset.dp
     )
 
@@ -577,6 +581,8 @@ actual fun PlatformApp(
     val scrollWatcher = remember {
         object : NestedScrollConnection {
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                // Pages that keep the title fixed (the chat with its sidebar) opt out
+                if (!PlatformBridge.linkScrollToBars) return Offset.Zero
                 // Pulling down past the top means we're at the top again
                 scrolledPx = if (available.y > 0f) 0f else (scrolledPx - consumed.y).coerceAtLeast(0f)
                 return Offset.Zero
@@ -584,7 +590,9 @@ actual fun PlatformApp(
         }
     }
     // A new page or tab starts at the top
-    LaunchedEffect(currentEntry?.destination?.route, PlatformBridge.requestedTabSignal) { scrolledPx = 0f }
+    LaunchedEffect(currentEntry?.destination?.route, PlatformBridge.requestedTabSignal, PlatformBridge.linkScrollToBars) {
+        scrolledPx = 0f
+    }
     val followsNativeBars = tabBarShown && !edgeToEdge
     LaunchedEffect(followsNativeBars) {
         snapshotFlow { if (followsNativeBars) scrolledPx / density else 0f }

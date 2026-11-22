@@ -1,4 +1,20 @@
 package pages
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.saveable.rememberSaveable
+import components.ui.LocalAppearanceControls
+import components.ui.LocalTopBarOverlap
+import config.appVersionName
+import platform.PlatformBridge
+import sub_pages.AboutPage
+import sub_pages.DarkModeSettingsPage
+import sub_pages.NotificationPage
+import sub_pages.AccountPage
+import sub_pages.AccountPageScreen
+import androidx.compose.material.icons.outlined.ManageAccounts
 import components.ui.bottomBarOverlap
 import components.ui.topBarOverlap
 import components.ui.PlatformAlertDialog
@@ -66,137 +82,169 @@ import sub_pages.DarkModeSettingsPageScreen
 import sub_pages.NotificationPageScreen
 import utils.deleteUser
 
+/** The settings that open from the Profile page: on their own screen on phones, beside the list on large screens. */
+private enum class ProfileSection(val title: String, val subtitle: String, val icon: ImageVector, val route: String) {
+    Notifications("Notifications", "Reminders and alerts", Icons.Outlined.Notifications, NotificationPageScreen),
+    Appearance("Appearance", "Light, dark or system", Icons.Outlined.DarkMode, DarkModeSettingsPageScreen),
+    About("About", "Version and credits", Icons.Outlined.Info, AboutPageScreen),
+    Account("Account", "Sign out or delete your account", Icons.Outlined.ManageAccounts, AccountPageScreen),
+}
+
 @Composable
 fun ProfilePage(navController: NavController) {
     val auth = Firebase.auth
     val coroutineScope = rememberCoroutineScope()
-    var showDeleteDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val email = remember { runCatching { auth.currentUser?.email }.getOrNull() }
     val displayName = remember { runCatching { auth.currentUser?.displayName }.getOrNull() }
+    val appearance = LocalAppearanceControls.current
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier.centeredMaxWidth(ContentWidth.Reading).fillMaxSize(),
-            contentPadding = PaddingValues(start = PagePadding, end = PagePadding, top = 16.dp + topBarOverlap(), bottom = 16.dp + bottomBarOverlap()),
-        ) {
-            // Profile header
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.extraLarge,
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    ),
-                ) {
-                    Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(64.dp),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = (displayName ?: email ?: "?").take(1).uppercase(),
-                                    style = MaterialTheme.typography.headlineMedium,
-                                )
-                            }
-                        }
-                        Spacer(Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = displayName?.takeIf { it.isNotBlank() } ?: "Your profile",
-                                style = MaterialTheme.typography.titleLarge,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            if (email != null) {
-                                Text(
-                                    text = email,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+    // Large screens (tablets, unfolded phones): the list on the left and the chosen setting on the
+    // right, like iPad Settings. Measured here, so it's the space the page itself has.
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val twoPane = maxWidth >= 760.dp
+        val listWidth = if (maxWidth >= 1000.dp) 380.dp else 340.dp
+        var selected by rememberSaveable { mutableStateOf(ProfileSection.Notifications) }
 
-            // Preferences
-            item { SectionHeader("Preferences") }
-            item {
-                SettingsGroup {
-                    SettingsRow("Notifications", "Reminders and alerts", Icons.Outlined.Notifications) {
-                        navController.navigate(NotificationPageScreen)
-                    }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    SettingsRow("Appearance", "Light, dark or system", Icons.Outlined.DarkMode) {
-                        try { navController.navigate(DarkModeSettingsPageScreen) } catch (_: Throwable) {}
-                    }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    SettingsRow("About", "Version and credits", Icons.Outlined.Info) {
-                        navController.navigate(AboutPageScreen)
-                    }
-                }
-            }
+        // Both panes scroll on their own, so the page title stays large and fixed rather than
+        // collapsing over one of them
+        DisposableEffect(twoPane) {
+            PlatformBridge.linkScrollToBars = !twoPane
+            onDispose { PlatformBridge.linkScrollToBars = true }
+        }
 
-            // Account
-            item { SectionHeader("Account") }
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilledTonalButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                auth.signOut()
-                                navController.navigate(LoginScreen)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                    ) {
-                        Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Sign out")
-                    }
-                    TextButton(
-                        onClick = { showDeleteDialog = true },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    ) {
-                        Icon(Icons.Outlined.DeleteForever, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Delete account")
-                    }
-                }
+        val open: (ProfileSection) -> Unit = { section ->
+            // Appearance needs the app's theme controls; without them it opens on its own screen
+            if (twoPane && (section != ProfileSection.Appearance || appearance != null)) {
+                selected = section
+            } else {
+                try { navController.navigate(section.route) } catch (_: Throwable) {}
             }
         }
 
-        if (showDeleteDialog) {
-            PlatformAlertDialog(
-                title = "Delete your account?",
-                message = "This permanently removes your account and data. This action cannot be undone.",
-                confirmText = "Delete",
-                destructive = true,
-                icon = Icons.Outlined.DeleteForever,
-                onConfirm = {
-                    coroutineScope.launch {
-                        try {
-                            deleteUser(auth, navController, snackbarHostState)
-                            navController.navigate(LoginScreen)
-                        } catch (_: Exception) {
-                            // surfaced by deleteUser via snackbar where possible
+        if (twoPane) {
+            val titleSpace = topBarOverlap()
+            CompositionLocalProvider(LocalTopBarOverlap provides 0.dp) {
+                Row(modifier = Modifier.fillMaxSize().padding(top = titleSpace)) {
+                    ProfileList(
+                        displayName = displayName,
+                        email = email,
+                        selected = selected,
+                        onOpen = open,
+                        modifier = Modifier.width(listWidth).fillMaxHeight(),
+                    )
+                    VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        when (selected) {
+                            ProfileSection.Notifications -> NotificationPage(navController, embedded = true)
+                            ProfileSection.Appearance -> appearance?.let {
+                                DarkModeSettingsPage(
+                                    isDarkMode = it.isDarkMode,
+                                    onDarkModeToggle = it.onDarkModeToggle,
+                                    useSystemDefault = it.useSystemDefault,
+                                    onUseSystemDefaultToggle = it.onUseSystemDefaultToggle,
+                                    navController = navController,
+                                    embedded = true,
+                                )
+                            }
+                            ProfileSection.About -> AboutPage(navController, versionNumber = appVersionName(), embedded = true)
+                            ProfileSection.Account -> AccountPage(navController, embedded = true)
                         }
                     }
-                    showDeleteDialog = false
-                },
-                onDismiss = { showDeleteDialog = false },
+                }
+            }
+        } else {
+            ProfileList(
+                displayName = displayName,
+                email = email,
+                selected = null,
+                onOpen = open,
+                modifier = Modifier.centeredMaxWidth(ContentWidth.Reading).fillMaxSize(),
             )
         }
 
         SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
+    }
+}
+
+/** The profile card, settings list and account buttons. [selected] is highlighted (two-pane only). */
+@Composable
+private fun ProfileList(
+    displayName: String?,
+    email: String?,
+    selected: ProfileSection?,
+    onOpen: (ProfileSection) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(start = PagePadding, end = PagePadding, top = 16.dp + topBarOverlap(), bottom = 16.dp + bottomBarOverlap()),
+    ) {
+        // Profile header
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.extraLarge,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ),
+            ) {
+                Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(64.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = (displayName ?: email ?: "?").take(1).uppercase(),
+                                style = MaterialTheme.typography.headlineMedium,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = displayName?.takeIf { it.isNotBlank() } ?: "Your profile",
+                            style = MaterialTheme.typography.titleLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (email != null) {
+                            Text(
+                                text = email,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Preferences
+        item { SectionHeader("Preferences") }
+        item {
+            SettingsGroup {
+                ProfileSection.entries.forEachIndexed { index, section ->
+                    if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsRow(
+                        title = section.title,
+                        subtitle = section.subtitle,
+                        icon = section.icon,
+                        selected = section == selected,
+                        // In two-pane the setting opens beside the list, so no "goes somewhere" chevron
+                        showChevron = selected == null,
+                        onClick = { onOpen(section) },
+                    )
+                }
+            }
+        }
+
     }
 }
 
@@ -212,7 +260,14 @@ private fun SettingsGroup(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SettingsRow(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {
+private fun SettingsRow(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    selected: Boolean = false,
+    showChevron: Boolean = true,
+    onClick: () -> Unit,
+) {
     ListItem(
         headlineContent = { Text(title, style = MaterialTheme.typography.titleMedium) },
         supportingContent = { Text(subtitle) },
@@ -224,10 +279,12 @@ private fun SettingsRow(title: String, subtitle: String, icon: ImageVector, onCl
                 size = 40.dp,
             )
         },
-        trailingContent = {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        trailingContent = if (showChevron) {
+            { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+        } else null,
+        colors = ListItemDefaults.colors(
+            containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
         modifier = Modifier.clickable(onClick = onClick),
     )
 }

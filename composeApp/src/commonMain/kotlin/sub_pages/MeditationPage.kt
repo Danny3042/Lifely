@@ -38,8 +38,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.mmk.kmpnotifier.notification.NotifierManager
 import utils.SettingsManager
+import service.SessionNotifications
+import service.MEDITATION_FINISHED_NOTIFICATION
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
+import kotlinx.coroutines.launch
 import components.SessionLengthPicker
 import components.ui.BreathingBuddy
 import kotlinx.coroutines.delay
@@ -69,17 +73,45 @@ fun MeditationPage(
     var timeLeft by remember { mutableStateOf(totalTime) }
     val progress = timeLeft / totalTime.toFloat()
     var isRunning by remember { mutableStateOf(false) }
-    // NotifierManager may not be initialized yet on iOS startup; obtain safely.
-    val notifier = remember {
-        runCatching { NotifierManager.getLocalNotifier() }.getOrNull()
+    // Stopping, resetting or changing the length ends the session: its notification is withdrawn.
+    // (A session that finishes keeps it, so it still arrives on time.)
+    fun stopSession() {
+        isRunning = false
+        SessionNotifications.cancel(MEDITATION_FINISHED_NOTIFICATION)
+    }
+    // Leaving the page mid-session ends it too
+    val runningNow by rememberUpdatedState(isRunning)
+    DisposableEffect(Unit) {
+        onDispose { if (runningNow) SessionNotifications.cancel(MEDITATION_FINISHED_NOTIFICATION) }
     }
     var showEditDialog by remember { mutableStateOf(false) }
 
 
     LaunchedEffect(isRunning) {
-        while (isRunning && timeLeft > 0) {
-            delay(1.seconds)
-            timeLeft -= 1
+        if (!isRunning) return@LaunchedEffect
+        // Count down to a fixed finish time rather than counting ticks, so the timer is still right
+        // after the app has been in the background (where ticks stop).
+        val endAt = Clock.System.now().toEpochMilliseconds() + timeLeft * 1000L
+        // Hand the "finished" notification to the system now, so it arrives on time even if the app
+        // is in the background or the phone is locked by then
+        launch {
+            val wanted = runCatching { SettingsManager.loadNotificationsEnabled() }.getOrDefault(true)
+            if (wanted && runCatching { SessionNotifications.ensurePermission() }.getOrDefault(false)) {
+                val seconds = ((endAt - Clock.System.now().toEpochMilliseconds()) / 1000).toInt()
+                SessionNotifications.schedule(
+                    id = MEDITATION_FINISHED_NOTIFICATION,
+                    afterSeconds = seconds,
+                    title = "Meditation complete",
+                    body = "Your session has ended. Take a moment to notice how you feel.",
+                )
+            }
+        }
+        while (true) {
+            val remainingMs = endAt - Clock.System.now().toEpochMilliseconds()
+            timeLeft = ((remainingMs + 999) / 1000).toInt().coerceAtLeast(0)
+            if (timeLeft == 0) break
+            // Wake just after the next whole second
+            delay((remainingMs % 1000).coerceAtLeast(1) + 5)
         }
         if (timeLeft == 0 && isRunning) {
             isRunning = false
@@ -91,16 +123,7 @@ fun MeditationPage(
                     duration = totalTime / 60
                 )
             )
-            // Send notification only if user has enabled notifications
-            runCatching {
-                val enabled = SettingsManager.loadNotificationsEnabled()
-                if (enabled) {
-                    notifier?.notify(
-                        title = "Meditation Timer Finished",
-                        body = "Your meditation session has ended. Take a moment to reflect.",
-                    )
-                }
-            }
+            // The "finished" notification was scheduled with the system when the session started
             // Prefer explicit meditation-complete navigation (Reflection page).
             // Call the completion handler if provided; otherwise fall back to navigating to insights.
             if (onMeditationComplete != null) {
@@ -124,7 +147,7 @@ fun MeditationPage(
                 totalTime = minutes * 60
                 timeLeft = totalTime
                 showEditDialog = false
-                isRunning = false
+                stopSession()
             }
         )
     }
@@ -232,7 +255,7 @@ fun MeditationPage(
         ) {
             FilledTonalIconButton(
                 onClick = {
-                    isRunning = false
+                    stopSession()
                     timeLeft = totalTime
                 },
                 modifier = Modifier.size(64.dp),
@@ -243,7 +266,7 @@ fun MeditationPage(
 
             LargeFloatingActionButton(
                 onClick = {
-                    if (isRunning) isRunning = false else if (timeLeft > 0) isRunning = true
+                    if (isRunning) stopSession() else if (timeLeft > 0) isRunning = true
                 },
                 // Red while running so Stop is unmistakable
                 containerColor = if (isRunning) Color(0xFFE5484D) else sky.accent,

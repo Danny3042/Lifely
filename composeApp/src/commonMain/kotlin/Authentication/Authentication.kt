@@ -1,5 +1,6 @@
 package Authentication
 
+import components.ui.AppLogo
 import components.ui.ContentWidth
 import components.ui.centeredMaxWidth
 import androidx.compose.ui.text.style.TextAlign
@@ -247,46 +248,40 @@ class Authentication {
                         .centeredMaxWidth(ContentWidth.Form)
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
+                        .padding(horizontal = 24.dp, vertical = 32.dp),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    TextField(
+                    AuthHeader(title = "Create your account", subtitle = "Start building calmer habits, one day at a time")
+
+                    OutlinedTextField(
                         value = userEmail,
                         onValueChange = { userEmail = it },
-                        placeholder = { Text("Email address") },
-                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
-                        keyboardActions = onDoneHideKeyboardAction(onDone = {}),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surface,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                            cursorColor = MaterialTheme.colorScheme.onSurface,
-                            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                            unfocusedIndicatorColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                        )
+                        label = { Text("Email") },
+                        leadingIcon = { Icon(Icons.Outlined.Email, contentDescription = null) },
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.medium,
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+                        modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    TextField(
+                    OutlinedTextField(
                         value = userPassword,
                         onValueChange = { userPassword = it },
-                        placeholder = { Text("Password") },
-                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
+                        label = { Text("Password") },
+                        leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null) },
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.medium,
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                         keyboardActions = onDoneHideKeyboardAction(onDone = {}),
                         visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
-                            val image =
-                                if (isPasswordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
+                            val image = if (isPasswordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
                             IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
                                 Icon(image, contentDescription = "Toggle password visibility")
                             }
                         },
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surface,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                            cursorColor = MaterialTheme.colorScheme.onSurface,
-                            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                            unfocusedIndicatorColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                        ),
+                        modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     Button(onClick = {
@@ -308,11 +303,14 @@ class Authentication {
 
                             }
                         }
-                    }) {
-                        Text("Sign up")
+                    }, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                        Text("Create account", style = MaterialTheme.typography.titleMedium)
                     }
-                    OutlinedButton(onClick = { navController.navigate(LoginScreen) }) {
-                        Text("Login")
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Already have an account?", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(onClick = { navController.navigate(LoginScreen) }) { Text("Sign in") }
                     }
                 }
             }
@@ -329,6 +327,8 @@ class Authentication {
         var message by remember { mutableStateOf<String?>(null) }
         val auth = Firebase.auth
 
+        var sent by remember { mutableStateOf(false) }
+
         Box(
             modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
         ) {
@@ -336,42 +336,69 @@ class Authentication {
                 modifier = Modifier
                     .centeredMaxWidth(ContentWidth.Form)
                     .fillMaxSize()
-                    .padding(16.dp),
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
                 val keyboardController = LocalSoftwareKeyboardController.current
-                TextField(
+                AuthHeader(
+                    title = "Reset your password",
+                    subtitle = "Enter your email and we'll send you a link to choose a new one",
+                )
+
+                // Result of the last attempt: a confirmation, or what went wrong
+                message?.let {
+                    if (sent) {
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        ) {
+                            Text(it, modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium)
+                        }
+                    } else {
+                        AuthError(it)
+                    }
+                }
+
+                OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
-                    placeholder = { Text("Email address") },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
+                    label = { Text("Email") },
+                    leadingIcon = { Icon(Icons.Outlined.Email, contentDescription = null) },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.medium,
+                    keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
                     keyboardActions = onDoneHideKeyboardAction(onDone = {}),
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(24.dp))
                 Button(
                     onClick = {
+                        keyboardController?.hide()
                         scope.launch {
-                            resetPassword(email).collect { result ->
+                            resetPassword(email.trim()).collect { result ->
+                                sent = result.isSuccess
                                 message = if (result.isSuccess) {
-                                    "Reset email sent successfully."
+                                    "Check your inbox: we've sent a reset link to ${email.trim()}."
                                 } else {
-                                    "Failed to send reset email: ${result.exceptionOrNull()?.message}"
+                                    "Couldn't send the reset email: ${result.exceptionOrNull()?.message}"
                                 }
                             }
                         }
-                    }
+                    },
+                    enabled = email.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
                 ) {
-                    Text("Send Reset Email")
+                    Text(if (sent) "Send again" else "Send reset link", style = MaterialTheme.typography.titleMedium)
                 }
-                message?.let {
-                    Text(it, color = MaterialTheme.colorScheme.error)
-                }
-                OutlinedButton(onClick = {
-                    navController.navigate(LoginScreen)
-                }) {
-                    Text("Login")
+
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Remembered it?", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick = { navController.navigate(LoginScreen) }) { Text("Sign in") }
                 }
             }
         }
@@ -392,16 +419,8 @@ class Authentication {
 
 @Composable
 private fun AuthHeader(title: String, subtitle: String) {
-    Surface(
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        modifier = Modifier.size(80.dp),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Spa, contentDescription = null, modifier = Modifier.size(40.dp))
-        }
-    }
+    // The app's own icon (simplified), so sign-in looks like the app you just opened
+    AppLogo(size = 80.dp)
     Spacer(modifier = Modifier.height(24.dp))
     Text(title, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
     Spacer(modifier = Modifier.height(4.dp))

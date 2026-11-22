@@ -1,3 +1,5 @@
+import androidx.compose.runtime.LaunchedEffect
+import service.DailyReminders
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,6 +17,10 @@ fun App() {
     // App-wide dark mode state (shared via expect/actual PlatformApp if needed)
     var appDarkMode by remember { mutableStateOf(false) }
     var appUseSystem by remember { mutableStateOf(true) }
+
+    // Daily meditation / check-in reminders: re-apply them at launch (some phones drop scheduled
+    // alarms after a restart)
+    LaunchedEffect(Unit) { runCatching { DailyReminders.sync() } }
 
     PlatformApp(
         showBottomBar = showBottomBar,

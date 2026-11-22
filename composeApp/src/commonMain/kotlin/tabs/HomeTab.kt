@@ -10,6 +10,8 @@ import cafe.adriel.voyager.navigator.tab.TabOptions
 import pages.ChartsPageScreen
 import pages.HomePage
 import sub_pages.MEDITATION_PAGE_ROUTE
+import sub_pages.CHECK_IN_PAGE_ROUTE
+import sub_pages.CHECK_IN_CALENDAR_ROUTE
 import utils.HealthKitService
 import utils.HealthKitServiceImpl
 import utils.iOSHealthKitManager
@@ -49,6 +51,14 @@ object HomeTab : Tab {
             },
             onChartClick = {
                 PlatformBridge.requestedRoute = ChartsPageScreen
+                PlatformBridge.requestedRouteSignal = PlatformBridge.requestedRouteSignal + 1
+            },
+            onCheckIn = {
+                PlatformBridge.requestedRoute = CHECK_IN_PAGE_ROUTE
+                PlatformBridge.requestedRouteSignal = PlatformBridge.requestedRouteSignal + 1
+            },
+            onCheckInCalendar = {
+                PlatformBridge.requestedRoute = CHECK_IN_CALENDAR_ROUTE
                 PlatformBridge.requestedRouteSignal = PlatformBridge.requestedRouteSignal + 1
             }
         )

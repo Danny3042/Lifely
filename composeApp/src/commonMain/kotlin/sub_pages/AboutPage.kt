@@ -1,5 +1,6 @@
 package sub_pages
 
+import components.ui.AppLogo
 import components.ui.bottomBarOverlap
 import components.ui.topBarOverlap
 import androidx.compose.foundation.layout.Arrangement
@@ -56,7 +57,12 @@ private data class AboutItem(val icon: ImageVector, val title: String, val subti
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AboutPage(navController: NavController, versionNumber: String) {
+fun AboutPage(
+    navController: NavController,
+    versionNumber: String,
+    /** Shown inside another page (the Profile detail pane): no back bar of its own. */
+    embedded: Boolean = false,
+) {
     val features = listOf(
         AboutItem(Icons.Outlined.SelfImprovement, "Guided meditation", "A calming timer with streaks and weekly insights"),
         AboutItem(Icons.Outlined.Checklist, "Habit coaching", "Build healthy habits with practical tips"),
@@ -76,7 +82,7 @@ fun AboutPage(navController: NavController, versionNumber: String) {
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Column(modifier = Modifier.fillMaxSize()) {
-            if (isAndroid()) {
+            if (isAndroid() && !embedded) {
                 TopAppBar(
                     title = { Text("About") },
                     navigationIcon = {
@@ -140,13 +146,8 @@ private fun AppHeader(versionNumber: String) {
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        IconBadge(
-            icon = Icons.Filled.Spa,
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            size = 88.dp,
-            shape = MaterialTheme.shapes.extraLarge,
-        )
+        // The app's own icon (simplified)
+        AppLogo(size = 88.dp)
         Spacer(Modifier.height(16.dp))
         Text("MyHealthBuddy", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(4.dp))

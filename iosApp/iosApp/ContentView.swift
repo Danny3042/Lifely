@@ -298,6 +298,9 @@ struct SharedComposeHost: View {
                     Button(action: handleBackButton) {
                         Label("Back", systemImage: "chevron.left")
                     }
+                    // Black in light mode, white in dark mode (rather than the app's teal accent)
+                    .tint(.primary)
+                    .foregroundStyle(.primary)
                     .transition(.opacity.combined(with: .scale))
                 }
             }
@@ -477,6 +480,8 @@ struct ContentView: View {
     /// Compose asks for this on screens that draw under the bars (the meditation sky).
     @State private var composeEdgeToEdge: Bool = false
     @State private var composeHidesNavigationBar: Bool = false
+    /// Where the tab bar is, in the Home page's coordinates (for placing the add button)
+    @State private var tabBarFrame: CGRect = .zero
     @State private var safeAreaBottom: CGFloat = 0
      // Ensure we only sync persisted color scheme once at first appearance to avoid overwriting
      @State private var didInitColorScheme: Bool = false
@@ -561,15 +566,29 @@ struct ContentView: View {
                 // floating tab bar on iPhone, and clear of the tab bar, fold and camera on iPhone Duo
                 // wherever the system puts the bar. The tab bar only shows once past sign-in and
                 // onboarding, so it doubles as the signed-in check.
-                .overlay(alignment: .bottomTrailing) {
-                    if showsAddButton && selectedTab == 0 && !composeHidesTabBar && !composeEdgeToEdge {
-                        addCardButton
-                            .padding(.trailing, 20)
-                            .padding(.bottom, 20)
+                .overlay {
+                    if showsAddButton && selectedTab == 0 && !composeHidesTabBar && !composeEdgeToEdge && !router.showBackButton {
+                        GeometryReader { _ in
+                            if tabBarFrame.height > tabBarFrame.width {
+                                // Tab bar standing on the side (iPhone Duo outer display, landscape):
+                                // the button sits on top of it, in the same column
+                                addCardButton
+                                    .position(x: tabBarFrame.midX, y: tabBarFrame.minY - 12 - 28)
+                            } else {
+                                addCardButton
+                                    .padding(.trailing, 20)
+                                    .padding(.bottom, 20)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                            }
+                        }
+                        .background(TabBarFrameReader(frame: $tabBarFrame))
                     }
                 }
                 .navigationTitle(composeEdgeToEdge ? "" : tabTitle(for: selectedTab))
-                .navigationBarTitleDisplayMode(composeEdgeToEdge ? .inline : .large)
+                // Always large: SwiftUI doesn't reliably apply a display-mode change on a stack that's
+                // already showing, and would leave the title stuck small after the meditation timer.
+                // That full-screen page just shows no title text instead.
+                .navigationBarTitleDisplayMode(.large)
                 .toolbar(composeHidesNavigationBar ? .hidden : .visible, for: .navigationBar)
                 // The back button comes from SharedComposeHost's own toolbar
         }
@@ -1451,6 +1470,7 @@ private struct NavigationBarMinimization: ViewModifier {
 
 private struct ComposeScrollMirror: View {
     @State private var driver = MirrorScrollDriver()
+    @Environment(\.layoutDirection) private var layoutDirection
     private let offsets = NotificationCenter.default.publisher(for: Notification.Name("ComposeScrollOffset"))
 
     var body: some View {
@@ -1462,11 +1482,21 @@ private struct ComposeScrollMirror: View {
         }
         .scrollIndicators(.hidden)
         .scrollEdgeEffectSoft()
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.safeAreaInsets.top
-        } action: { top in
-            // Read by Compose as state, so it's there whenever Compose looks
-            PlatformBridge.shared.topBarInset = Double(top)
+        .onGeometryChange(for: EdgeInsets.self) { proxy in
+            proxy.safeAreaInsets
+        } action: { insets in
+            // Read by Compose as state, so it's there whenever Compose looks. The page itself runs
+            // under every bar, so this is how it learns what to keep clear of: the navigation bar
+            // at the top and, on iPhone Duo, the side tab bar, camera and fold at the sides.
+            let rtl = layoutDirection == .rightToLeft
+            driver.safeTop = insets.top
+            PlatformBridge.shared.barLeftInset = Double(rtl ? insets.trailing : insets.leading)
+            PlatformBridge.shared.barRightInset = Double(rtl ? insets.leading : insets.trailing)
+            driver.apply()
+        }
+        // The full-screen meditation timer has its own bar layout: don't learn the resting top from it
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ComposeEdgeToEdge"))) { note in
+            driver.paused = (note.userInfo?["enabled"] as? Bool) ?? false
             driver.apply()
         }
         .onReceive(offsets) { note in
@@ -1482,6 +1512,8 @@ private struct ComposeScrollMirror: View {
 private final class MirrorScrollDriver {
     weak var scrollView: UIScrollView?
     var scrolled: CGFloat = 0
+    /// The safe area's top (status, navigation and tab bars) as SwiftUI reports it
+    var safeTop: CGFloat = 0
     /// The top inset with the bar fully expanded (large title): offsets are measured from here
     private var restTop: CGFloat = 0
     private var width: CGFloat = 0
@@ -1494,15 +1526,28 @@ private final class MirrorScrollDriver {
         apply()
     }
 
+    /// True while a full-screen page (the meditation timer) is showing
+    var paused = false
+
     func apply() {
         guard let scrollView else { return }
         let inset = scrollView.adjustedContentInset.top
+        if paused {
+            // Sit at the top without learning anything from this layout
+            let target = CGPoint(x: scrollView.contentOffset.x, y: -inset)
+            if scrollView.contentOffset != target { scrollView.setContentOffset(target, animated: false) }
+            return
+        }
         // A new size (rotation, iPhone Duo) can change the bar, so measure again
         if scrollView.bounds.width != width {
             width = scrollView.bounds.width
             restTop = inset
         }
         if scrolled == 0 { restTop = max(restTop, inset) }
+        // Tell Compose where its content starts: the scroll view's own top inset, which (unlike the
+        // safe area) also covers the large title where iPadOS lays it out below the top tab bar
+        let top = Double(max(restTop, safeTop))
+        if PlatformBridge.shared.topBarInset != top { PlatformBridge.shared.topBarInset = top }
         let target = CGPoint(x: scrollView.contentOffset.x, y: scrolled - restTop)
         if scrollView.contentOffset != target {
             scrollView.setContentOffset(target, animated: false)
@@ -1548,6 +1593,81 @@ private extension View {
             self.scrollEdgeEffectStyle(.soft, for: .top)
         } else {
             self
+        }
+    }
+}
+
+
+/// Reports the tab bar's frame in this view's coordinates, or .zero when there isn't one showing.
+/// Re-measured on layout and just after appearing, since the bar settles after the first frame and
+/// moves when iPhone Duo opens, closes or rotates.
+private struct TabBarFrameReader: UIViewRepresentable {
+    @Binding var frame: CGRect
+
+    func makeUIView(context: Context) -> ReaderView {
+        let view = ReaderView()
+        view.isUserInteractionEnabled = false
+        view.onChange = { if frame != $0 { frame = $0 } }
+        return view
+    }
+
+    func updateUIView(_ uiView: ReaderView, context: Context) {
+        uiView.onChange = { if frame != $0 { frame = $0 } }
+        uiView.measureSoon()
+    }
+
+    final class ReaderView: UIView {
+        var onChange: ((CGRect) -> Void)?
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            measureSoon()
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            measureSoon()
+            for delay in [0.3, 1.0] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.measure() }
+            }
+        }
+
+        func measureSoon() {
+            DispatchQueue.main.async { [weak self] in self?.measure() }
+        }
+
+        /// Finds the tab bar the user sees. When it stands on the side (iPhone Duo's outer display,
+        /// landscape) UITabBar itself is an empty full-height column and the pill is drawn inside
+        /// the tab view's floating bar, so look for the tightest tall, narrow, visible view lying
+        /// past the trailing edge of the page's safe area. Nothing found means the bar is at the
+        /// bottom, where the normal placement already works.
+        func measure() {
+            guard window != nil else { return }
+            var responder: UIResponder? = self.next
+            var container: UIView?
+            while let current = responder {
+                if let tabs = current as? UITabBarController { container = tabs.view; break }
+                responder = current.next
+            }
+            guard let container else { onChange?(.zero); return }
+            let width = bounds.width
+            var best: CGRect = .zero
+            func walk(_ view: UIView, depth: Int) {
+                guard depth < 20, !view.isHidden, view.alpha > 0.01 else { return }
+                if view !== self, !(view is UITabBar) {
+                    let frame = view.convert(view.bounds, to: self)
+                    let tallAndNarrow = frame.height >= 120 && frame.width >= 30 && frame.width <= 90
+                        && frame.height > frame.width * 2
+                    let onTrailingSide = frame.minX >= width - 20
+                    if tallAndNarrow && onTrailingSide
+                        && (best == .zero || frame.width * frame.height < best.width * best.height) {
+                        best = frame
+                    }
+                }
+                for sub in view.subviews { walk(sub, depth: depth + 1) }
+            }
+            walk(container, depth: 0)
+            onChange?(best)
         }
     }
 }

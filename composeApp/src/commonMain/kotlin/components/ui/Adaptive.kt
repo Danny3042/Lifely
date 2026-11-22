@@ -138,3 +138,17 @@ val LocalTopBarOverlap = compositionLocalOf { 0.dp }
 /** See [LocalTopBarOverlap]. */
 @Composable
 fun topBarOverlap(): Dp = LocalTopBarOverlap.current
+
+
+/**
+ * The app's appearance setting and how to change it, for screens that show the Appearance controls
+ * outside its own route (the Profile page's detail pane on large screens). Null where not provided.
+ */
+data class AppearanceControls(
+    val isDarkMode: Boolean,
+    val onDarkModeToggle: (Boolean) -> Unit,
+    val useSystemDefault: Boolean,
+    val onUseSystemDefaultToggle: (Boolean) -> Unit,
+)
+
+val LocalAppearanceControls = compositionLocalOf<AppearanceControls?> { null }
