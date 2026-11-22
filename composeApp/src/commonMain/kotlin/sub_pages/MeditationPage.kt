@@ -11,6 +11,12 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -40,6 +46,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import utils.SettingsManager
 import service.SessionNotifications
+import service.MeditationLiveActivity
+import platform.PlatformBridge
 import service.MEDITATION_FINISHED_NOTIFICATION
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberUpdatedState
@@ -58,7 +66,7 @@ import kotlinx.datetime.toLocalDateTime
 // Must not be (or start with) "meditation": that's the Meditate tab's route, and the iOS host
 // matches tab routes by prefix, so sharing it made this page count as a tab with no back button.
 const val MEDITATION_PAGE_ROUTE = "meditate_timer"
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun MeditationPage(
     onBack: (() -> Unit)? = null,
@@ -69,7 +77,8 @@ fun MeditationPage(
     // Use provided view model if given; otherwise use platform-appropriate creation.
     val insightsViewModel: InsightsViewModel = insightsViewModelParam ?: viewModel { InsightsViewModel() }
 
-    var totalTime by remember { mutableStateOf(5 * 60) }
+    // Opens at the length you used last time
+    var totalTime by remember { mutableStateOf(loadPreferredMinutes() * 60) }
     var timeLeft by remember { mutableStateOf(totalTime) }
     val progress = timeLeft / totalTime.toFloat()
     var isRunning by remember { mutableStateOf(false) }
@@ -78,11 +87,33 @@ fun MeditationPage(
     fun stopSession() {
         isRunning = false
         SessionNotifications.cancel(MEDITATION_FINISHED_NOTIFICATION)
+        MeditationLiveActivity.end(completed = false)
     }
     // Leaving the page mid-session ends it too
     val runningNow by rememberUpdatedState(isRunning)
     DisposableEffect(Unit) {
-        onDispose { if (runningNow) SessionNotifications.cancel(MEDITATION_FINISHED_NOTIFICATION) }
+        onDispose {
+            if (runningNow) {
+                SessionNotifications.cancel(MEDITATION_FINISHED_NOTIFICATION)
+                MeditationLiveActivity.end(completed = false)
+            }
+        }
+    }
+    // "Start a meditation" from Siri or Shortcuts: set the length and go
+    val startRequest = PlatformBridge.meditationStartMinutes
+    LaunchedEffect(startRequest) {
+        val minutes = startRequest ?: return@LaunchedEffect
+        PlatformBridge.meditationStartMinutes = null
+        if (isRunning) stopSession()
+        totalTime = minutes.coerceIn(1, 180) * 60
+        timeLeft = totalTime
+        isRunning = true
+    }
+    // The Stop button on the Live Activity
+    val stopSignal = PlatformBridge.meditationStopSignal
+    val initialStopSignal = remember { stopSignal }
+    LaunchedEffect(stopSignal) {
+        if (stopSignal != initialStopSignal && isRunning) stopSession()
     }
     var showEditDialog by remember { mutableStateOf(false) }
 
@@ -92,6 +123,8 @@ fun MeditationPage(
         // Count down to a fixed finish time rather than counting ticks, so the timer is still right
         // after the app has been in the background (where ticks stop).
         val endAt = Clock.System.now().toEpochMilliseconds() + timeLeft * 1000L
+        // The countdown in the Dynamic Island / on the Lock Screen
+        MeditationLiveActivity.start(endAtEpochMillis = endAt, totalSeconds = totalTime)
         // Hand the "finished" notification to the system now, so it arrives on time even if the app
         // is in the background or the phone is locked by then
         launch {
@@ -115,6 +148,7 @@ fun MeditationPage(
         }
         if (timeLeft == 0 && isRunning) {
             isRunning = false
+            MeditationLiveActivity.end(completed = true)
             // Add session to shared state
             val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
             insightsViewModel.addSession(
@@ -148,6 +182,7 @@ fun MeditationPage(
                 timeLeft = totalTime
                 showEditDialog = false
                 stopSession()
+                savePreferredMinutes(minutes)
             }
         )
     }
@@ -289,6 +324,40 @@ fun MeditationPage(
         }
     }
 
+    // The usual lengths, one tap each (hidden while a session runs). The timer button covers the rest.
+    val lengthChips: @Composable () -> Unit = {
+        AnimatedVisibility(visible = !isRunning, enter = fadeIn(), exit = fadeOut()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                QUICK_LENGTHS.forEach { mins ->
+                    val selected = totalTime == mins * 60
+                    FilterChip(
+                        selected = selected,
+                        onClick = {
+                            stopSession()
+                            totalTime = mins * 60
+                            timeLeft = totalTime
+                            savePreferredMinutes(mins)
+                        },
+                        label = { Text("$mins min", style = MaterialTheme.typography.labelLarge) },
+                        modifier = Modifier.heightIn(min = 40.dp),
+                        shape = CircleShape,
+                        border = null,
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = sky.glass,
+                            labelColor = sky.onSky,
+                            selectedContainerColor = sky.accent,
+                            selectedLabelColor = sky.onAccent,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
     val tip: @Composable () -> Unit = {
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -332,6 +401,7 @@ fun MeditationPage(
                     ) {
                         header()
                         controls()
+                        lengthChips()
                         tip()
                     }
                 }
@@ -351,7 +421,9 @@ fun MeditationPage(
                     ring()
                     Spacer(Modifier.height(40.dp))
                     controls()
-                    Spacer(Modifier.height(40.dp))
+                    Spacer(Modifier.height(24.dp))
+                    lengthChips()
+                    Spacer(Modifier.height(24.dp))
                     tip()
                 }
             }
@@ -367,4 +439,14 @@ fun MeditationPage(
           }
         }
     }
+}
+/** One-tap session lengths on the meditation page */
+private val QUICK_LENGTHS = listOf(1, 3, 5, 10, 15, 20)
+private const val PREFERRED_LENGTH_FILE = "meditation_length.txt"
+
+private fun loadPreferredMinutes(): Int =
+    runCatching { platform.readTextFile(PREFERRED_LENGTH_FILE).trim().toInt() }.getOrNull()?.coerceIn(1, 120) ?: 5
+
+private fun savePreferredMinutes(minutes: Int) {
+    runCatching { platform.writeTextFile(PREFERRED_LENGTH_FILE, minutes.toString()) }
 }

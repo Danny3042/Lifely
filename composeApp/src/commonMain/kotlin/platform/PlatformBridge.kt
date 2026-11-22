@@ -15,6 +15,11 @@ object PlatformBridge {
     var requestedRoute: String? by mutableStateOf(null)
     var requestedRouteSignal: Long by mutableStateOf(0L)
 
+    /** Siri / Shortcuts asked to start a meditation of this many minutes (the page clears it). */
+    var meditationStartMinutes: Int? by mutableStateOf(null)
+    /** Bumped when the Live Activity's Stop button is pressed. */
+    var meditationStopSignal: Long by mutableStateOf(0L)
+
     // Safe area insets in point units — updated by Swift via the generated ObjC/Swift bridge.
     var safeAreaTop: Double by mutableStateOf(0.0)
     var safeAreaBottom: Double by mutableStateOf(0.0)

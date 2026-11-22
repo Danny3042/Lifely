@@ -80,7 +80,10 @@ fun YourMainNavHost(
 
         val routesWithHiddenNav = setOf("Login", "SignUp", "ResetPassword", "Onboarding")
 
-        val isMainTab = mainTabRoutes.any { currentRoute.startsWith(it) }
+        // Exact names (or with arguments): "meditation_reflection" starts with "meditation" but is a
+        // pushed page, and matching by prefix hid its back button
+        val isMainTab = currentRoute in mainTabRoutes ||
+            mainTabRoutes.any { currentRoute.startsWith("$it/") || currentRoute.startsWith("$it?") }
         val shouldHideNav = routesWithHiddenNav.contains(currentRoute)
         // Sub pages keep the tab bar (tapping a tab closes them); sign-in and onboarding hide it.
         val shouldHideTab = shouldHideNav
@@ -91,6 +94,8 @@ fun YourMainNavHost(
             NSOperationQueue.mainQueue.addOperationWithBlock {
                 val userInfo: Map<Any?, Any?> = mapOf(
                     "route" to currentRoute,
+                    // The page's own name for the navigation bar ("" keeps the tab's name)
+                    "title" to (iosPageTitle(currentRoute) ?: ""),
                     "shouldShowBackButton" to shouldShowBackButton,
                     "shouldHideTab" to shouldHideTab,
                     "shouldHideNavigationBar" to shouldHideNav

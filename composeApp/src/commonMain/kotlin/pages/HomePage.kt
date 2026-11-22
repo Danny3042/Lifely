@@ -14,6 +14,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Mood
@@ -111,10 +113,12 @@ fun HomePage(
     onCheckInCalendar: () -> Unit = {},
 ) {
     LaunchedEffect(Unit) { runCatching { MoodCheckInStore.load() } }
-    var loading by remember { mutableStateOf(true) }
+    // The loading placeholders show once per app session: replaying them on every return to Home
+    // made quick tab switching flash grey blocks
+    var loading by remember { mutableStateOf(!homeShownThisSession) }
     // Custom cards added by the + button
-    val customCards = remember { mutableStateListOf<Pair<Int, String>>() }
-    var nextCardId by remember { mutableStateOf(0) }
+    // Shortcuts pinned with the + button, kept on the device
+    val shortcuts = remember { mutableStateListOf<HomeShortcut>().apply { addAll(loadHomeShortcuts()) } }
     var showAddDialog by remember { mutableStateOf(false) }
 
     // Native iOS host posts "ComposeShowAddDialog" to open the add dialog from its own FAB.
@@ -132,9 +136,9 @@ fun HomePage(
                 // host may not support HealthKit
             }
         }
-        loading = true
-        delay(700L)
+        if (!homeShownThisSession) delay(700L)
         loading = false
+        homeShownThisSession = true
     }
 
     // Permission status (Android only)
@@ -160,13 +164,10 @@ fun HomePage(
     val weekMinutes = totals.sum().toInt()
     val sessionsCount = sessionsPerDay.sumOf { it.size }
     val today = try { Clock.System.todayIn(TimeZone.currentSystemDefault()) } catch (_: Throwable) { null }
-    val todayIndex = today?.let { (it.dayOfWeek.ordinal + 6) % 7 } ?: 0
+    val todayIndex = today?.let { it.dayOfWeek.ordinal } ?: 0 // Monday first
     val todayMinutes = totals.getOrNull(todayIndex)?.toInt() ?: 0
-    var streakDays = 0
-    for (offset in 0 until 7) {
-        val idx = (todayIndex - offset + 7) % 7
-        if ((sessionsPerDay.getOrNull(idx) ?: emptyList()).isNotEmpty()) streakDays++ else break
-    }
+    // Days in a row from the saved history (the week view alone reset the streak every Monday)
+    val streakDays = remember(sessionsPerDay) { runCatching { utils.MeditationHistory.streakDays() }.getOrDefault(0) }
 
     // Recent activity: latest meditation session + completed habits
     data class RecentItem(val id: String, val label: String, val subtitle: String, val autoCompleted: Boolean)
@@ -192,10 +193,11 @@ fun HomePage(
 
     if (showAddDialog) {
         AddCardDialog(
+            pinned = shortcuts.toSet(),
             onDismiss = { showAddDialog = false },
-            onAdd = { title ->
-                customCards.add(nextCardId to title)
-                nextCardId += 1
+            onAdd = { shortcut ->
+                if (shortcut !in shortcuts) shortcuts.add(shortcut)
+                saveHomeShortcuts(shortcuts)
                 showAddDialog = false
             }
         )
@@ -302,22 +304,35 @@ fun HomePage(
     // Shortcuts and recent activity
     val activitySection: LazyListScope.() -> Unit = {
             // User-added shortcut cards
-            if (customCards.isNotEmpty()) {
+            if (shortcuts.isNotEmpty()) {
                 item { SectionHeader("Shortcuts") }
-                items(customCards, key = { it.first }) { (_, title) ->
-                    val (icon, subtitle, action) = when {
-                        title.contains("Meditation", true) -> Triple(Icons.Filled.PlayArrow, "Start a session", onNavigateMeditate)
-                        title.contains("Habit", true) -> Triple(Icons.AutoMirrored.Filled.List, "Open habits", onNavigateHabits)
-                        else -> Triple(Icons.Filled.Insights, "See your trends", onChartClick)
+                items(shortcuts.toList(), key = { it.name }) { shortcut ->
+                    val action = when (shortcut) {
+                        HomeShortcut.Meditate -> onNavigateMeditate
+                        HomeShortcut.Habits -> onNavigateHabits
+                        HomeShortcut.Trends -> onChartClick
+                        HomeShortcut.CheckIn -> onCheckIn
+                        HomeShortcut.Calendar -> onCheckInCalendar
                     }
                     ListRowCard(
-                        title = title,
-                        subtitle = subtitle,
-                        icon = icon,
+                        title = shortcut.title,
+                        subtitle = shortcut.subtitle,
+                        icon = shortcut.icon,
                         iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         iconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         onClick = action,
-                        trailing = { Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                        trailing = {
+                            androidx.compose.material3.IconButton(onClick = {
+                                shortcuts.remove(shortcut)
+                                saveHomeShortcuts(shortcuts)
+                            }) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = "Remove ${shortcut.title} shortcut",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        },
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                 }
@@ -456,7 +471,7 @@ private fun TodayHeroCard(todayMinutes: Int, onStart: () -> Unit) {
             Spacer(Modifier.height(20.dp))
             Button(
                 onClick = onStart,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                 contentPadding = ButtonDefaults.ContentPadding,
             ) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
@@ -503,24 +518,54 @@ private fun WeekTrendCard(totals: List<Float>, onClick: () -> Unit) {
 }
 
 @Composable
-private fun AddCardDialog(onDismiss: () -> Unit, onAdd: (String) -> Unit) {
+private fun AddCardDialog(pinned: Set<HomeShortcut>, onDismiss: () -> Unit, onAdd: (HomeShortcut) -> Unit) {
+    val allPinned = pinned.size == HomeShortcut.entries.size
     ExpressiveDialog(
         onDismissRequest = onDismiss,
         title = "Add a shortcut",
         icon = Icons.Filled.Add,
-        supportingText = "Pin a shortcut to your Home page.",
+        supportingText = if (allPinned) "Every shortcut is already on Home. Remove one with its ✕." else "Pin a shortcut to your Home page. Remove it any time with its ✕.",
         dismissText = "Close",
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(
-                Triple("Meditation shortcut", Icons.Filled.PlayArrow, "Start a session"),
-                Triple("Habit shortcut", Icons.AutoMirrored.Filled.List, "Open habits"),
-                Triple("Charts shortcut", Icons.Filled.Insights, "See your trends"),
-            ).forEach { (title, icon, subtitle) ->
-                ListRowCard(title = title, subtitle = subtitle, icon = icon, onClick = { onAdd(title) })
+            HomeShortcut.entries.forEach { shortcut ->
+                val isPinned = shortcut in pinned
+                val onClick: (() -> Unit)? = if (isPinned) null else { { onAdd(shortcut) } }
+                val check: (@Composable androidx.compose.foundation.layout.RowScope.() -> Unit)? = if (isPinned) {
+                    { Icon(Icons.Filled.CheckCircle, contentDescription = "Already on Home", tint = MaterialTheme.colorScheme.primary) }
+                } else null
+                ListRowCard(
+                    title = shortcut.title,
+                    subtitle = if (isPinned) "On Home" else shortcut.subtitle,
+                    icon = shortcut.icon,
+                    onClick = onClick,
+                    trailing = check,
+                )
             }
         }
     }
+}
+
+/** Home has been on screen since the app started (see `loading` in HomePage). */
+private var homeShownThisSession = false
+
+/** The shortcuts the + button can pin to Home. */
+enum class HomeShortcut(val title: String, val subtitle: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    Meditate("Meditate", "Start a session", Icons.Filled.PlayArrow),
+    CheckIn("Check in", "How are you feeling?", Icons.Filled.Mood),
+    Calendar("Check-in calendar", "Your past check-ins", Icons.Filled.CalendarMonth),
+    Habits("Habits", "Open your habits", Icons.AutoMirrored.Filled.List),
+    Trends("Trends", "See your week", Icons.Filled.Insights),
+}
+
+private const val HOME_SHORTCUTS_FILE = "home_shortcuts.txt"
+
+private fun loadHomeShortcuts(): List<HomeShortcut> =
+    runCatching { platform.readTextFile(HOME_SHORTCUTS_FILE) }.getOrDefault("")
+        .split(",").mapNotNull { name -> HomeShortcut.entries.firstOrNull { it.name == name.trim() } }.distinct()
+
+private fun saveHomeShortcuts(shortcuts: List<HomeShortcut>) {
+    runCatching { platform.writeTextFile(HOME_SHORTCUTS_FILE, shortcuts.joinToString(",") { it.name }) }
 }
 
 /** Fade + slide entrance used for the Home sections once data has loaded. */

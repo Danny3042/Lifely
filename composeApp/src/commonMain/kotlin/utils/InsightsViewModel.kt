@@ -13,7 +13,10 @@ data class Session(val time: String, val duration: Int)
 class InsightsViewModel : ViewModel() {
     companion object {
         // Shared backing store so multiple ViewModel instances observe the same data
-        private val SHARED_SESSIONS = mutableStateOf(List(7) { emptyList<Session>() })
+        // Starts from the sessions saved on the device (this week, Monday first)
+        private val SHARED_SESSIONS = mutableStateOf(
+            runCatching { MeditationHistory.thisWeek() }.getOrDefault(List(7) { emptyList<Session>() })
+        )
     }
 
     // Instance reference to the shared state
@@ -22,6 +25,8 @@ class InsightsViewModel : ViewModel() {
 
 
     fun addSession(session: Session) {
+        // Keep it, so it's still there after a restart and the widgets can show it
+        runCatching { MeditationHistory.add(SessionRecord(Clock.System.now().toEpochMilliseconds(), session.duration)) }
         val currentDayIndex = getTodayIndex()
         _sessionsPerDay.value = _sessionsPerDay.value.toMutableList().also { list ->
             list[currentDayIndex] = list[currentDayIndex] + session
@@ -32,6 +37,7 @@ class InsightsViewModel : ViewModel() {
 
         // Compute totals and publish to platform chart bridge so native views can update
         publishTotalsToPlatform()
+        service.WidgetSync.refresh()
     }
 
     private fun publishTotalsToPlatform() {
@@ -45,6 +51,7 @@ class InsightsViewModel : ViewModel() {
 
     private fun getTodayIndex(): Int {
         val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
-        return (today.dayOfWeek.ordinal + 6) % 7
+        // Monday first (kotlinx-datetime numbers Monday as 0), matching the Mon…Sun labels
+        return today.dayOfWeek.ordinal
     }
 }

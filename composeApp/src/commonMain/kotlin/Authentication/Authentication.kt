@@ -13,6 +13,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Row
 import HeroScreen
 import androidx.compose.foundation.background
@@ -200,14 +201,14 @@ class Authentication {
                                 }
                             }
                         },
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                     ) {
                         Text("Sign in", style = MaterialTheme.typography.titleMedium)
                     }
 
                     if (authready) {
                         OrDivider()
-                        GoogleSignInButton(modifier = Modifier.fillMaxWidth().height(52.dp), fontSize = 16.sp) { googleSignIn.launch() }
+                        GoogleSignInButton(modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), fontSize = 16.sp) { googleSignIn.launch() }
                         Spacer(modifier = Modifier.height(12.dp))
                         AppleButtonUiContainer(onResult = onFirebaseResult) {
                             AppleSignInButton(onClick = { this.onClick() }, modifier = Modifier.fillMaxWidth())
@@ -303,7 +304,7 @@ class Authentication {
 
                             }
                         }
-                    }, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                    }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                         Text("Create account", style = MaterialTheme.typography.titleMedium)
                     }
 
@@ -390,7 +391,7 @@ class Authentication {
                         }
                     },
                     enabled = email.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                 ) {
                     Text(if (sent) "Send again" else "Send reset link", style = MaterialTheme.typography.titleMedium)
                 }

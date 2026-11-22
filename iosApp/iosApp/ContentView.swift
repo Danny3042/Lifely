@@ -328,9 +328,28 @@ struct SharedComposeHost: View {
         }
     }
 
+    /// Every tab has its own copy of this host and each sees the same tab change, so the same
+    /// request arrives several times at once: only the first goes through.
+    private static var lastSentRoute: String?
+    private static var lastSentAt = Date.distantPast
+
+    private func sendRouteOnce(_ route: String) -> Bool {
+        let now = Date()
+        if route == Self.lastSentRoute && now.timeIntervalSince(Self.lastSentAt) < 0.03 { return false }
+        Self.lastSentRoute = route
+        Self.lastSentAt = now
+        return true
+    }
+
+    /// Still the selected tab's route? Retries for a tab that's already been left are dropped, or
+    /// quick taps replay one after another.
+    private func isCurrentTab(_ route: String) -> Bool {
+        !tabRoutes.indices.contains(selectedTab) || tabRoutes[selectedTab] == route
+    }
+
     private func sendRouteWithRetries(route: String) {
-        print("SharedComposeHost: sendRouteWithRetries called with route: \(route)")
-        
+        guard sendRouteOnce(route) else { return }
+
         // First, update PlatformBridge directly to trigger Compose navigation
         let bridge = PlatformBridge.shared
         print("SharedComposeHost: Before update - requestedTabSignal = \(bridge.requestedTabSignal)")
@@ -343,12 +362,14 @@ struct SharedComposeHost: View {
         
         // Retry logic to ensure navigation happens
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            guard isCurrentTab(route), sendRouteOnce(route) else { return }
             bridge.requestedTabName = route
             bridge.requestedTabSignal = bridge.requestedTabSignal + 1
             print("SharedComposeHost: Retry 1 - requestedTabSignal = \(bridge.requestedTabSignal)")
             AuthManager.shared.requestNavigateTo(route: route)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            guard isCurrentTab(route), sendRouteOnce(route) else { return }
             bridge.requestedTabName = route
             bridge.requestedTabSignal = bridge.requestedTabSignal + 1
             print("SharedComposeHost: Retry 2 - requestedTabSignal = \(bridge.requestedTabSignal)")
@@ -470,6 +491,9 @@ struct ComposeViewController: UIViewControllerRepresentable {
 struct ContentView: View {
     @EnvironmentObject var router: NativeRouter
     @State private var selectedTab: Int = 0
+    /// When a tab was last tapped. For a moment after, the tab bar is the truth: Compose echoes each
+    /// request back as "switch to tab X", and during quick taps those echoes are for tabs already left.
+    @State private var lastUserTabTap = Date.distantPast
     @State private var showImagePicker: Bool = false
     @State private var selectedImage: UIImage? = nil
     @StateObject private var settings = AppSettings()
@@ -480,6 +504,8 @@ struct ContentView: View {
     /// Compose asks for this on screens that draw under the bars (the meditation sky).
     @State private var composeEdgeToEdge: Bool = false
     @State private var composeHidesNavigationBar: Bool = false
+    /// The pushed page's own title (from Compose); nil on a tab's main page
+    @State private var composePageTitle: String? = nil
     /// Where the tab bar is, in the Home page's coordinates (for placing the add button)
     @State private var tabBarFrame: CGRect = .zero
     @State private var safeAreaBottom: CGFloat = 0
@@ -537,9 +563,20 @@ struct ContentView: View {
             get: { selectedTab },
             set: { newValue in
                 if newValue == selectedTab { returnToTabRoot(newValue) }
+                lastUserTabTap = Date()
                 selectedTab = newValue
             }
         )
+    }
+
+    /// Compose asking for a tab (a Home card that opens Habits, say). Ignored just after a tab tap,
+    /// when it's only the echo of an earlier tap and would drag the selection back.
+    private func selectTabFromCompose(_ index: Int) {
+        guard index != selectedTab else { return }
+        guard Date().timeIntervalSince(lastUserTabTap) > 1.0 else { return }
+        withAnimation {
+            selectedTab = index
+        }
     }
 
     private func returnToTabRoot(_ index: Int) {
@@ -584,7 +621,7 @@ struct ContentView: View {
                         .background(TabBarFrameReader(frame: $tabBarFrame))
                     }
                 }
-                .navigationTitle(composeEdgeToEdge ? "" : tabTitle(for: selectedTab))
+                .navigationTitle(composeEdgeToEdge ? "" : (composePageTitle ?? tabTitle(for: selectedTab)))
                 // Always large: SwiftUI doesn't reliably apply a display-mode change on a stack that's
                 // already showing, and would leave the title stuck small after the meditation timer.
                 // That full-screen page just shows no title text instead.
@@ -634,6 +671,12 @@ struct ContentView: View {
             }
             .tint(Color.appTeal)
             .animation(.easeInOut(duration: 0.2), value: composeHidesTabBar)
+            // Name pushed pages in the bar ("Check in", "Notifications") instead of the tab
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ComposeRouteChanged"))) { note in
+                // Only route changes that carry a title (YourMainNavHost.kt) set it; ignore any others
+                guard let title = note.userInfo?["title"] as? String else { return }
+                composePageTitle = title.isEmpty ? nil : title
+            }
 
             // Native back button: shown in the navigation bar when Compose requests it
             // We add a toolbar item on the top-level navigation so it appears as a
@@ -682,12 +725,8 @@ struct ContentView: View {
         }
         .onAppear {
             // Set up ComposeBridge callbacks for SwiftUI coordination
-            composeBridge.onTabSelectionChange = { [selectedTab] index in
-                if selectedTab != index {
-                    withAnimation {
-                        self.selectedTab = index
-                    }
-                }
+            composeBridge.onTabSelectionChange = { index in
+                selectTabFromCompose(index)
             }
             
             composeBridge.onTabBarVisibilityChange = { [composeHidesTabBar] hidden in
@@ -761,10 +800,7 @@ struct ContentView: View {
                 queue: .main
             ) { notification in
                 if let index = notification.userInfo?["index"] as? Int {
-                    print("ContentView: Received UpdateNativeTabSelection -> index \(index)")
-                    withAnimation {
-                        selectedTab = index
-                    }
+                    selectTabFromCompose(index)
                 }
             }
 

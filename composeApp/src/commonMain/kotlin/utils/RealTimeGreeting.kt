@@ -30,7 +30,9 @@ fun RealTimeGreeting(modifier: Modifier = Modifier) {
     val greeting = when (hour) {
         in 5..11 -> "Good morning"
         in 12..16 -> "Good afternoon"
-        else -> "Good evening"
+        in 17..21 -> "Good evening"
+        // Late at night and the small hours
+        else -> "Good night"
     }
 
     Text(

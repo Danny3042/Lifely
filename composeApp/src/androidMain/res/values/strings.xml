@@ -1,6 +1,16 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">MyHealthBuddy</string>
 
+    <string name="widget_description">Today\'s meditation, your streak, and a quick check-in</string>
+
+    <!-- App shortcuts (long-press the app icon) -->
+    <string name="shortcut_meditate_short">Meditate</string>
+    <string name="shortcut_meditate_long">Start a 5 minute meditation</string>
+    <string name="shortcut_check_in_short">Check in</string>
+    <string name="shortcut_check_in_long">How are you feeling?</string>
+    <string name="shortcut_calendar_short">Check-ins</string>
+    <string name="shortcut_calendar_long">Check-in calendar</string>
+
     <!-- Sleep Session screen -->
     <string name="generate_sleep_data">Generate sleep data</string>
     <string-array name="sleep_notes_array" tools:ignore="InconsistentArrays">

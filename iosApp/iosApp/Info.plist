@@ -26,6 +26,14 @@
 				<string>com.googleusercontent.apps.991501394909-thu9k5dmtqr80p5gnk79e9mh8g6u3d2k</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>org.example.project.HealthApp.widgets</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>myhealthbuddy</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
@@ -53,6 +61,8 @@
 	<string>HealthCompose requires access to motion and fitness activity for tracking purposes.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>The app does not need speech recognition access.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>Your data will be used to deliver a better user experience and personalised content</string>
 	<key>UIApplicationSceneManifest</key>

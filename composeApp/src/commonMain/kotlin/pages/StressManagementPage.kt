@@ -4,6 +4,7 @@ package pages
 import components.ui.bottomBarOverlap
 import components.ui.topBarOverlap
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -251,7 +252,7 @@ private fun MeditationHeroCard(onStart: () -> Unit) {
             Spacer(Modifier.height(16.dp))
             Button(
                 onClick = onStart,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.tertiary,
                     contentColor = MaterialTheme.colorScheme.onTertiary,

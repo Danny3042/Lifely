@@ -102,6 +102,8 @@ struct iOSApp: App {
             ContentView()
                 .environmentObject(router)
                 .onOpenURL { url in
+                    // Widgets: myhealthbuddy://meditate, myhealthbuddy://checkin
+                    if WidgetLinks.handle(url) { return }
 #if canImport(GoogleSignIn)
                     GIDSignIn.sharedInstance.handle(url)
 #endif
@@ -125,6 +127,10 @@ struct iOSApp: App {
         private var composeCoordinator: ComposeCoordinator?
         
         func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+            // Meditation countdown in the Dynamic Island / on the Lock Screen
+            MeditationLiveActivityController.shared.activate()
+            // Home and Lock Screen widgets
+            WidgetRefresher.shared.activate()
             
             // Ensure existing windows are transparent
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {

@@ -8,13 +8,15 @@
     <!-- Session-finished notifications: show them, and deliver them on time (the user can allow exact alarms) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <!-- Lets Android 16+ show a running meditation as a Live Update (status bar chip, lock screen) -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS"/>
     <!-- Application-level attributes now live in androidApp/src/main/AndroidManifest.xml -->
     <application>
         <receiver
-            android:name=".MeditationAlarmReceiver"
+            android:name=".SessionFinishedReceiver"
             android:exported="false" />
         <receiver
-            android:name=".SessionFinishedReceiver"
+            android:name=".MeditationStopReceiver"
             android:exported="false" />
         <receiver
             android:name=".MeditationWidgetReceiver"
@@ -40,6 +42,11 @@
                 <action android:name="android.intent.action.VIEW_PERMISSION_USAGE"/>
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS"/>
             </intent-filter>
+
+            <!-- Long-press shortcuts: Meditate, Check in, Check-in calendar -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
     </application>
 

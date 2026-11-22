@@ -61,7 +61,9 @@ fun YourMainNavHost(navController: NavHostController, showBottomBar: Boolean = t
         val mainTabRoutes = setOf("HomePage", "HabitCoachingPage", "ChatScreen", "meditation", "profile", "HeroScreen")
         val routesWithHiddenNav = setOf("Login", "SignUp", "ResetPassword", "Onboarding")
 
-        val isMainTab = mainTabRoutes.any { currentRoute.startsWith(it) }
+        // Exact names (or with arguments): "meditation_reflection" starts with "meditation" but is a pushed page
+        val isMainTab = currentRoute in mainTabRoutes ||
+            mainTabRoutes.any { currentRoute.startsWith("$it/") || currentRoute.startsWith("$it?") }
         val shouldHideTab = !isMainTab
         val shouldHideNav = routesWithHiddenNav.contains(currentRoute)
         val shouldShowBackButton = !isMainTab && !shouldHideNav && navController.previousBackStackEntry != null

@@ -2,6 +2,7 @@ package sub_pages
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -115,7 +116,7 @@ fun ReflectionPage(
     val insights: InsightsViewModel = viewModel { InsightsViewModel() }
     val sessionsPerDay by insights.sessionsPerDay
     val today = runCatching { Clock.System.todayIn(TimeZone.currentSystemDefault()) }.getOrNull()
-    val todayIndex = today?.let { (it.dayOfWeek.ordinal + 6) % 7 } ?: 0
+    val todayIndex = today?.let { it.dayOfWeek.ordinal } ?: 0 // Monday first
     val todaySessions = sessionsPerDay.getOrNull(todayIndex).orEmpty()
     val lastMinutes = todaySessions.lastOrNull()?.duration
     val todayMinutes = todaySessions.sumOf { it.duration }
@@ -153,11 +154,7 @@ fun ReflectionPage(
                     .padding(top = topBarOverlap(), bottom = bottomBarOverlap())
                     .padding(horizontal = PagePadding, vertical = 16.dp),
             ) {
-                if (!isAndroid()) {
-                    // The iOS navigation bar keeps the tab's title, so name the page here
-                    Text(pageTitle, style = MaterialTheme.typography.headlineMedium)
-                    Spacer(Modifier.height(4.dp))
-                }
+                // The page's title is in the navigation bar (iOS) or the top app bar (Android)
                 Text(
                     if (afterSession) "Take a moment before you move on." else "Take a moment to notice how you feel.",
                     style = MaterialTheme.typography.bodyLarge,
@@ -324,7 +321,7 @@ fun ReflectionPage(
                 }
 
                 Spacer(Modifier.height(24.dp))
-                Button(onClick = onBack, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                Button(onClick = onBack, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                     Text("Done", style = MaterialTheme.typography.titleMedium)
                 }
             }

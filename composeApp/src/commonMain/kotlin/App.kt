@@ -21,6 +21,8 @@ fun App() {
     // Daily meditation / check-in reminders: re-apply them at launch (some phones drop scheduled
     // alarms after a restart)
     LaunchedEffect(Unit) { runCatching { DailyReminders.sync() } }
+    // Bring the home screen widgets up to date (and take in check-ins logged from them)
+    LaunchedEffect(Unit) { service.WidgetSync.onAppActive() }
 
     PlatformApp(
         showBottomBar = showBottomBar,

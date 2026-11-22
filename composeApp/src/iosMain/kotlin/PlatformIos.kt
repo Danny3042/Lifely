@@ -167,10 +167,19 @@ actual fun PlatformApp(
                 is NSNumber -> darkAny.boolValue
                 else -> false
             }
-            // Always record the system style; only change the app's own setting when it follows the system
+            // Always record the system style; only change the app's own setting when it follows the system.
+            // Ask the saved choice, not the state: Swift sends this at launch, before the saved choice
+            // has been restored, when the state still says "follow the system" and a Light choice was
+            // being overwritten with the system's Dark.
             try {
                 PlatformBridge.systemInterfaceDark = isDarkFromSystem
-                if (currentUseSystemDefault) {
+                val defaults = NSUserDefaults.standardUserDefaults
+                val followsSystem = if (defaults.objectForKey("useSystemDefault") != null) {
+                    defaults.boolForKey("useSystemDefault")
+                } else {
+                    currentUseSystemDefault
+                }
+                if (followsSystem) {
                     currentOnDarkModeToggle(isDarkFromSystem)
                 }
             } catch (_: Throwable) {
@@ -216,7 +225,7 @@ actual fun PlatformApp(
             val defaults = NSUserDefaults.standardUserDefaults
             val savedUseSystem = if (defaults.objectForKey("useSystemDefault") != null) defaults.boolForKey("useSystemDefault") else true
             onUseSystemDefaultToggle(savedUseSystem)
-            if (!savedUseSystem) onDarkModeToggle(defaults.boolForKey("isDarkMode"))
+            onDarkModeToggle(if (savedUseSystem) PlatformBridge.systemInterfaceDark else defaults.boolForKey("isDarkMode"))
         } catch (_: Throwable) {
         }
         appearanceLoaded = true
@@ -465,6 +474,8 @@ actual fun PlatformApp(
                     NSOperationQueue.mainQueue.addOperationWithBlock {
                         val userInfo: Map<Any?, Any?> = mapOf(
                             "route" to destName,
+                            // The page's own name for the navigation bar ("" keeps the tab's name)
+                            "title" to (iosPageTitle(destName) ?: ""),
                             "shouldHideTab" to shouldHideTab,
                             "shouldHideNavigationBar" to shouldHideNav,
                             "shouldShowBackButton" to shouldShowBackButton
@@ -645,4 +656,19 @@ actual fun PlatformApp(
           }
         }
     }
+}
+
+/** What the iOS navigation bar calls each page pushed inside a tab. Tabs themselves keep the tab's name. */
+internal fun iosPageTitle(route: String): String? = when (route) {
+    "About" -> "About"
+    "Notification" -> "Notifications"
+    "Account" -> "Account"
+    "DarkModeSettingsScreen" -> "Appearance"
+    "completed_habits" -> "Completed habits"
+    "meditation_reflection" -> "Reflection"
+    "check_in" -> "Check in"
+    "check_in_calendar" -> "Check-in calendar"
+    "Insights" -> "Insights"
+    "timer" -> "Timer"
+    else -> null
 }

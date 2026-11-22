@@ -145,8 +145,8 @@ fun NotificationPage(
                     .padding(top = topBarOverlap(), bottom = bottomBarOverlap())
                     .padding(horizontal = PagePadding, vertical = 16.dp),
             ) {
-                if (!isAndroid() || embedded) {
-                    // The iOS navigation bar keeps the tab's title (and a pane has no bar), so name the page here
+                if (embedded) {
+                    // A pane in Profile has no bar of its own, so name the page here (the bars show the title otherwise)
                     Text("Notifications", style = MaterialTheme.typography.headlineMedium)
                     Spacer(Modifier.height(4.dp))
                 }

@@ -86,12 +86,8 @@ fun CompletedHabitsPage(navController: NavHostController) {
             ) {
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (!isAndroid()) {
-                            // The iOS navigation bar keeps the tab's title, so name the page here
-                            Text("Completed habits", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-                        } else {
-                            Spacer(Modifier.weight(1f))
-                        }
+                        // The title is in the navigation bar
+                        Spacer(Modifier.weight(1f))
                         if (completed.isNotEmpty()) {
                             TextButton(
                                 onClick = { confirmClearAll = true },

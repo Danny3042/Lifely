@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,6 +36,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.NotificationsActive
+import androidx.compose.material.icons.outlined.WbSunny
+import androidx.compose.material.icons.outlined.Bedtime
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.outlined.SelfImprovement
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.Button
@@ -95,11 +101,23 @@ enum class OnboardingExit {
 fun OnboardingRoute(navController: NavController) {
     val scope = rememberCoroutineScope()
     val isSignedIn = remember { runCatching { Firebase.auth.currentUser != null }.getOrDefault(false) }
-    OnboardingPage(isSignedIn = isSignedIn) { goalMinutes, exit ->
+    OnboardingPage(isSignedIn = isSignedIn) { goalMinutes, reminders, exit ->
         scope.launch {
             runCatching {
                 SettingsManager.saveDailyGoalMinutes(goalMinutes)
+                service.WidgetSync.refresh()
                 SettingsManager.saveOnboardingCompleted(true)
+            }
+            // Reminders chosen on the last page: ask for notifications only now, and only if wanted
+            if (reminders.morning || reminders.evening) {
+                runCatching {
+                    val allowed = service.SessionNotifications.ensurePermission()
+                    SettingsManager.saveNotificationsEnabled(allowed)
+                    val current = service.DailyReminders.load()
+                    service.DailyReminders.save(
+                        current.copy(morningEnabled = reminders.morning, eveningEnabled = reminders.evening)
+                    )
+                }
             }
             val destination = if (exit == OnboardingExit.SignIn) LoginScreen else HeroScreen
             navController.navigate(destination) {
@@ -129,6 +147,9 @@ private data class IntroPage(
     val content: @Composable () -> Color,
 )
 
+/** The daily nudges offered on the last onboarding page */
+data class OnboardingReminders(val morning: Boolean, val evening: Boolean)
+
 private val GoalOptions = listOf(
     5 to "Light",
     10 to "Steady",
@@ -143,7 +164,7 @@ private val GoalOptions = listOf(
 @Composable
 fun OnboardingPage(
     isSignedIn: Boolean,
-    onFinish: (goalMinutes: Int, exit: OnboardingExit) -> Unit,
+    onFinish: (goalMinutes: Int, reminders: OnboardingReminders, exit: OnboardingExit) -> Unit,
 ) {
     val intro = listOf(
         IntroPage(
@@ -175,8 +196,12 @@ fun OnboardingPage(
             content = { MaterialTheme.colorScheme.onPrimaryContainer },
         ),
     )
-    val pageCount = intro.size + 1 // + the goal picker
+    val goalPage = intro.size
+    val pageCount = intro.size + 2 // + the goal picker and the reminders
     val lastPage = pageCount - 1
+    var morningReminder by remember { mutableStateOf(false) }
+    var eveningReminder by remember { mutableStateOf(false) }
+    val reminders = OnboardingReminders(morningReminder, eveningReminder)
     val pagerState = rememberPagerState(pageCount = { pageCount })
     val scope = rememberCoroutineScope()
     var goalMinutes by remember { mutableIntStateOf(DEFAULT_DAILY_GOAL_MINUTES) }
@@ -198,12 +223,13 @@ fun OnboardingPage(
             modifier = Modifier.centeredMaxWidth(ContentWidth.Form).fillMaxSize(),
         ) {
             // Skip jumps to the goal picker rather than past it, so everyone still sets a goal.
+            // (The reminders after it are a page of their own, so they're easy to pass by.)
             Box(
                 modifier = Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 8.dp),
                 contentAlignment = Alignment.CenterEnd,
             ) {
-                if (pagerState.currentPage < lastPage) {
-                    TextButton(onClick = { goTo(lastPage) }) { Text("Skip") }
+                if (pagerState.currentPage < goalPage) {
+                    TextButton(onClick = { goTo(goalPage) }) { Text("Skip") }
                 }
             }
 
@@ -219,6 +245,37 @@ fun OnboardingPage(
                         body = p.body,
                         compactHeight = compactHeight,
                     )
+                } else if (page == lastPage) {
+                    PageLayout(
+                        art = {
+                            BreathingArt(
+                                Icons.Outlined.NotificationsActive,
+                                MaterialTheme.colorScheme.tertiaryContainer,
+                                MaterialTheme.colorScheme.onTertiaryContainer,
+                                if (compactHeight) 88.dp else 140.dp,
+                            )
+                        },
+                        title = "A gentle nudge?",
+                        body = "A daily reminder makes it easier to keep going. Pick any you'd like; you can change them later in Profile.",
+                        compactHeight = compactHeight,
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ReminderOption(
+                                icon = Icons.Outlined.WbSunny,
+                                title = "Morning meditation",
+                                time = service.formatReminderTime(8, 0),
+                                checked = morningReminder,
+                                onCheckedChange = { morningReminder = it },
+                            )
+                            ReminderOption(
+                                icon = Icons.Outlined.Bedtime,
+                                title = "Evening check-in",
+                                time = service.formatReminderTime(20, 30),
+                                checked = eveningReminder,
+                                onCheckedChange = { eveningReminder = it },
+                            )
+                        }
+                    }
                 } else {
                     PageLayout(
                         art = {
@@ -255,9 +312,9 @@ fun OnboardingPage(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Button(
                             onClick = {
-                                onFinish(goalMinutes, if (isSignedIn) OnboardingExit.App else OnboardingExit.SignIn)
+                                onFinish(goalMinutes, reminders, if (isSignedIn) OnboardingExit.App else OnboardingExit.SignIn)
                             },
-                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                         ) {
                             Text(
                                 if (isSignedIn) "Let's begin" else "Get started",
@@ -266,7 +323,7 @@ fun OnboardingPage(
                         }
                         if (!isSignedIn) {
                             Spacer(Modifier.height(4.dp))
-                            TextButton(onClick = { onFinish(goalMinutes, OnboardingExit.App) }) {
+                            TextButton(onClick = { onFinish(goalMinutes, reminders, OnboardingExit.App) }) {
                                 Text("Look around first")
                             }
                         }
@@ -284,7 +341,7 @@ fun OnboardingPage(
                         }
                         Button(
                             onClick = { goTo(pagerState.currentPage + 1) },
-                            modifier = Modifier.height(56.dp).width(140.dp),
+                            modifier = Modifier.heightIn(min = 56.dp).widthIn(min = 140.dp),
                         ) {
                             Text("Next", style = MaterialTheme.typography.titleMedium)
                         }
@@ -359,6 +416,38 @@ private fun BreathingArt(icon: ImageVector, container: Color, content: Color, si
             Box(contentAlignment = Alignment.Center) {
                 Icon(icon, contentDescription = null, modifier = Modifier.size(size * 0.3f))
             }
+        }
+    }
+}
+
+/** One reminder on the last onboarding page: the whole row toggles it */
+@Composable
+private fun ReminderOption(
+    icon: ImageVector,
+    title: String,
+    time: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = if (checked) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).heightIn(min = 48.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = null)
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(time, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            // The row is the control; the switch just shows its state
+            androidx.compose.material3.Switch(checked = checked, onCheckedChange = null)
         }
     }
 }
