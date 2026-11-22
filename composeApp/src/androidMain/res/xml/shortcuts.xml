@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the app icon (or drag one to the home screen). Handled in MainActivity.handleShortcut. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="meditate"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_meditate"
+        android:shortcutShortLabel="@string/shortcut_meditate_short"
+        android:shortcutLongLabel="@string/shortcut_meditate_long">
+        <intent
+            android:action="org.danielramzani.HealthCompose.action.MEDITATE"
+            android:targetPackage="org.danielramzani.HealthCompose"
+            android:targetClass="org.danielramzani.HealthCompose.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="check_in"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_check_in"
+        android:shortcutShortLabel="@string/shortcut_check_in_short"
+        android:shortcutLongLabel="@string/shortcut_check_in_long">
+        <intent
+            android:action="org.danielramzani.HealthCompose.action.CHECK_IN"
+            android:targetPackage="org.danielramzani.HealthCompose"
+            android:targetClass="org.danielramzani.HealthCompose.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="check_in_calendar"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_calendar"
+        android:shortcutShortLabel="@string/shortcut_calendar_short"
+        android:shortcutLongLabel="@string/shortcut_calendar_long">
+        <intent
+            android:action="org.danielramzani.HealthCompose.action.CHECK_IN_CALENDAR"
+            android:targetPackage="org.danielramzani.HealthCompose"
+            android:targetClass="org.danielramzani.HealthCompose.MainActivity" />
+    </shortcut>
+</shortcuts>
