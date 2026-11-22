@@ -1,5 +1,7 @@
 package sub_pages
 
+import components.ui.bottomBarOverlap
+import components.ui.topBarOverlap
 import Colors.DarkColors
 import Colors.LightColors
 import Colors.platformDynamicColorScheme
@@ -121,6 +123,7 @@ fun DarkModeSettingsPage(
                 modifier = Modifier
                     .centeredMaxWidth(ContentWidth.Reading)
                     .verticalScroll(rememberScrollState())
+                    .padding(top = topBarOverlap(), bottom = bottomBarOverlap())
                     .padding(horizontal = PagePadding, vertical = 16.dp),
             ) {
                 if (!isAndroid()) {

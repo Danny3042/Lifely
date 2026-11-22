@@ -1,5 +1,7 @@
 package sub_pages
 
+import components.ui.bottomBarOverlap
+import components.ui.topBarOverlap
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -88,6 +90,7 @@ fun NotificationPage(navController: NavController) {
                 modifier = Modifier
                     .centeredMaxWidth(ContentWidth.Reading)
                     .verticalScroll(rememberScrollState())
+                    .padding(top = topBarOverlap(), bottom = bottomBarOverlap())
                     .padding(horizontal = PagePadding, vertical = 16.dp),
             ) {
                 if (!isAndroid()) {

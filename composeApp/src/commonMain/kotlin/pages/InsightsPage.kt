@@ -1,5 +1,7 @@
 package pages
 
+import components.ui.bottomBarOverlap
+import components.ui.topBarOverlap
 import components.ui.ContentWidth
 import components.ui.centeredMaxWidth
 import androidx.compose.animation.AnimatedVisibility
@@ -88,6 +90,7 @@ fun InsightsPage(
             .centeredMaxWidth(ContentWidth.Wide)
             .fillMaxSize()
             .verticalScroll(scrollState)
+            .padding(top = topBarOverlap(), bottom = bottomBarOverlap())
             .padding(horizontal = PagePadding, vertical = 16.dp),
     ) {
         Text("This week", style = MaterialTheme.typography.headlineMedium)

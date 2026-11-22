@@ -1,6 +1,8 @@
 package pages
 
 
+import components.ui.bottomBarOverlap
+import components.ui.topBarOverlap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -12,7 +14,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import components.ui.CoachPromptCard
-import components.ui.CoachTipCard
+import components.ui.RichCoachTipCard
+import service.CoachTip
+import service.CoachTopic
+import service.generateCoachTip
 import components.ui.IconBadge
 import components.ui.PagePadding
 import components.ui.QuoteCard
@@ -58,13 +63,30 @@ const val STRESS_MANAGEMENT_PAGE_ROUTE = "stress_management"
 @Composable
 fun StressManagementPage(navController: NavController) {
     val scope = rememberCoroutineScope()
-    var aiTip by remember { mutableStateOf<String?>(null) }
+    var aiTip by remember { mutableStateOf<CoachTip?>(null) }
+    var tipSubject by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var userActivity by remember { mutableStateOf("") }
     // New state to request navigation to meditation safely from composition
     var navigateToMeditation by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
+
+    fun loadTip(subject: String) {
+        if (isLoading) return
+        scope.launch {
+            isLoading = true
+            error = null
+            try {
+                aiTip = generateCoachTip(subject, CoachTopic.Stress)
+                tipSubject = subject
+            } catch (e: Exception) {
+                error = service.friendlyGeminiError(e)
+            } finally {
+                isLoading = false
+            }
+        }
+    }
 
     fun generateTipAndAddActivity() {
         try {
@@ -78,21 +100,9 @@ fun StressManagementPage(navController: NavController) {
                 navigateToMeditation = true
                 return
             }
-            scope.launch {
-                isLoading = true
-                error = null
-                try {
-                    aiTip = GenerativeAiService.instance.getSuggestions(
-                        listOf("Give me a practical succinct tip for managing stress with: $userActivity")
-                    )
-                    userActivity = ""
-                } catch (e: Exception) {
-                    error = e.message
-                    println("StressManagementPage: GenerativeAiService error: ${e.message}")
-                } finally {
-                    isLoading = false
-                }
-            }
+            val subject = userActivity.trim()
+            userActivity = ""
+            loadTip(subject)
         } catch (e: Throwable) {
             println("StressManagementPage: unexpected error in generateTipAndAddActivity: ${e.message}")
         }
@@ -155,6 +165,7 @@ fun StressManagementPage(navController: NavController) {
         modifier = Modifier
             .centeredMaxWidth(ContentWidth.Reading)
             .verticalScroll(scrollState)
+            .padding(top = topBarOverlap(), bottom = bottomBarOverlap())
             .padding(start = PagePadding, end = PagePadding, top = 16.dp, bottom = 32.dp),
     ) {
         // Primary action: the guided meditation timer
@@ -194,11 +205,13 @@ fun StressManagementPage(navController: NavController) {
         )
 
         Spacer(Modifier.height(12.dp))
-        CoachTipCard(
+        // No "Add to my habits" here: stress tips are for the moment, not habits to track
+        RichCoachTipCard(
             tip = aiTip,
             isLoading = isLoading,
             error = error,
             emptyText = "Feeling overwhelmed? Slow your breathing and give yourself a short break. Your coach's tips will appear here.",
+            onNewTip = tipSubject?.let { { loadTip(it) } },
         )
 
         Spacer(Modifier.height(16.dp))

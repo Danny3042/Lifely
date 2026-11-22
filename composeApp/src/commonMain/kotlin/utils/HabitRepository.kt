@@ -31,6 +31,23 @@ object HabitRepository {
 
     fun addCompletedHabit(habit: String) = completeHabit(habit)
 
+    /** Undoes [completeHabit]: moves a habit from the completed list back to the active list. */
+    fun restoreHabit(habit: String) {
+        if (completedHabits.remove(habit)) HabitStorage.saveCompletedHabits(completedHabits)
+        addHabit(habit)
+    }
+
+    /** Removes a habit from the completed list for good. */
+    fun deleteCompletedHabit(habit: String) {
+        if (completedHabits.remove(habit)) HabitStorage.saveCompletedHabits(completedHabits)
+    }
+
+    /** Empties the completed list. */
+    fun clearCompletedHabits() {
+        completedHabits.clear()
+        HabitStorage.saveCompletedHabits(completedHabits)
+    }
+
     fun removeHabit(habit: String) {
         activeHabits.remove(habit)
         HabitStorage.saveHabits(activeHabits)

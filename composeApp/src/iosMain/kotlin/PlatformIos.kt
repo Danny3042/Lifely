@@ -1,6 +1,9 @@
 
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.foundation.layout.absolutePadding
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalWindowInfo
+import kotlinx.coroutines.flow.distinctUntilChanged
 import Authentication.LoginScreen
 import Authentication.ResetPasswordScreen
 import Authentication.SignUpScreen
@@ -42,6 +45,8 @@ import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSNumber
 import platform.Foundation.NSOperationQueue
 import platform.Foundation.NSUserDefaults
+import platform.UIKit.UIScreen
+import platform.UIKit.UIUserInterfaceStyle
 import platform.PlatformBridge
 import sub_pages.AboutPage
 import sub_pages.AboutPageScreen
@@ -59,6 +64,19 @@ import utils.HealthKitServiceImpl
 import utils.iOSHealthKitManager
 import tabs.HomeTab
 import pages.OnboardingScreen
+import components.ui.LocalSystemBarsPadding
+import components.ui.LocalBottomBarOverlap
+import components.ui.LocalTopBarOverlap
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.navigation.compose.currentBackStackEntryAsState
 import utils.SettingsManager
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,6 +90,27 @@ actual fun PlatformApp(
 ) {
     // remember a NavController for Compose navigation on iOS
     val navController = rememberNavController()
+
+    // Know the appearance before the first frame. Swift announces the system style with a
+    // notification, but its first one is posted before Compose starts listening, so Compose used
+    // to start light and only turn dark on a later post (a light flash at launch, and onboarding
+    // stayed light). Read the device's style and the saved Appearance choice directly instead.
+    remember {
+        try {
+            PlatformBridge.systemInterfaceDark =
+                UIScreen.mainScreen.traitCollection.userInterfaceStyle == UIUserInterfaceStyle.UIUserInterfaceStyleDark
+        } catch (_: Throwable) {
+        }
+    }
+    val savedAppearance = remember {
+        try {
+            val defaults = NSUserDefaults.standardUserDefaults
+            val useSystem = if (defaults.objectForKey("useSystemDefault") != null) defaults.boolForKey("useSystemDefault") else true
+            useSystem to defaults.boolForKey("isDarkMode")
+        } catch (_: Throwable) {
+            true to false
+        }
+    }
 
     // Let PlatformBridge know whether the native host should show its tab bar
     try {
@@ -128,14 +167,11 @@ actual fun PlatformApp(
                 is NSNumber -> darkAny.boolValue
                 else -> false
             }
-            // Only update Compose dark-mode if the user asked to follow the system
+            // Always record the system style; only change the app's own setting when it follows the system
             try {
+                PlatformBridge.systemInterfaceDark = isDarkFromSystem
                 if (currentUseSystemDefault) {
-                    // Call the callback provided by common App to update the shared dark mode state
                     currentOnDarkModeToggle(isDarkFromSystem)
-                    try {
-                        PlatformBridge.systemInterfaceDark = isDarkFromSystem
-                    } catch (_: Throwable) {}
                 }
             } catch (_: Throwable) {
             }
@@ -493,25 +529,100 @@ actual fun PlatformApp(
     // Removed PlatformBridge.useNativeTabBar writes because the binding isn't available reliably here.
 
     // Set Compose Material3 colors based on dark mode state - respect 'use system default' when enabled
-    val effectiveDark = if (useSystemDefault) PlatformBridge.systemInterfaceDark else isDarkMode
-    val colors = remember(isDarkMode, useSystemDefault, PlatformBridge.systemInterfaceDark) {
-        if (effectiveDark) DarkColors else LightColors
+    // Until the saved choice has been handed to App (one frame), use the copy read above.
+    val followSystem = if (appearanceLoaded) useSystemDefault else savedAppearance.first
+    val chosenDark = if (appearanceLoaded) isDarkMode else savedAppearance.second
+    val effectiveDark = if (followSystem) PlatformBridge.systemInterfaceDark else chosenDark
+    // App-wide Material 3 Expressive theme. The Surface goes inside the theme so its content colour
+    // (onBackground) is the theme's: any page without its own Surface then gets readable text in
+    // dark mode instead of the default black.
+    // Pages that draw edge to edge (the meditation sky) go under the status, navigation and tab bars.
+    // For those, the app stops padding itself, tells Swift to let the Compose view extend under the
+    // bars, and hands the insets to the page so it can keep its controls clear of them.
+    val currentEntry by navController.currentBackStackEntryAsState()
+    val edgeToEdge = currentEntry?.destination?.route == MEDITATION_PAGE_ROUTE
+    LaunchedEffect(edgeToEdge) {
+        NSOperationQueue.mainQueue.addOperationWithBlock {
+            NSNotificationCenter.defaultCenter.postNotificationName(
+                aName = "ComposeEdgeToEdge",
+                `object` = null,
+                userInfo = mapOf<Any?, Any?>("enabled" to edgeToEdge)
+            )
+        }
     }
+    val systemBars = PaddingValues.Absolute(
+        left = leftInset.dp,
+        top = topInset.dp,
+        right = rightInset.dp,
+        bottom = bottomInset.dp
+    )
+    // Every page with the tab bar runs under it at the bottom (Swift extends the Compose view there),
+    // so the bottom inset isn't padded; pages pad their scrolling content by it instead
+    // (LocalBottomBarOverlap). Screens without the tab bar (sign-in, onboarding) keep the padding.
+    val tabBarShown = currentEntry?.destination?.route !in setOf("Login", "SignUp", "ResetPassword", OnboardingScreen)
+    val pagePadding = PaddingValues.Absolute(
+        left = leftInset.dp,
+        // Pages with the bars run under the navigation bar too and pad their own content (LocalTopBarOverlap)
+        top = if (tabBarShown) 0.dp else topInset.dp,
+        right = rightInset.dp,
+        bottom = if (tabBarShown) 0.dp else bottomInset.dp
+    )
 
-    // Main app surface with safe area insets applied
-    Surface(
-        modifier = Modifier
-            .fillMaxSize()
-            .absolutePadding(
-                left = leftInset.dp,
-                top = topInset.dp,
-                right = rightInset.dp,
-                bottom = bottomInset.dp
-            ),
-        color = colors.background
-    ) {
-        // App-wide Material 3 Expressive theme
-        HealthAppTheme(darkTheme = effectiveDark) {
+    // Native iOS bars: Swift places a hidden UIScrollView over the page and keeps its offset in step
+    // with Compose's scrolling, so iOS itself collapses the large title, draws the scroll edge effect
+    // (the blur under the bar, iOS 26+) and minimises the bar (iOS 27). Any scrollable in the app
+    // reports through this nested-scroll connection at the root.
+    var scrolledPx by remember { mutableStateOf(0f) }
+    val density = LocalDensity.current.density
+    val scrollWatcher = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                // Pulling down past the top means we're at the top again
+                scrolledPx = if (available.y > 0f) 0f else (scrolledPx - consumed.y).coerceAtLeast(0f)
+                return Offset.Zero
+            }
+        }
+    }
+    // A new page or tab starts at the top
+    LaunchedEffect(currentEntry?.destination?.route, PlatformBridge.requestedTabSignal) { scrolledPx = 0f }
+    val followsNativeBars = tabBarShown && !edgeToEdge
+    LaunchedEffect(followsNativeBars) {
+        snapshotFlow { if (followsNativeBars) scrolledPx / density else 0f }
+            .distinctUntilChanged()
+            .collect { points ->
+                NSNotificationCenter.defaultCenter.postNotificationName(
+                    aName = "ComposeScrollOffset",
+                    `object` = null,
+                    userInfo = mapOf<Any?, Any?>("offset" to points.toDouble())
+                )
+            }
+    }
+    // Content starts below the bar at its expanded (large title) height and keeps that start while the
+    // title collapses or the bar minimises, exactly like a native scroll view's content inset.
+    // It's re-read whenever the page is back at the top, or the screen size or page changes.
+    // Swift reports how much of the top the status and navigation bars cover.
+    val barTopInset = PlatformBridge.topBarInset
+    val containerSize = LocalWindowInfo.current.containerSize
+    var restTopInset by remember { mutableStateOf(barTopInset) }
+    LaunchedEffect(containerSize, currentEntry?.destination?.route) { restTopInset = barTopInset }
+    SideEffect {
+        if (scrolledPx == 0f && barTopInset > restTopInset) restTopInset = barTopInset
+    }
+    val topOverlap = if (scrolledPx == 0f) maxOf(barTopInset, restTopInset) else restTopInset
+
+    HealthAppTheme(darkTheme = effectiveDark) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (edgeToEdge) Modifier else Modifier.padding(pagePadding)),
+            color = MaterialTheme.colorScheme.background
+        ) {
+          CompositionLocalProvider(
+              LocalSystemBarsPadding provides systemBars,
+              LocalBottomBarOverlap provides if (tabBarShown && !edgeToEdge) bottomInset.dp else 0.dp,
+              LocalTopBarOverlap provides if (followsNativeBars) topOverlap.dp else 0.dp,
+          ) {
+            Box(Modifier.fillMaxSize().nestedScroll(scrollWatcher)) {
             // Navigation host for Compose — on iOS we hide Compose's bottom bar because
             // the app uses a native SwiftUI TabView. Pass showBottomBar=false.
             YourMainNavHost(
@@ -522,6 +633,8 @@ actual fun PlatformApp(
                 useSystemDefault = useSystemDefault,
                 onUseSystemDefaultToggle = onUseSystemDefaultToggle
             )
-     }
-  }
-  }
+            }
+          }
+        }
+    }
+}

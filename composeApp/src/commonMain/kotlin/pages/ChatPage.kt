@@ -1,6 +1,15 @@
+import components.ui.bottomBarOverlap
+import components.ui.topBarOverlap
 import androidx.compose.foundation.layout.Box
 import components.ui.platformScaffoldInsets
-import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import components.ChatHistorySheet
+import components.ui.GlassIconButton
 import androidx.compose.foundation.layout.fillMaxWidth
 import components.ui.ContentWidth
 import components.ui.centeredMaxWidth
@@ -63,6 +72,18 @@ fun ChatScreen(
     }
 
     val listState = rememberLazyListState()
+    var showHistory by remember { mutableStateOf(false) }
+    if (showHistory) {
+        ChatHistorySheet(
+            chats = chatViewModel.savedChats,
+            onOpen = { id ->
+                showHistory = false
+                chatViewModel.openSavedChat(id)
+            },
+            onDelete = { id -> chatViewModel.deleteChat(id) },
+            onDismiss = { showHistory = false },
+        )
+    }
     // removed unused showNewMessageChip state (not used currently)
     val messages = chatUiState.messages
     // When messages change, auto-scroll only if the user is already near the bottom.
@@ -104,7 +125,7 @@ fun ChatScreen(
                 state = listState,
                 reverseLayout = false,
                 // Keep the last message clear of the input bar and the New chat button above it
-                contentPadding = PaddingValues(top = 8.dp, bottom = 176.dp),
+                contentPadding = PaddingValues(top = 8.dp + topBarOverlap(), bottom = 176.dp + bottomBarOverlap()),
             ) {
                 items(
                     items = chatUiState.messages,
@@ -119,7 +140,7 @@ fun ChatScreen(
                 }
             }
             if (messages.isEmpty()) {
-                ChatEmptyState(modifier = Modifier.align(Alignment.Center).padding(bottom = 96.dp))
+                ChatEmptyState(modifier = Modifier.align(Alignment.Center).padding(bottom = 96.dp + bottomBarOverlap()))
             }
             Column(
                 modifier = Modifier
@@ -127,22 +148,36 @@ fun ChatScreen(
                     .fillMaxWidth()
                     .widthIn(max = ContentWidth.Wide)
             ) {
-                // "New chat" sits just above the input's trailing end, so it moves with the input
-                // on every screen size instead of floating at the window edge. Hidden while the
-                // chat is empty, where it would do nothing and cover the "Ask Gemini" prompt.
-                if (messages.isNotEmpty()) {
-                    SmallFloatingActionButton(
-                        onClick = {
-                            chatViewModel.newChat()
-                            coroutineScope.launch { snackbarHostState.showSnackbar("New chat started") }
-                        },
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .padding(end = 16.dp, bottom = 8.dp),
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                // Past chats and "New chat" sit just above the input's trailing end, so they move
+                // with the input on every screen size. Liquid Glass on iOS, small FABs on Android.
+                // New chat is hidden while the chat is empty (it would do nothing); history shows
+                // once there's something in it.
+                val hasHistory = chatViewModel.savedChats.isNotEmpty()
+                if (messages.isNotEmpty() || hasHistory) {
+                    Row(
+                        modifier = Modifier.align(Alignment.End).padding(end = 16.dp, bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Icon(Icons.Filled.Add, contentDescription = "New chat")
+                        if (hasHistory) {
+                            GlassIconButton(
+                                iosSymbol = "clock.arrow.circlepath",
+                                icon = Icons.Outlined.History,
+                                contentDescription = "Past chats",
+                                onClick = { showHistory = true },
+                                prominent = false,
+                            )
+                        }
+                        if (messages.isNotEmpty()) {
+                            GlassIconButton(
+                                iosSymbol = "plus",
+                                icon = Icons.Filled.Add,
+                                contentDescription = "New chat",
+                                onClick = {
+                                    chatViewModel.newChat()
+                                    coroutineScope.launch { snackbarHostState.showSnackbar("New chat started — the last one is in Past chats") }
+                                },
+                            )
+                        }
                     }
                 }
                 // TTS toggle moved into the message input box (MessageInput.trailings)
@@ -161,9 +196,9 @@ fun ChatScreen(
                      snackbarHostState = snackbarHostState,
                      onNewChat = { chatViewModel.newChat() },
                  )
-                // Small breathing room under the input. The bottom safe area is already applied by the
-                // app shell on both platforms, so it isn't added again here.
-                Spacer(modifier = Modifier.height(8.dp))
+                // Small breathing room under the input, plus the floating tab bar on iOS (pages run
+                // underneath it there, so the input has to sit above it).
+                Spacer(modifier = Modifier.height(8.dp + bottomBarOverlap()))
             }
          }
      }

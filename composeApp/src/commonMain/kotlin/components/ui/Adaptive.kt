@@ -2,6 +2,10 @@ package components.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -93,3 +97,44 @@ fun AdaptiveContent(
 @Composable
 fun platformScaffoldInsets(): WindowInsets =
     if (isAndroid()) ScaffoldDefaults.contentWindowInsets else WindowInsets(0, 0, 0, 0)
+
+
+/**
+ * The space taken by system bars (status bar, navigation bar, tab bar, camera and fold) on iOS,
+ * where the SwiftUI host reports it. Null on Android, where pages use WindowInsets instead.
+ * Pages drawn edge to edge put their background under the bars and pad only their content by this.
+ */
+val LocalSystemBarsPadding = compositionLocalOf<PaddingValues?> { null }
+
+/** Padding that keeps content clear of the system bars on either platform. */
+@Composable
+fun Modifier.systemBarsContentPadding(): Modifier {
+    val padding = LocalSystemBarsPadding.current
+    return if (padding != null) this.padding(padding) else this.windowInsetsPadding(WindowInsets.safeDrawing)
+}
+
+
+/**
+ * How much of the bottom of the page the floating tab bar covers. On iOS every page with the tab bar
+ * runs underneath it (the bar is translucent glass), so scrolling content adds this at its end to
+ * be able to scroll clear of the bar. 0 where nothing overlaps (Android, pages without the tab bar).
+ */
+val LocalBottomBarOverlap = compositionLocalOf { 0.dp }
+
+/** See [LocalBottomBarOverlap]. */
+@Composable
+fun bottomBarOverlap(): Dp = LocalBottomBarOverlap.current
+
+
+/**
+ * How much of the top of the page the navigation bar covers. On iOS, pages with the tab bar run
+ * underneath the native navigation bar (like a native scroll view), so scrolling content adds this at
+ * its start and then scrolls up under the bar, where iOS blurs it. It stays at the bar's expanded
+ * (large title) height while the title collapses, so content moves exactly with the finger.
+ * 0 on Android and on pages without the bars.
+ */
+val LocalTopBarOverlap = compositionLocalOf { 0.dp }
+
+/** See [LocalTopBarOverlap]. */
+@Composable
+fun topBarOverlap(): Dp = LocalTopBarOverlap.current

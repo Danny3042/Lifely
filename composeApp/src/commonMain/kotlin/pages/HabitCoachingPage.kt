@@ -1,5 +1,7 @@
 package pages
 
+import components.ui.bottomBarOverlap
+import components.ui.topBarOverlap
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,7 +29,10 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import components.ui.CoachPromptCard
-import components.ui.CoachTipCard
+import components.ui.RichCoachTipCard
+import service.CoachTip
+import service.CoachTopic
+import service.generateCoachTip
 import components.ui.ContentWidth
 import components.ui.ListRowCard
 import components.ui.PagePadding
@@ -43,12 +48,29 @@ import utils.HabitRepository
 @Composable
 fun HabitCoachingPage(navcontroller: NavController) {
     val scope = rememberCoroutineScope()
-    var aiTip by remember { mutableStateOf<String?>(null) }
+    var aiTip by remember { mutableStateOf<CoachTip?>(null) }
+    // The habit the current tip is about, for "New tip"
+    var tipSubject by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var userHabit by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
     val trackedHabits = HabitRepository.habits
+
+    fun loadTip(subject: String) {
+        if (isLoading) return
+        scope.launch {
+            isLoading = true
+            error = null
+            try {
+                aiTip = generateCoachTip(subject, CoachTopic.Habit)
+            } catch (e: Exception) {
+                error = service.friendlyGeminiError(e)
+            } finally {
+                isLoading = false
+            }
+        }
+    }
 
     fun generateTipAndAddHabit() {
         if (userHabit.isBlank() || isLoading) return
@@ -58,24 +80,13 @@ fun HabitCoachingPage(navcontroller: NavController) {
         // Save the habit straight away so it isn't lost if the tip request fails
         HabitRepository.addHabit(habit)
         userHabit = ""
-        scope.launch {
-            isLoading = true
-            error = null
-            try {
-                aiTip = GenerativeAiService.instance.getSuggestions(
-                    listOf("Give me a practical succinct tip for building the habit: $habit")
-                )
-            } catch (e: Exception) {
-                error = e.message
-            } finally {
-                isLoading = false
-            }
-        }
+        tipSubject = habit
+        loadTip(habit)
     }
 
     LazyColumn(
         modifier = Modifier.centeredMaxWidth(ContentWidth.Reading).fillMaxSize(),
-        contentPadding = PaddingValues(start = PagePadding, end = PagePadding, top = 16.dp, bottom = 32.dp),
+        contentPadding = PaddingValues(start = PagePadding, end = PagePadding, top = 16.dp + topBarOverlap(), bottom = 32.dp + bottomBarOverlap()),
     ) {
         item {
             CoachPromptCard(
@@ -93,11 +104,16 @@ fun HabitCoachingPage(navcontroller: NavController) {
 
         item {
             SectionHeader("Coach's tip")
-            CoachTipCard(
+            val subject = tipSubject
+            RichCoachTipCard(
                 tip = aiTip,
                 isLoading = isLoading,
                 error = error,
                 emptyText = "Add a habit above and your coach will suggest how to start. Small and consistent beats big and occasional.",
+                // The habit was saved when it was typed in; the button confirms it (or re-adds it if ticked off)
+                isInHabits = subject != null && subject in HabitRepository.activeHabits,
+                onAddToHabits = subject?.let { { HabitRepository.addHabit(it) } },
+                onNewTip = subject?.let { { loadTip(it) } },
             )
         }
 
@@ -130,7 +146,11 @@ fun HabitCoachingPage(navcontroller: NavController) {
             Spacer(Modifier.height(8.dp))
             ListRowCard(
                 title = "Completed habits",
-                subtitle = "See what you've ticked off",
+                subtitle = when (val done = HabitRepository.completedHabits.size) {
+                    0 -> "Habits you tick off go here"
+                    1 -> "1 ticked off · see it here"
+                    else -> "$done ticked off · see them here"
+                },
                 icon = Icons.Outlined.EmojiEvents,
                 iconContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
                 iconContentColor = MaterialTheme.colorScheme.onTertiaryContainer,

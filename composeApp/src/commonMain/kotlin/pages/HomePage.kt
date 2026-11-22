@@ -1,4 +1,6 @@
 package pages
+import components.ui.bottomBarOverlap
+import components.ui.topBarOverlap
 import components.ui.ExpressiveDialog
 
 import androidx.compose.animation.AnimatedVisibility
@@ -136,10 +138,11 @@ fun HomePage(
         } else null
     }
 
-    // Platform safe-area insets (iOS) as Dp
-    val topInsetDp = with(LocalDensity.current) { PlatformBridge.safeAreaTop.toFloat().toDp() }
-    val bottomInsetDp = with(LocalDensity.current) { PlatformBridge.safeAreaBottom.toFloat().toDp() }
-    val effectiveTopPadding = if (topInsetDp > 0.dp) (topInsetDp + 8.dp) else 8.dp
+    // On iOS the page runs under the navigation bar (so the bar's scroll edge effect has content to
+    // blur); the list starts below it instead. 0 on Android.
+    val topInsetDp = topBarOverlap()
+    // Room to scroll the last card clear of the floating tab bar (iOS); 0 on Android
+    val bottomInsetDp = bottomBarOverlap()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -193,7 +196,7 @@ fun HomePage(
 
     val windowSize = LocalWindowSize.current
     val twoPane = windowSize.useTwoPane
-    val listPadding = PaddingValues(start = PagePadding, end = PagePadding, bottom = 96.dp + bottomInsetDp)
+    val listPadding = PaddingValues(start = PagePadding, end = PagePadding, top = 8.dp + topInsetDp, bottom = 96.dp + bottomInsetDp)
 
     // Greeting, today's progress, stats and the weekly trend
     val summarySection: LazyListScope.() -> Unit = {
@@ -323,7 +326,7 @@ fun HomePage(
             }
     }
 
-    Box(modifier = modifier.fillMaxSize().padding(top = effectiveTopPadding)) {
+    Box(modifier = modifier.fillMaxSize()) {
         if (twoPane) {
             // Wide screens and landscape: two independently scrolling columns
             Row(
@@ -335,7 +338,7 @@ fun HomePage(
                 }
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxSize(),
-                    contentPadding = PaddingValues(start = PagePadding, end = PagePadding, top = 8.dp, bottom = 96.dp + bottomInsetDp),
+                    contentPadding = PaddingValues(start = PagePadding, end = PagePadding, top = 16.dp + topInsetDp, bottom = 96.dp + bottomInsetDp),
                 ) {
                     activitySection()
                 }

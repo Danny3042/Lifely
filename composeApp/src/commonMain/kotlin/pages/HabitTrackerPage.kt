@@ -1,3 +1,5 @@
+import components.ui.bottomBarOverlap
+import components.ui.topBarOverlap
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -71,7 +73,7 @@ fun HabitTrackerPage(navcontroller: NavController) {
                 HabitRepository.addHabit(userHabit)
                 userHabit = ""
             } catch (e: Exception) {
-                error = e.message
+                error = service.friendlyGeminiError(e)
             } finally {
                 isLoading = false
             }
@@ -82,6 +84,7 @@ fun HabitTrackerPage(navcontroller: NavController) {
         modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(scrollState)
+            .padding(top = topBarOverlap(), bottom = bottomBarOverlap())
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

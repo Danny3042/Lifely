@@ -474,6 +474,8 @@ struct ContentView: View {
     @State private var showChartsSheet: Bool = false
     @State private var isSignedIn: Bool = Auth.auth().currentUser != nil
     @State private var composeHidesTabBar: Bool = false
+    /// Compose asks for this on screens that draw under the bars (the meditation sky).
+    @State private var composeEdgeToEdge: Bool = false
     @State private var composeHidesNavigationBar: Bool = false
     @State private var safeAreaBottom: CGFloat = 0
      // Ensure we only sync persisted color scheme once at first appearance to avoid overwriting
@@ -496,19 +498,31 @@ struct ContentView: View {
                 object: nil
             )
         }) {
-            Image(systemName: "plus")
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(width: 56, height: 56)
-                .background(
-                    Circle()
-                        .fill(Color(red: 0.4, green: 0.2, blue: 0.6))
-                        .shadow(color: Color(red: 0.4, green: 0.2, blue: 0.6).opacity(0.5), radius: 8, x: 0, y: 4)
-                )
+            addCardButtonLabel
         }
         .zIndex(1000)
         .accessibilityLabel("Add card")
         .accessibilityAddTraits(.isButton)
+    }
+
+    /// The "+" itself: Liquid Glass on iOS 26 and later (tinted with the app's teal, and interactive, so it
+    /// responds to touch like the system's own glass controls); the solid circle on older iOS.
+    @ViewBuilder
+    private var addCardButtonLabel: some View {
+        let icon = Image(systemName: "plus")
+            .font(.system(size: 24, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 56, height: 56)
+        if #available(iOS 26.0, *) {
+            icon
+                .glassEffect(.regular.tint(Color(red: 0.0, green: 0.42, blue: 0.38).opacity(0.75)).interactive(), in: .circle)
+        } else {
+            icon.background(
+                Circle()
+                    .fill(Color(red: 0.4, green: 0.2, blue: 0.6))
+                    .shadow(color: Color(red: 0.4, green: 0.2, blue: 0.6).opacity(0.5), radius: 8, x: 0, y: 4)
+            )
+        }
     }
 
     /// Selection for the tab bar. Tapping the tab you're already on closes any sub page
@@ -531,71 +545,75 @@ struct ContentView: View {
         bridge.requestedTabSignal = bridge.requestedTabSignal + 1
     }
 
+    /// One tab: the shared Compose page in its own navigation stack, with the native title and bars. Everything here sits on the tab's content, where SwiftUI applies it per tab.
+    private func tabStack<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        NavigationStack {
+            content()
+                // Must sit on the tab's content: on the TabView itself SwiftUI ignores it.
+                .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
+                // Pages run under the navigation and floating tab bars like a native scroll view
+                // (Compose keeps scrolling content clear of them); iOS blurs what passes beneath.
+                .ignoresSafeArea(edges: .all)
+                // Native iOS bars follow Compose's scrolling through a hidden scroll view. Added after
+                // ignoresSafeArea so that scroll view still sees the bars' safe area.
+                .composeNativeBars()
+                .navigationTitle(composeEdgeToEdge ? "" : tabTitle(for: selectedTab))
+                .navigationBarTitleDisplayMode(composeEdgeToEdge ? .inline : .large)
+                .toolbar(composeHidesNavigationBar ? .hidden : .visible, for: .navigationBar)
+                // The back button comes from SharedComposeHost's own toolbar
+        }
+    }
+
     var body: some View {
         ZStack {
             // Native NavigationStack with TabView
-            NavigationStack {
-                TabView(selection: tabSelection) {
+            // Each tab has its own NavigationStack (Apple's recommended layout). iOS then links that tab's
+            // navigation bar to the scroll view inside it, so the large title collapses, the scroll edge
+            // effect shows and (iOS 27) the bar minimises as the page scrolls.
+            TabView(selection: tabSelection) {
+                tabStack {
                     SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                        // Must sit on the tab's content: on the TabView itself SwiftUI ignores it.
-                        .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
-                        // Overlay on the tab's content (not the whole screen) so the button stays inside
-                        // the safe area wherever the system puts the tab bar — bottom on iPhone,
-                        // the side on iPhone Duo — and clear of the fold and camera regions.
-                        .overlay(alignment: .bottomTrailing) {
-                            if selectedTab == 0 && isSignedIn && !composeHidesTabBar {
-                                addCardButton
-                                    .padding(.trailing, 20)
-                                    .padding(.bottom, 20)
+                            // Overlay on the tab's content (not the whole screen) so the button stays inside
+                            // the safe area wherever the system puts the tab bar — bottom on iPhone,
+                            // the side on iPhone Duo — and clear of the fold and camera regions.
+                            .overlay(alignment: .bottomTrailing) {
+                                if selectedTab == 0 && isSignedIn && !composeHidesTabBar {
+                                    addCardButton
+                                        .padding(.trailing, 20)
+                                        .padding(.bottom, 20)
+                                }
                             }
-                        }
-                        .tabItem { Label("Home", systemImage: "house") }
-                        .tag(0)
-
-                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                        // Must sit on the tab's content: on the TabView itself SwiftUI ignores it.
-                        .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
-                        .tabItem { Label("Habits", systemImage: "checklist") }
-                        .tag(1)
-
-                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                        // Must sit on the tab's content: on the TabView itself SwiftUI ignores it.
-                        .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
-                        .tabItem { Label("Chat", systemImage: "message") }
-                        .tag(2)
-
-                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                        // Must sit on the tab's content: on the TabView itself SwiftUI ignores it.
-                        .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
-                        .tabItem { Label("Meditate", systemImage: "apple.meditate.circle.fill") }
-                        .tag(3)
-
-                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                        // Must sit on the tab's content: on the TabView itself SwiftUI ignores it.
-                        .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
-                        .tabItem { Label("Profile", systemImage: "person") }
-                        .tag(4)
                 }
-                .navigationTitle(tabTitle(for: selectedTab))
-                .navigationBarTitleDisplayMode(.large)
-                .toolbar(composeHidesTabBar ? .hidden : .visible, for: .tabBar)
-                .toolbar(composeHidesNavigationBar ? .hidden : .visible, for: .navigationBar)
-                .toolbar {
-                    // .cancellationAction: on iPhone Duo the back button joins the tab bar's side column
-                    ToolbarItem(placement: .cancellationAction) {
-                        if router.showBackButton {
-                            Button(action: {
-                                let impact = UIImpactFeedbackGenerator(style: .light)
-                                impact.impactOccurred()
-                                router.nativeBackTapped()
-                            }) {
-                                Label("Back", systemImage: "chevron.left")
-                            }
-                        }
-                    }
+                .tabItem { Label("Home", systemImage: "house") }
+                .tag(0)
+
+                tabStack {
+                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
                 }
-                 .animation(.easeInOut(duration: 0.2), value: composeHidesTabBar)
+                .tabItem { Label("Habits", systemImage: "checklist") }
+                .tag(1)
+
+                tabStack {
+                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                }
+                .tabItem { Label("Chat", systemImage: "message") }
+                .tag(2)
+
+                tabStack {
+                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                }
+                .tabItem { Label("Meditate", systemImage: "apple.meditate.circle.fill") }
+                .tag(3)
+
+                tabStack {
+                    SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
+                }
+                .tabItem { Label("Profile", systemImage: "person") }
+                .tag(4)
+
             }
+            .tint(Color.appTeal)
+            .animation(.easeInOut(duration: 0.2), value: composeHidesTabBar)
 
             // Native back button: shown in the navigation bar when Compose requests it
             // We add a toolbar item on the top-level navigation so it appears as a
@@ -704,6 +722,18 @@ struct ContentView: View {
                 }
             }
             
+            // Edge-to-edge screens: drop the large title and let Compose draw under the bars
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("ComposeEdgeToEdge"),
+                object: nil,
+                queue: .main
+            ) { notification in
+                let enabled = (notification.userInfo?["enabled"] as? Bool) ?? false
+                if composeEdgeToEdge != enabled {
+                    composeEdgeToEdge = enabled
+                }
+            }
+
             // 🆕 Listen for tab selection updates from ComposeCoordinator
             NotificationCenter.default.addObserver(
                 forName: Notification.Name("UpdateNativeTabSelection"),
@@ -1369,3 +1399,154 @@ struct ChartView: View {
 
 
 
+
+
+extension Color {
+    /// The app's primary teal (Material theme primary): #006A60 in light mode, #53DBC9 in dark.
+    /// Used for the selected tab and other native accents so they match the Compose screens.
+    static let appTeal = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0x53 / 255.0, green: 0xDB / 255.0, blue: 0xC9 / 255.0, alpha: 1)
+            : UIColor(red: 0x00 / 255.0, green: 0x6A / 255.0, blue: 0x60 / 255.0, alpha: 1)
+    })
+}
+
+
+// MARK: - Native bars for Compose pages
+
+/// Compose doesn't scroll with native scroll views, and iOS only links its bars to those: the large
+/// title collapse, the scroll edge effect under the bar (iOS 26+) and bar minimisation (iOS 27).
+/// So each tab gets a hidden, non-interactive SwiftUI ScrollView over the page whose position Compose
+/// keeps in step with its own scrolling ("ComposeScrollOffset"), and iOS drives the bars from that.
+/// It also tells Compose how much of the top the bars cover (PlatformBridge.topBarInset), since the page
+/// itself runs underneath them.
+extension View {
+    func composeNativeBars() -> some View {
+        self
+            .overlay {
+                ComposeScrollMirror()
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            .modifier(NavigationBarMinimization())
+    }
+}
+
+/// iOS 27: the navigation bar minimises while scrolling down and comes back when scrolling up.
+/// The safe area doesn't change as it does, so the page doesn't jump.
+private struct NavigationBarMinimization: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 27.0, *) {
+            content
+                .toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar)
+                .toolbarMinimizationSafeAreaAdjustment(.disabled, for: .navigationBar)
+                // Restore when the page is back at the top
+                .toolbarMinimizationRestoration(.atScrollEdge, for: .navigationBar)
+        } else {
+            content
+        }
+    }
+}
+
+private struct ComposeScrollMirror: View {
+    @State private var driver = MirrorScrollDriver()
+    private let offsets = NotificationCenter.default.publisher(for: Notification.Name("ComposeScrollOffset"))
+
+    var body: some View {
+        ScrollView(.vertical) {
+            // Tall enough for any page; nothing is drawn
+            Color.clear
+                .frame(height: 200_000)
+                .background(ScrollViewFinder { driver.attach($0) })
+        }
+        .scrollIndicators(.hidden)
+        .scrollEdgeEffectSoft()
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.safeAreaInsets.top
+        } action: { top in
+            // Read by Compose as state, so it's there whenever Compose looks
+            PlatformBridge.shared.topBarInset = Double(top)
+            driver.apply()
+        }
+        .onReceive(offsets) { note in
+            driver.scrolled = max(0, CGFloat((note.userInfo?["offset"] as? Double) ?? 0))
+            driver.apply()
+        }
+    }
+}
+
+/// Moves the mirror's UIScrollView the way a finger would. The offset is set on the UIScrollView
+/// directly because SwiftUI won't scroll above the top, and iOS only expands a collapsed large title
+/// when the content goes back past the top it had with the bar collapsed.
+private final class MirrorScrollDriver {
+    weak var scrollView: UIScrollView?
+    var scrolled: CGFloat = 0
+    /// The top inset with the bar fully expanded (large title): offsets are measured from here
+    private var restTop: CGFloat = 0
+    private var width: CGFloat = 0
+
+    func attach(_ scrollView: UIScrollView) {
+        guard self.scrollView !== scrollView else { return }
+        self.scrollView = scrollView
+        scrollView.isUserInteractionEnabled = false
+        scrollView.scrollsToTop = false
+        apply()
+    }
+
+    func apply() {
+        guard let scrollView else { return }
+        let inset = scrollView.adjustedContentInset.top
+        // A new size (rotation, iPhone Duo) can change the bar, so measure again
+        if scrollView.bounds.width != width {
+            width = scrollView.bounds.width
+            restTop = inset
+        }
+        if scrolled == 0 { restTop = max(restTop, inset) }
+        let target = CGPoint(x: scrollView.contentOffset.x, y: scrolled - restTop)
+        if scrollView.contentOffset != target {
+            scrollView.setContentOffset(target, animated: false)
+        }
+    }
+}
+
+/// Finds the UIScrollView SwiftUI uses for the enclosing ScrollView.
+private struct ScrollViewFinder: UIViewRepresentable {
+    let found: (UIScrollView) -> Void
+
+    func makeUIView(context: Context) -> FinderView {
+        let view = FinderView()
+        view.found = found
+        return view
+    }
+
+    func updateUIView(_ uiView: FinderView, context: Context) {
+        uiView.found = found
+    }
+
+    final class FinderView: UIView {
+        var found: ((UIScrollView) -> Void)?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            var view = superview
+            while let current = view {
+                if let scrollView = current as? UIScrollView {
+                    found?(scrollView)
+                    return
+                }
+                view = current.superview
+            }
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func scrollEdgeEffectSoft() -> some View {
+        if #available(iOS 26.0, *) {
+            self.scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            self
+        }
+    }
+}

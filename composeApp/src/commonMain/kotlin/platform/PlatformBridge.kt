@@ -20,6 +20,8 @@ object PlatformBridge {
     var safeAreaBottom: Double by mutableStateOf(0.0)
     var safeAreaLeading: Double by mutableStateOf(0.0)
     var safeAreaTrailing: Double by mutableStateOf(0.0)
+    /** iOS: how much of the top the status and navigation bars cover (set by the SwiftUI host). */
+    var topBarInset: Double by mutableStateOf(0.0)
 
     // When set to true, the native host (iOS) will show a native UITabBar and the Compose UI should hide its bottom navigation.
     var useNativeTabBar: Boolean by mutableStateOf(false)

@@ -3,6 +3,8 @@ package service
 import dev.shreyaspatil.ai.client.generativeai.Chat
 import dev.shreyaspatil.ai.client.generativeai.GenerativeModel
 import dev.shreyaspatil.ai.client.generativeai.type.Content
+import dev.shreyaspatil.ai.client.generativeai.type.RequestOptions
+import kotlin.time.Duration.Companion.minutes
 import org.danielramzani.HealthCompose.BuildKonfig
 
 /**
@@ -23,6 +25,9 @@ class GenerativeAiService(
         return visionModel.startChat(history)
     }
 
+    /** A chat that streams quickly (Gemini 3 thinking set to "low") with sensible timeouts. */
+    fun startFastChat(): GeminiChatSession = GeminiChatSession(GEMINI_API_KEY, MODEL_NAME, FALLBACK_MODEL_NAME)
+
     suspend fun getSuggestions(results: List<String>): String? {
         if (!enabled) {
             throw IllegalStateException(
@@ -30,11 +35,16 @@ class GenerativeAiService(
             )
         }
 
-        val response = visionModel.generateContent(
-            prompt = "Based on the following results: ${results.joinToString(", ")}. Provide suggestions for the week.",
-            // maxTokens is currently passed implicitly by model/client - keep for future
-        )
-        return response.text
+        // Gemini 3 models think before answering, so a reply can occasionally be slow enough to time
+        // out on a weak connection. One quiet retry fixes most of those.
+        // Same fast path as the chat: low thinking, our own timeouts (the SDK's 80 s socket timeout
+        // was being hit while Gemini 3 thought at its default "high" level).
+        val prompt = "Based on the following results: ${results.joinToString(", ")}. Provide suggestions for the week."
+        return retryOnTimeout {
+            val text = StringBuilder()
+            startFastChat().sendMessageStream(prompt).collect { text.append(it) }
+            text.toString()
+        }.ifBlank { null }
     }
 
     /**
@@ -57,11 +67,16 @@ class GenerativeAiService(
         @Suppress("ktlint:standard:property-naming")
         // Use BuildKonfig (set at build time). Do not call JVM-specific APIs in commonMain.
         var GEMINI_API_KEY: String = BuildKonfig.GEMINI_API_KEY
-
         // Runtime-configurable model name. You can change this at runtime via `setModelName("...")`.
-        // Gemini 3.8 Flash: Google's current recommended Flash model (GA since Sep 2026).
+        // Gemini 4 Hydrogen: Google's fast everyday Gemini 4 model (Nov 2026); replied in ~2-4 s in
+        // testing, though new models are sometimes briefly "experiencing high demand" (HTTP 503), so
+        // GeminiChatSession retries and then falls back to FALLBACK_MODEL_NAME.
+        // (gemini-3.8-flash is listed for this API key but never answered: requests hung.)
         // Gemini 3+ ignores temperature/top_p/top_k and rejects prefilled model turns, so don't add them.
-        var MODEL_NAME: String = "gemini-3.8-flash"
+        var MODEL_NAME: String = "gemini-4-hydrogen"
+
+        /** Used when [MODEL_NAME] is busy or rate limited. gemini-3.5-flash is GA and answered in ~3 s. */
+        var FALLBACK_MODEL_NAME: String = "gemini-3.5-flash"
 
         // Backing instance that can be recreated if model name is changed.
         private var _instance: GenerativeAiService? = null
@@ -81,6 +96,8 @@ class GenerativeAiService(
             val model = GenerativeModel(
                 modelName = MODEL_NAME,
                 apiKey = GEMINI_API_KEY,
+                // Generous limit: thinking models can take a while before the first words arrive.
+                requestOptions = RequestOptions(timeout = 3.minutes),
             )
             return GenerativeAiService(
                 visionModel = model,
@@ -96,3 +113,35 @@ class GenerativeAiService(
         }
      }
  }
+
+/** True if [this] (or anything it wraps) is a network or request timeout. */
+fun Throwable.isTimeout(): Boolean =
+    generateSequence(this) { it.cause }.take(8).any { e ->
+        val name = e::class.simpleName.orEmpty()
+        val message = e.message.orEmpty()
+        name.contains("Timeout", ignoreCase = true) ||
+            message.contains("timed out", ignoreCase = true) ||
+            message.contains("timeout", ignoreCase = true) ||
+            message.contains("allotted time", ignoreCase = true)
+    }
+
+/** Runs [block], trying again up to [retries] more times if it fails with a timeout. */
+suspend fun <T> retryOnTimeout(retries: Int = 1, block: suspend () -> T): T {
+    var attempt = 0
+    while (true) {
+        try {
+            return block()
+        } catch (e: Exception) {
+            if (!e.isTimeout() || attempt >= retries) throw e
+            attempt++
+        }
+    }
+}
+
+/** A message for people rather than a stack trace: what went wrong and what to do. */
+fun friendlyGeminiError(error: Throwable): String = when {
+    error.isTimeout() -> "Gemini took too long to reply. Check your connection and try again."
+    error is GeminiApiException && error.isBusy -> "Gemini is very busy right now. Please try again in a moment."
+    else -> error.message?.takeIf { it.isNotBlank() } ?: "Something went wrong talking to Gemini. Please try again."
+}
+

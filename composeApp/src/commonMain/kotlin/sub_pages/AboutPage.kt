@@ -1,5 +1,7 @@
 package sub_pages
 
+import components.ui.bottomBarOverlap
+import components.ui.topBarOverlap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -89,6 +91,7 @@ fun AboutPage(navController: NavController, versionNumber: String) {
                 modifier = Modifier
                     .centeredMaxWidth(ContentWidth.Reading)
                     .verticalScroll(rememberScrollState())
+                    .padding(top = topBarOverlap(), bottom = bottomBarOverlap())
                     .padding(horizontal = PagePadding, vertical = 16.dp),
             ) {
                 AppHeader(versionNumber)

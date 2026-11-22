@@ -1,5 +1,8 @@
 package sub_pages
 
+import androidx.compose.foundation.layout.padding
+import components.ui.bottomBarOverlap
+import components.ui.topBarOverlap
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -45,6 +48,7 @@ fun ReflectionPage(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            .padding(top = topBarOverlap(), bottom = bottomBarOverlap())
             .padding(24.dp),
         horizontalAlignment = Alignment.Start
     ) {

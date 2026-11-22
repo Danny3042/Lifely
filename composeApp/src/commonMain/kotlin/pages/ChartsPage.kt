@@ -1,5 +1,7 @@
 package pages
 
+import components.ui.bottomBarOverlap
+import components.ui.topBarOverlap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -60,6 +62,7 @@ fun ChartsPage(
         Column(modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
+            .padding(top = topBarOverlap(), bottom = bottomBarOverlap())
             .padding(16.dp)) {
             // On Android show a TopAppBar with a native back button when navController is provided
             if (isAndroid() && navController != null) {

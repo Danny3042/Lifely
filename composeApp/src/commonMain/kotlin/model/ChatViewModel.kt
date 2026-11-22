@@ -1,5 +1,7 @@
 package model
 
+import service.friendlyGeminiError
+import service.isTimeout
 import components.ChatUiState
 import components.ModelChatMessage
 import components.MutableChatUiState
@@ -22,17 +24,34 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
 import components.saveChatState
-import components.loadChatState
+import components.loadChatStateWithId
+import components.loadChatHistory
+import components.saveChatToHistory
+import components.loadSavedChat
+import components.deleteSavedChat
+import components.SavedChatSummary
+import components.ChatMessage
+import components.UserChatMessage
+import androidx.compose.runtime.mutableStateListOf
+import kotlinx.coroutines.withContext
+import kotlin.time.Clock
 
 class ChatViewModel(private val aiService: GenerativeAiService) {
     private val coroutineScope = MainScope()
 
     // make the chat session mutable so we can reset for a new conversation
     // Start with an empty history (same as "New chat"). Gemini 3+ models reject scripted/prefilled model turns.
-    private var chat = aiService.startChat(history = emptyList<Content>())
+    // Direct REST chat with low thinking (see GeminiChatSession for why not the SDK's Chat)
+    private var chat = aiService.startFastChat()
 
     private val _uiState = MutableChatUiState()
     val uiState: ChatUiState = _uiState
+
+    /** Id of the open conversation; it keeps this id in the chat history. */
+    private var chatId: String = getUUIDString()
+
+    /** Past chats for the history sheet, most recent first. */
+    val savedChats = mutableStateListOf<SavedChatSummary>()
 
     // Save state when messages change
     private val saveScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -40,8 +59,12 @@ class ChatViewModel(private val aiService: GenerativeAiService) {
     init {
         // restore persisted state
         saveScope.launch {
-            val msgs = loadChatState()
+            val (msgs, savedId) = loadChatStateWithId()
+            if (savedId != null) chatId = savedId
             msgs.forEach { _uiState.addMessage(it) }
+            // Give Gemini the restored conversation too, so follow-up questions keep their context
+            chat.restoreHistory(turnsOf(msgs))
+            refreshHistory()
         }
 
         // Observe and persist changes to messages list periodically
@@ -49,10 +72,67 @@ class ChatViewModel(private val aiService: GenerativeAiService) {
             // very simple: periodically snapshot messages and save (can be optimized)
             while (true) {
                 try {
-                    saveChatState(_uiState.messages)
+                    saveChatState(_uiState.messages.toList(), chatId)
                 } catch (_: Throwable) {}
                 kotlinx.coroutines.delay(3000)
             }
+        }
+    }
+
+    private fun turnsOf(messages: List<ChatMessage>): List<Pair<Boolean, String>> = messages.mapNotNull {
+        when (it) {
+            is UserChatMessage -> true to it.text
+            is ModelChatMessage.LoadedModelMessage -> false to it.text
+            else -> null
+        }
+    }
+
+    private suspend fun refreshHistory() {
+        val list = runCatching { loadChatHistory() }.getOrDefault(emptyList())
+        withContext(Dispatchers.Main) {
+            savedChats.clear()
+            savedChats.addAll(list)
+        }
+    }
+
+    /** Keeps the open conversation in the history (if it has a question in it). */
+    private suspend fun archiveCurrentChat() {
+        val messages = _uiState.messages.toList()
+        if (messages.none { it is UserChatMessage }) return
+        runCatching { saveChatToHistory(chatId, messages, Clock.System.now().toEpochMilliseconds()) }
+    }
+
+    private suspend fun cancelActiveJobs() {
+        jobsMutex.withLock {
+            for (j in activeJobs.values) j.cancel()
+            activeJobs.clear()
+        }
+        attachmentStore.clear()
+    }
+
+    /** Opens a past chat: the current one is kept in the history first. */
+    fun openSavedChat(id: String) {
+        if (id == chatId) return
+        coroutineScope.launch {
+            cancelActiveJobs()
+            archiveCurrentChat()
+            val messages = runCatching { loadSavedChat(id) }.getOrNull() ?: run { refreshHistory(); return@launch }
+            _uiState.clearAllMessages()
+            messages.forEach { _uiState.addMessage(it) }
+            _uiState.canSendMessage = true
+            chatId = id
+            chat = aiService.startFastChat().also { it.restoreHistory(turnsOf(messages)) }
+            saveScope.launch { runCatching { saveChatState(messages, id) } }
+            refreshHistory()
+        }
+    }
+
+    /** Removes a past chat. Deleting the one that's open also starts a fresh chat. */
+    fun deleteChat(id: String) {
+        coroutineScope.launch {
+            runCatching { deleteSavedChat(id) }
+            if (id == chatId) startFresh(archive = false)
+            refreshHistory()
         }
     }
 
@@ -69,18 +149,10 @@ class ChatViewModel(private val aiService: GenerativeAiService) {
 
         val completeText = StringBuilder()
 
-        val base = if (imageBytes != null) {
-            val content = content {
-                image(imageBytes)
-                text(prompt)
-            }
-            chat.sendMessageStream(content)
-        } else {
-            chat.sendMessageStream(prompt)
-        }
+        val base = chat.sendMessageStream(prompt, imageBytes)
 
         val modelMessage = ModelChatMessage.LoadingModelMessage(
-            base.map { it.text ?: "" }
+            base
                 .onEach { completeText.append(it) }
                 .onStart { _uiState.canSendMessage = false }
                 .onCompletion {
@@ -90,7 +162,9 @@ class ChatViewModel(private val aiService: GenerativeAiService) {
                 .catch {
                     println("ChatViewModel: Gemini request failed: ${describeError(it)}")
                     it.printStackTrace()
-                    _uiState.setLastMessageAsError(describeError(it))
+                    // Timeouts get a plain-language message (the retry button is right there);
+                    // anything else keeps the detailed description.
+                    _uiState.setLastMessageAsError(if (it.isTimeout()) friendlyGeminiError(it) else describeError(it))
                     _uiState.canSendMessage = true
                 },
         )
@@ -139,31 +213,22 @@ class ChatViewModel(private val aiService: GenerativeAiService) {
      * Start a fresh chat: cancel active jobs, clear UI state and persistence, and recreate the chat session.
      */
     fun newChat() {
-        coroutineScope.launch {
-            // cancel active streaming jobs
-            jobsMutex.withLock {
-                for (j in activeJobs.values) j.cancel()
-                activeJobs.clear()
-            }
+        coroutineScope.launch { startFresh(archive = true) }
+    }
 
-            // clear attachments
-            attachmentStore.clear()
-
-            // clear ui messages
-            _uiState.clearAllMessages()
-
-            // persist empty state
-            saveScope.launch {
-                try { saveChatState(emptyList()) } catch (_: Throwable) {}
-            }
-
-            // recreate chat session (start fresh)
-            try {
-                chat = aiService.startChat(history = emptyList<Content>())
-            } catch (_: Throwable) {
-                // ignore; chat will remain as previous if restart fails
-            }
+    private suspend fun startFresh(archive: Boolean) {
+        cancelActiveJobs()
+        // The finished conversation goes to the history rather than being thrown away
+        if (archive) archiveCurrentChat()
+        _uiState.clearAllMessages()
+        _uiState.canSendMessage = true
+        chatId = getUUIDString()
+        val newId = chatId
+        saveScope.launch {
+            try { saveChatState(emptyList(), newId) } catch (_: Throwable) {}
         }
+        chat = aiService.startFastChat()
+        refreshHistory()
     }
 
     fun onCleared() {

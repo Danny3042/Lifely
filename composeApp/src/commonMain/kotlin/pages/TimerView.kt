@@ -1,4 +1,7 @@
 package pages
+import androidx.compose.foundation.layout.padding
+import components.ui.bottomBarOverlap
+import components.ui.topBarOverlap
 import components.ui.ExpressiveDialog
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.OutlinedTextField
@@ -138,7 +141,8 @@ fun TimerScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(scrollState),
+            .verticalScroll(scrollState)
+            .padding(top = topBarOverlap(), bottom = bottomBarOverlap()),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

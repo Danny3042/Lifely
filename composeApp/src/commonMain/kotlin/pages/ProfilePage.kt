@@ -1,4 +1,6 @@
 package pages
+import components.ui.bottomBarOverlap
+import components.ui.topBarOverlap
 import components.ui.PlatformAlertDialog
 
 import components.ui.ContentWidth
@@ -76,7 +78,7 @@ fun ProfilePage(navController: NavController) {
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.centeredMaxWidth(ContentWidth.Reading).fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = PagePadding, vertical = 16.dp),
+            contentPadding = PaddingValues(start = PagePadding, end = PagePadding, top = 16.dp + topBarOverlap(), bottom = 16.dp + bottomBarOverlap()),
         ) {
             // Profile header
             item {
