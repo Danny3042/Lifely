@@ -546,7 +546,7 @@ struct ContentView: View {
     }
 
     /// One tab: the shared Compose page in its own navigation stack, with the native title and bars. Everything here sits on the tab's content, where SwiftUI applies it per tab.
-    private func tabStack<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+    private func tabStack<Content: View>(showsAddButton: Bool = false, @ViewBuilder _ content: () -> Content) -> some View {
         NavigationStack {
             content()
                 // Must sit on the tab's content: on the TabView itself SwiftUI ignores it.
@@ -557,6 +557,17 @@ struct ContentView: View {
                 // Native iOS bars follow Compose's scrolling through a hidden scroll view. Added after
                 // ignoresSafeArea so that scroll view still sees the bars' safe area.
                 .composeNativeBars()
+                // Home's add button. After ignoresSafeArea, so it keeps to the safe area: above the
+                // floating tab bar on iPhone, and clear of the tab bar, fold and camera on iPhone Duo
+                // wherever the system puts the bar. The tab bar only shows once past sign-in and
+                // onboarding, so it doubles as the signed-in check.
+                .overlay(alignment: .bottomTrailing) {
+                    if showsAddButton && selectedTab == 0 && !composeHidesTabBar && !composeEdgeToEdge {
+                        addCardButton
+                            .padding(.trailing, 20)
+                            .padding(.bottom, 20)
+                    }
+                }
                 .navigationTitle(composeEdgeToEdge ? "" : tabTitle(for: selectedTab))
                 .navigationBarTitleDisplayMode(composeEdgeToEdge ? .inline : .large)
                 .toolbar(composeHidesNavigationBar ? .hidden : .visible, for: .navigationBar)
@@ -571,18 +582,8 @@ struct ContentView: View {
             // navigation bar to the scroll view inside it, so the large title collapses, the scroll edge
             // effect shows and (iOS 27) the bar minimises as the page scrolls.
             TabView(selection: tabSelection) {
-                tabStack {
+                tabStack(showsAddButton: true) {
                     SharedComposeHost(selectedTab: $selectedTab, hideTabBar: $composeHidesTabBar, hideNavigationBar: $composeHidesNavigationBar)
-                            // Overlay on the tab's content (not the whole screen) so the button stays inside
-                            // the safe area wherever the system puts the tab bar — bottom on iPhone,
-                            // the side on iPhone Duo — and clear of the fold and camera regions.
-                            .overlay(alignment: .bottomTrailing) {
-                                if selectedTab == 0 && isSignedIn && !composeHidesTabBar {
-                                    addCardButton
-                                        .padding(.trailing, 20)
-                                        .padding(.bottom, 20)
-                                }
-                            }
                 }
                 .tabItem { Label("Home", systemImage: "house") }
                 .tag(0)
