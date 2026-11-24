@@ -1,6 +1,7 @@
 package sub_pages
 
 import components.ui.ContentWidth
+import utils.saveMindfulMinutes
 import components.ui.LocalWindowSize
 import components.ui.centeredMaxWidth
 import components.ui.DaySky
@@ -157,6 +158,9 @@ fun MeditationPage(
                     duration = totalTime / 60
                 )
             )
+            // Also save it to Apple Health as Mindful Minutes, if the person allowed that
+            // Use when the timer actually ended, not when the app came back to the foreground
+            saveMindfulMinutes(endAt - totalTime * 1000L, endAt)
             // The "finished" notification was scheduled with the system when the session started
             // Prefer explicit meditation-complete navigation (Reflection page).
             // Call the completion handler if provided; otherwise fall back to navigating to insights.

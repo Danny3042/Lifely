@@ -128,14 +128,8 @@ fun HomePage(
     }
 
     LaunchedEffect(Unit) {
-        if (!isAndroid()) {
-            try {
-                healthKitService.checkPermissions()
-                healthKitService.requestAuthorization()
-            } catch (_: Throwable) {
-                // host may not support HealthKit
-            }
-        }
+        // Apple Health access is asked for only when someone chooses to connect it (Reflection page),
+        // not at launch, per Apple's HealthKit guidelines
         if (!homeShownThisSession) delay(700L)
         loading = false
         homeShownThisSession = true

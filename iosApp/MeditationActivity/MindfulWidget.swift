@@ -68,6 +68,8 @@ private func moodColor(_ valence: Int) -> Color {
 }
 
 private let moodLabels = [-3: "Very unpleasant", -2: "Unpleasant", -1: "Slightly unpleasant", 0: "Neutral", 1: "Slightly pleasant", 2: "Pleasant", 3: "Very pleasant"]
+/// A symbol per mood, so the choices still read in tinted, clear and Lock Screen modes
+private let moodSymbols = [-3: "cloud.rain.fill", -2: "cloud.fill", -1: "cloud.sun.fill", 0: "circle.fill", 1: "sun.haze.fill", 2: "sun.min.fill", 3: "sun.max.fill"]
 /// The widget's five quick choices (the in-between steps are left to the app)
 private let quickMoods = [-3, -2, 0, 2, 3]
 
@@ -152,29 +154,38 @@ private let meditateURL = URL(string: "myhealthbuddy://meditate")!
 private let checkInURL = URL(string: "myhealthbuddy://checkin")!
 
 private struct Ring: View {
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let progress: Double
     var width: CGFloat = 7
 
     var body: some View {
         ZStack {
-            Circle().stroke(Palette.track, lineWidth: width)
+            // In tinted/clear (accented) mode everything turns one colour, so the track drops to
+            // low opacity and the progress arc is the accent group
+            Circle().stroke(renderingMode == .fullColor ? Palette.track : Color.primary.opacity(0.25), lineWidth: width)
             Circle()
                 .trim(from: 0, to: max(0.001, progress))
                 .stroke(Palette.accent, style: StrokeStyle(lineWidth: width, lineCap: .round))
                 .rotationEffect(.degrees(-90))
+                .widgetAccentable()
         }
     }
 }
 
 private struct MeditatePill: View {
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let title: String
     var body: some View {
-        Label(title, systemImage: "play.fill")
+        let label = Label(title, systemImage: "play.fill")
             .font(.caption.weight(.semibold))
-            .foregroundStyle(Palette.onAccent)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
-            .background(Capsule().fill(Palette.accent))
+        if renderingMode == .fullColor {
+            label.foregroundStyle(Palette.onAccent).background(Capsule().fill(Palette.accent))
+        } else {
+            // A filled pill would turn the same colour as its text; outline it instead
+            label.widgetAccentable().overlay(Capsule().stroke(lineWidth: 1.5).widgetAccentable())
+        }
     }
 }
 
@@ -193,6 +204,14 @@ struct SmallMindfulView: View {
     let entry: MindfulEntry
 
     var body: some View {
+        if #available(iOS 17.0, *) {
+            BackgroundAware(entry: entry)
+        } else {
+            regular
+        }
+    }
+
+    var regular: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Today").font(.caption.weight(.semibold)).foregroundStyle(Palette.accent)
@@ -203,6 +222,7 @@ struct SmallMindfulView: View {
                 Ring(progress: entry.progress).frame(width: 52, height: 52)
                 VStack(alignment: .leading, spacing: 0) {
                     Text("\(entry.minutes)").font(.system(size: 24, weight: .semibold, design: .rounded)).foregroundStyle(Palette.text)
+                        .contentTransition(.numericText())
                     Text("of \(entry.goal) min").font(.caption2).foregroundStyle(Palette.secondary)
                 }
             }
@@ -210,6 +230,36 @@ struct SmallMindfulView: View {
             MeditatePill(title: "Meditate").frame(maxWidth: .infinity)
         }
         .widgetURL(meditateURL)
+    }
+}
+
+/// StandBy and CarPlay remove the background and scale the widget up: use the space for large,
+/// glanceable text instead of the pill, per the HIG.
+@available(iOS 17.0, *)
+private struct BackgroundAware: View {
+    @Environment(\.showsWidgetContainerBackground) private var showsBackground
+    let entry: MindfulEntry
+
+    var body: some View {
+        if showsBackground {
+            SmallMindfulView(entry: entry).regular
+        } else {
+            VStack(alignment: .leading, spacing: 2) {
+                Label("Today", systemImage: "leaf.fill")
+                    .font(.headline)
+                    .foregroundStyle(Palette.accent)
+                    .widgetAccentable()
+                Spacer(minLength: 0)
+                Text("\(entry.minutes)")
+                    .font(.system(size: 56, weight: .semibold, design: .rounded))
+                    .contentTransition(.numericText())
+                Text("of \(entry.goal) min")
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .widgetURL(meditateURL)
+        }
     }
 }
 
@@ -230,7 +280,7 @@ struct MediumMindfulView: View {
             Link(destination: meditateURL) {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text(greeting).font(.caption.weight(.semibold)).foregroundStyle(Palette.accent)
+                        Text(greeting).font(.caption.weight(.semibold)).foregroundStyle(Palette.accent).widgetAccentable()
                         Spacer()
                         StreakBadge(days: entry.streak)
                     }
@@ -239,8 +289,9 @@ struct MediumMindfulView: View {
                         .font(.system(size: 20, weight: .semibold, design: .rounded))
                         .foregroundStyle(Palette.text)
                         .minimumScaleFactor(0.8)
+                        .contentTransition(.numericText())
                     Text(statsLine).font(.caption2).foregroundStyle(Palette.secondary)
-                    ProgressView(value: entry.progress).tint(Palette.accent)
+                    ProgressView(value: entry.progress).tint(Palette.accent).widgetAccentable()
                     Spacer(minLength: 0)
                     MeditatePill(title: "Meditate")
                 }
@@ -249,7 +300,7 @@ struct MediumMindfulView: View {
             Rectangle().fill(Palette.track).frame(width: 0.5)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("How are you feeling?").font(.caption.weight(.semibold)).foregroundStyle(Palette.accent)
+                Text("How are you feeling?").font(.caption.weight(.semibold)).foregroundStyle(Palette.accent).widgetAccentable()
                 Spacer(minLength: 0)
                 HStack(spacing: 0) {
                     ForEach(quickMoods, id: \.self) { v in MoodButton(valence: v) }
@@ -258,6 +309,8 @@ struct MediumMindfulView: View {
                 lastCheckIn
             }
         }
+        // Taps outside the Meditate side and the mood buttons open the check-in
+        .widgetURL(checkInURL)
     }
 
     private var statsLine: String {
@@ -268,7 +321,9 @@ struct MediumMindfulView: View {
     @ViewBuilder private var lastCheckIn: some View {
         if let v = entry.snapshot?.lastMoodValence, let at = entry.snapshot?.lastMoodAtEpochMillis {
             HStack(spacing: 5) {
-                Circle().fill(moodColor(v)).frame(width: 8, height: 8)
+                Image(systemName: moodSymbols[v] ?? "circle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(moodColor(v))
                 Text("\(moodLabels[v] ?? "Logged") · \(Date(timeIntervalSince1970: Double(at) / 1000), style: .time)")
                     .font(.caption2)
                     .foregroundStyle(Palette.secondary)
@@ -276,17 +331,30 @@ struct MediumMindfulView: View {
                     .minimumScaleFactor(0.8)
             }
         } else {
-            Text("Tap a colour to check in").font(.caption2).foregroundStyle(Palette.secondary)
+            Text("Tap one to check in").font(.caption2).foregroundStyle(Palette.secondary)
         }
     }
 }
 
 private struct MoodButton: View {
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let valence: Int
 
     var body: some View {
-        // A 26pt dot in a tap area as wide as its share of the row and 40pt tall
-        let dot = Circle().fill(moodColor(valence)).frame(width: 26, height: 26)
+        // A 28pt dot with a weather symbol (so it doesn't rely on colour alone), in a tap area as
+        // wide as its share of the row and 40pt tall
+        let symbol = Image(systemName: moodSymbols[valence] ?? "circle.fill")
+            .font(.system(size: 13, weight: .semibold))
+        let face = ZStack {
+            if renderingMode == .fullColor {
+                Circle().fill(moodColor(valence))
+                symbol.foregroundStyle(.white)
+            } else {
+                Circle().stroke(lineWidth: 1.5).widgetAccentable()
+                symbol.widgetAccentable()
+            }
+        }
+        let dot = face.frame(width: 28, height: 28)
             .frame(maxWidth: .infinity, minHeight: 40)
             .contentShape(Rectangle())
             .accessibilityLabel("Log \(moodLabels[valence] ?? "feeling")")
@@ -302,7 +370,7 @@ struct CircularMindfulView: View {
     let entry: MindfulEntry
     var body: some View {
         Gauge(value: entry.progress) {
-            Image(systemName: "figure.mind.and.body")
+            Image(systemName: "leaf.fill")
         } currentValueLabel: {
             Text("\(entry.minutes)")
         }
@@ -315,7 +383,7 @@ struct RectangularMindfulView: View {
     let entry: MindfulEntry
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Label("Mindful", systemImage: "figure.mind.and.body").font(.headline).widgetAccentable()
+            Label("Mindful", systemImage: "leaf.fill").font(.headline).widgetAccentable()
             Text("\(entry.minutes) of \(entry.goal) min")
             Text(entry.streak > 0 ? "\(entry.streak) day streak" : "Start a streak today").foregroundStyle(.secondary)
         }
@@ -337,7 +405,7 @@ struct MindfulWidgetView: View {
         case .accessoryRectangular:
             RectangularMindfulView(entry: entry).widgetBackground(.clear)
         case .accessoryInline:
-            Text("\(entry.minutes) of \(entry.goal) mindful min").widgetBackground(.clear)
+            Label("\(entry.minutes) of \(entry.goal) mindful min", systemImage: "leaf.fill").widgetBackground(.clear)
         default:
             SmallMindfulView(entry: entry).widgetBackground(Palette.background)
         }
@@ -360,7 +428,7 @@ struct MindfulWidget: Widget {
             MindfulWidgetView(entry: entry)
         }
         .configurationDisplayName("Mindful minutes")
-        .description("Today's meditation, your streak, and a quick check-in.")
+        .description("See today's mindful minutes and streak, start a session, and check in with how you feel.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
 }

@@ -3,149 +3,214 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-// The app's greens (the meditation page and icon)
-private let deepGreen = Color(red: 0.17, green: 0.42, blue: 0.37)
+// Brand colours: the app's mint, and the gold of the sun in the app icon.
 private let mint = Color(red: 0.62, green: 0.95, blue: 0.87)
+private let sunGold = Color(red: 1.00, green: 0.78, blue: 0.45)
+private let deepGreen = Color(red: 0.09, green: 0.29, blue: 0.26)
+private let stopRed = Color(red: 0.96, green: 0.36, blue: 0.36)
 
-/// A running meditation: a countdown in the Dynamic Island, and a card on the Lock Screen (which
-/// is also what iPhones without a Dynamic Island show as a banner).
+private typealias SessionState = MeditationActivityAttributes.ContentState
+
+/// Where a tap goes: the running session, or straight to the check-in once it's finished.
+/// Every presentation uses the same link, so compact leading and trailing open the same screen.
+private func link(for state: SessionState) -> URL {
+    URL(string: state.finished ? "myhealthbuddy://checkin" : "myhealthbuddy://meditate")!
+}
+
+/// A running meditation, designed to Apple's Live Activities guidelines:
+/// - compact: progress ring snug against the camera + a medium-weight countdown, read as one piece
+/// - limited width (iOS 27, e.g. landscape): the ring alone, fitting a 28pt circle; trailing left empty
+/// - minimal: the live progress ring, not a static logo
+/// - expanded: the compact layout enlarged (ring leading, countdown trailing) wrapped around the camera,
+///   with one control (Stop) below
+/// - Lock Screen: its own layout (not a notification), 14pt margins, height shrinks once finished
 struct MeditationLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: MeditationActivityAttributes.self) { context in
             LockScreenView(context: context)
-                .activityBackgroundTint(deepGreen.opacity(0.85))
-                .activitySystemActionForegroundColor(.white)
+                .activityBackgroundTint(deepGreen)
+                .activitySystemActionForegroundColor(mint)
+                .widgetURL(link(for: context.state))
         } dynamicIsland: { context in
-            DynamicIsland {
+            let state = context.state
+            return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Label {
-                        Text(context.state.finished ? "Done" : "Meditating")
-                            .font(.subheadline.weight(.semibold))
-                    } icon: {
-                        Image(systemName: "figure.mind.and.body")
-                            .foregroundStyle(mint)
-                    }
-                    .padding(.leading, 4)
+                    SessionRing(state: state, lineWidth: 5, glyph: .title3)
+                        .frame(width: 52, height: 52)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Countdown(state: context.state)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(mint)
-                        .padding(.trailing, 4)
+                    Countdown(state: state, minutes: context.attributes.minutes)
+                        .font(.system(size: 40, weight: .semibold, design: .rounded))
+                        .foregroundStyle(state.finished ? sunGold : mint)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 10) {
-                        SessionProgress(state: context.state)
-                        HStack {
-                            Text(context.state.finished
-                                 ? "\(context.attributes.minutes) min of mindfulness"
-                                 : "Breathe in… and out")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            StopButton(finished: context.state.finished)
+                    HStack(alignment: .center, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(state.finished ? "Session complete" : "Meditating")
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                            Text(state.finished
+                                 ? "Tap to notice how you feel"
+                                 : "\(context.attributes.minutes)-min session")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.white.opacity(0.7))
                         }
+                        Spacer(minLength: 8)
+                        StopButton(finished: state.finished)
                     }
-                    .padding(.horizontal, 4)
+                    .padding(.top, 4)
                 }
             } compactLeading: {
-                Image(systemName: context.state.finished ? "checkmark.circle.fill" : "figure.mind.and.body")
-                    .foregroundStyle(mint)
+                // Snug against the camera: no extra padding
+                SessionRing(state: state, lineWidth: 3, glyph: .caption2)
+                    .frame(width: 24, height: 24)
             } compactTrailing: {
-                Countdown(state: context.state)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(mint)
-                    .frame(maxWidth: 44)
+                CompactTrailing(state: state, minutes: context.attributes.minutes)
             } minimal: {
-                if context.state.finished {
-                    Image(systemName: "checkmark").foregroundStyle(mint)
-                } else {
-                    ProgressView(
-                        timerInterval: context.state.startDate...context.state.endDate,
-                        countsDown: true,
-                        label: { EmptyView() },
-                        currentValueLabel: { Image(systemName: "figure.mind.and.body").font(.system(size: 9)) }
-                    )
-                    .progressViewStyle(.circular)
-                    .tint(mint)
-                }
+                SessionRing(state: state, lineWidth: 3, glyph: .caption2)
+                    .frame(width: 24, height: 24)
             }
             .keylineTint(mint)
+            .widgetURL(link(for: state))
         }
     }
 }
+
+// MARK: - Lock Screen (also the banner on iPhones without a Dynamic Island, and StandBy at 2x)
 
 private struct LockScreenView: View {
     let context: ActivityViewContext<MeditationActivityAttributes>
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 12) {
-                ZStack {
-                    Circle().fill(mint.opacity(0.25))
-                    Image(systemName: context.state.finished ? "checkmark" : "figure.mind.and.body")
-                        .font(.title3.weight(.semibold))
+        let state = context.state
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(state.finished ? "SESSION COMPLETE" : "MEDITATING")
+                    .font(.caption.weight(.bold))
+                    .tracking(1.2)
+                    .foregroundStyle(state.finished ? sunGold : mint)
+                Countdown(state: state, minutes: context.attributes.minutes)
+                    .font(.system(size: 46, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text(state.finished ? "Tap to notice how you feel" : "Breathe in… and out")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.75))
+            }
+            Spacer(minLength: 8)
+            VStack(spacing: 10) {
+                SessionRing(state: state, lineWidth: 6, glyph: .title2)
+                    .frame(width: 64, height: 64)
+                StopButton(finished: state.finished)
+            }
+        }
+        .padding(14) // standard Lock Screen margin
+    }
+}
+
+// MARK: - Pieces
+
+/// Countdown that the system advances every second without the app running.
+/// When the session ends it changes to the session length, with a content transition.
+private struct Countdown: View {
+    let state: SessionState
+    let minutes: Int
+
+    var body: some View {
+        Group {
+            if state.finished {
+                Text("\(minutes) min")
+            } else {
+                Text(timerInterval: state.startDate...state.endDate, countsDown: true)
+                    .monospacedDigit()
+                    .multilineTextAlignment(.trailing)
+            }
+        }
+        .contentTransition(.opacity)
+    }
+}
+
+/// Live progress ring with the app's leaf, filling as the session runs; gold with a tick when done.
+/// Used for compact leading, minimal, expanded and Lock Screen so the activity reads the same everywhere.
+private struct SessionRing: View {
+    let state: SessionState
+    let lineWidth: CGFloat
+    let glyph: Font
+
+    var body: some View {
+        if state.finished {
+            ZStack {
+                Circle().stroke(sunGold, lineWidth: lineWidth)
+                Image(systemName: "checkmark")
+                    .font(glyph.weight(.bold))
+                    .foregroundStyle(sunGold)
+            }
+            .padding(lineWidth / 2)
+            .transition(.scale.combined(with: .opacity))
+        } else {
+            ProgressView(
+                timerInterval: state.startDate...state.endDate,
+                countsDown: false,
+                label: { EmptyView() },
+                currentValueLabel: {
+                    Image(systemName: "leaf.fill")
+                        .font(glyph.weight(.bold))
                         .foregroundStyle(mint)
                 }
-                .frame(width: 44, height: 44)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(context.state.finished ? "Session complete" : "Meditating")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                    Text(context.state.finished
-                         ? "\(context.attributes.minutes) min of mindfulness. Notice how you feel."
-                         : "\(context.attributes.minutes) min session · breathe in… and out")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.75))
-                }
-                Spacer(minLength: 8)
-                if !context.state.finished {
-                    Countdown(state: context.state)
-                        .font(.system(size: 34, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white)
-                }
-            }
-            if !context.state.finished {
-                HStack(spacing: 12) {
-                    SessionProgress(state: context.state)
-                    StopButton(finished: false)
-                }
-            }
+            )
+            .progressViewStyle(.circular)
+            .tint(mint)
         }
-        .padding(16)
     }
 }
 
-/// Counts down by itself: the system updates it every second without the app running.
-private struct Countdown: View {
-    let state: MeditationActivityAttributes.ContentState
+/// Compact trailing: a medium-weight countdown. In the limited-width Dynamic Island (iOS 27)
+/// it is left empty so the system hides it and the ring alone fits the 28pt circle.
+private struct CompactTrailing: View {
+    let state: SessionState
+    let minutes: Int
 
     var body: some View {
-        if state.finished {
-            Text("Done")
+        if #available(iOS 27.0, *) {
+            LimitedWidthAware(state: state, minutes: minutes)
         } else {
-            Text(timerInterval: state.startDate...state.endDate, countsDown: true)
-                .monospacedDigit()
-                .multilineTextAlignment(.trailing)
+            CompactCountdown(state: state, minutes: minutes)
         }
     }
 }
 
-private struct SessionProgress: View {
-    let state: MeditationActivityAttributes.ContentState
+@available(iOS 27.0, *)
+private struct LimitedWidthAware: View {
+    @Environment(\.isDynamicIslandLimitedInWidth) private var limited
+    let state: SessionState
+    let minutes: Int
 
     var body: some View {
-        if state.finished {
-            ProgressView(value: 1).tint(mint)
+        if limited {
+            EmptyView()
         } else {
-            ProgressView(timerInterval: state.startDate...state.endDate, countsDown: false, label: { EmptyView() }, currentValueLabel: { EmptyView() })
-                .tint(mint)
+            CompactCountdown(state: state, minutes: minutes)
         }
     }
 }
 
-/// Stops the session from the Lock Screen or Dynamic Island (iOS 17 and later)
+private struct CompactCountdown: View {
+    let state: SessionState
+    let minutes: Int
+
+    var body: some View {
+        Countdown(state: state, minutes: minutes)
+            .font(.system(size: 15, weight: .semibold, design: .rounded))
+            .foregroundStyle(state.finished ? sunGold : mint)
+            .frame(width: 44, alignment: .trailing) // keeps it narrow and balanced with the ring
+    }
+}
+
+/// The single control: stop the session (iOS 17 and later). Hidden once finished.
 private struct StopButton: View {
     let finished: Bool
 
@@ -153,9 +218,9 @@ private struct StopButton: View {
         if #available(iOS 17.0, *), !finished {
             Button(intent: StopMeditationIntent()) {
                 Label("Stop", systemImage: "stop.fill")
-                    .font(.caption.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
             }
-            .tint(Color(red: 0.90, green: 0.28, blue: 0.30))
+            .tint(stopRed)
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.capsule)
         }

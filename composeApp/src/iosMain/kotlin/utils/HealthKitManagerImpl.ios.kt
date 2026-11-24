@@ -42,18 +42,10 @@ class IOSHealthKitServiceImpl : HealthKitService {
     private val healthStore = HKHealthStore()
 
 override fun requestAuthorization(): Boolean {
-    var isAuthorized = false
-    val typesToRead: Set<HKObjectType> = setOf(
-        HKObjectType.quantityTypeForIdentifier(HKQuantityTypeIdentifierStepCount),
-        HKObjectType.categoryTypeForIdentifier(HKCategoryTypeIdentifierSleepAnalysis),
-        HKObjectType.quantityTypeForIdentifier(HKQuantityTypeIdentifierAppleExerciseTime),
-        HKObjectType.quantityTypeForIdentifier(HKQuantityTypeIdentifierDistanceWalkingRunning)
-    ).filterNotNull().toSet()
-
-    healthStore.requestAuthorizationToShareTypes(null, typesToRead) { success, error ->
-        isAuthorized = success
-    }
-    return isAuthorized
+    // The app's single Apple Health request (AppleHealthAccess.ios.kt): everything it reads and
+    // the Mindful Minutes it writes, so people see one clear permission sheet
+    AppleHealth.request { }
+    return true
 }
 
 override fun checkPermissions(): Boolean {

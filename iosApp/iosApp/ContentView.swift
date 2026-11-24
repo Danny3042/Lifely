@@ -1088,15 +1088,10 @@ class ChartDataModel: ObservableObject {
             return
         }
 
-        let typesToRead: Set<HKObjectType> = [mindfulType]
-
-        healthStore.requestAuthorization(toShare: nil, read: typesToRead) { [weak self] success, error in
-            if success {
-                self?.fetchMindfulnessData()
-            } else {
-                print("HealthKit authorization failed: \(error?.localizedDescription ?? "unknown error")")
-            }
-        }
+        _ = mindfulType
+        // No permission request here: the app asks once, when people choose "Connect Apple Health"
+        // (Reflection page). Reading without access simply returns nothing.
+        fetchMindfulnessData()
     }
 
     private func fetchMindfulnessData() {

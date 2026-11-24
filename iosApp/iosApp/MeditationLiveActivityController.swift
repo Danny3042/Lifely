@@ -56,13 +56,13 @@ final class MeditationLiveActivityController {
         Task {
             for activity in Activity<MeditationActivityAttributes>.activities {
                 if completed {
-                    // Show "Session complete" for a little while, then go
+                    // Keep the summary (and its tap-to-check-in link) for 15 min, per the HIG (15–30 min)
                     var state = activity.content.state
                     state.finished = true
                     state.endDate = Date()
                     await activity.end(
                         ActivityContent(state: state, staleDate: nil),
-                        dismissalPolicy: .after(Date().addingTimeInterval(5 * 60))
+                        dismissalPolicy: .after(Date().addingTimeInterval(15 * 60))
                     )
                 } else {
                     await activity.end(nil, dismissalPolicy: .immediate)

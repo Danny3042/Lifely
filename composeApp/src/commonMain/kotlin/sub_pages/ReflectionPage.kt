@@ -35,6 +35,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -81,6 +82,8 @@ import kotlinx.datetime.todayIn
 import kotlin.time.Clock
 import kotlin.time.Instant
 import utils.HealthData
+import utils.healthAccessNeedsRequest
+import utils.requestHealthAccess
 import utils.HealthKitService
 import utils.InsightsViewModel
 import utils.MoodCheckInStore
@@ -104,9 +107,15 @@ fun ReflectionPage(
 ) {
     val pageTitle = if (afterSession) "Reflection" else "Check in"
     var data by remember { mutableStateOf<HealthData?>(null) }
+    // Apple Health is only asked for here, when someone taps Connect (never at launch)
+    var healthNeedsRequest by remember { mutableStateOf(false) }
+    var healthReload by remember { mutableStateOf(0) }
     LaunchedEffect(Unit) {
         MoodCheckInStore.load()
-        // collect once; it's fine if it errors (no Health permissions)
+        healthAccessNeedsRequest { healthNeedsRequest = it }
+    }
+    LaunchedEffect(healthReload) {
+        // it's fine if it errors (no Health permissions)
         try {
             healthKitService.readData().collect { hd -> data = hd }
         } catch (_: Throwable) {}
@@ -294,7 +303,20 @@ fun ReflectionPage(
                         modifier = Modifier.weight(1f),
                     )
                 }
-                if (hd == null) {
+                if (healthNeedsRequest) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "See your steps, sleep and exercise next to your check-ins, and save your meditations as Mindful Minutes.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = {
+                        requestHealthAccess {
+                            healthNeedsRequest = false
+                            healthReload++
+                        }
+                    }) { Text("Connect Apple Health") }
+                } else if (hd == null) {
                     Spacer(Modifier.height(8.dp))
                     Text(
                         if (isAndroid()) "Allow Health Connect access to see your day here."
