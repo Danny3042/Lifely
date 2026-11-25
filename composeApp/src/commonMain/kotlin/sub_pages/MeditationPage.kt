@@ -56,6 +56,14 @@ import kotlinx.coroutines.launch
 import components.SessionLengthPicker
 import components.ui.BreathingBuddy
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
+import tts.GuideAudio
+import tts.GuideVoice
+import tts.GuideVoices
+import tts.guideScript
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.datetime.TimeZone
@@ -87,6 +95,7 @@ fun MeditationPage(
     // (A session that finishes keeps it, so it still arrives on time.)
     fun stopSession() {
         isRunning = false
+        GuideAudio.stop()
         SessionNotifications.cancel(MEDITATION_FINISHED_NOTIFICATION)
         MeditationLiveActivity.end(completed = false)
     }
@@ -95,6 +104,7 @@ fun MeditationPage(
     DisposableEffect(Unit) {
         onDispose {
             if (runningNow) {
+                GuideAudio.stop()
                 SessionNotifications.cancel(MEDITATION_FINISHED_NOTIFICATION)
                 MeditationLiveActivity.end(completed = false)
             }
@@ -176,6 +186,39 @@ fun MeditationPage(
             }
         }
     }
+
+    // Spoken guidance: the chosen AI voice welcomes you, checks in through the session and closes it.
+    // Every line is prepared as the session starts (and kept on the phone for next time), then
+    // played on schedule; the line being spoken is shown as a caption.
+    var caption by remember { mutableStateOf<String?>(null) }
+    val guideVoice = GuideVoices.selected
+    LaunchedEffect(isRunning, guideVoice) {
+        caption = null
+        val voice = guideVoice
+        if (!isRunning || voice == null) return@LaunchedEffect
+        val total = totalTime
+        val elapsedNow = total - timeLeft
+        val startedAt = Clock.System.now().toEpochMilliseconds() - elapsedNow * 1000L
+        val cues = guideScript(total).filter { it.atSecond >= elapsedNow - 1 }
+        val gate = Semaphore(3)
+        val files = cues.map { cue -> async { gate.withPermit { GuideVoices.audioFor(voice, cue.text) } } }
+        try {
+            cues.forEachIndexed { i, cue ->
+                val wait = startedAt + cue.atSecond * 1000L - Clock.System.now().toEpochMilliseconds()
+                if (wait > 0) delay(wait)
+                // The first line may still be generating on a first run: give it a little longer
+                val file = withTimeoutOrNull(if (i == 0) 15_000 else 6_000) { files[i].await() } ?: return@forEachIndexed
+                caption = cue.text
+                GuideAudio.play(file)
+            }
+        } finally {
+            // Stopped early: silence the guide. A session that finishes lets its closing words play out.
+            if (timeLeft > 0) GuideAudio.stop()
+        }
+    }
+    val guideScope = rememberCoroutineScope()
+    var previewing by remember { mutableStateOf<String?>(null) }
+    var voiceProblem by remember { mutableStateOf(false) }
 
     if (showEditDialog) {
         SessionLengthPicker(
@@ -362,6 +405,67 @@ fun MeditationPage(
         }
     }
 
+    // The AI voice that guides the session (or none). Picking one plays a short hello in it.
+    val voiceChips: @Composable () -> Unit = {
+        AnimatedVisibility(visible = !isRunning, enter = fadeIn(), exit = fadeOut()) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Guide voice", style = MaterialTheme.typography.titleSmall, color = sky.onSky)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    (listOf<GuideVoice?>(null) + GuideVoices.all).forEach { voice ->
+                        val selected = GuideVoices.selectedId == voice?.id
+                        FilterChip(
+                            selected = selected,
+                            onClick = {
+                                GuideVoices.select(voice?.id)
+                                GuideAudio.stop()
+                                voiceProblem = false
+                                if (voice != null) {
+                                    previewing = voice.id
+                                    guideScope.launch {
+                                        val file = GuideVoices.audioFor(voice, GuideVoices.sampleLine(voice))
+                                        if (previewing == voice.id) {
+                                            previewing = null
+                                            if (file != null) GuideAudio.play(file) else voiceProblem = true
+                                        }
+                                    }
+                                } else {
+                                    previewing = null
+                                }
+                            },
+                            label = { Text(voice?.name ?: "Off", style = MaterialTheme.typography.labelLarge) },
+                            leadingIcon = if (previewing != null && previewing == voice?.id) {
+                                { CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = sky.onAccent) }
+                            } else null,
+                            modifier = Modifier.heightIn(min = 40.dp),
+                            shape = CircleShape,
+                            border = null,
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = sky.glass,
+                                labelColor = sky.onSky,
+                                selectedContainerColor = sky.accent,
+                                selectedLabelColor = sky.onAccent,
+                            ),
+                        )
+                    }
+                }
+                Text(
+                    when {
+                        voiceProblem -> "Couldn't load that voice. Check your connection and try again."
+                        GuideVoices.selected != null -> "${GuideVoices.selected!!.character} voice guides your session"
+                        else -> "Silent session"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = sky.onSky.copy(alpha = 0.8f),
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+    }
+
     val tip: @Composable () -> Unit = {
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -369,7 +473,8 @@ fun MeditationPage(
             colors = CardDefaults.cardColors(containerColor = sky.glass),
         ) {
             Text(
-                text = "Take a deep breath and relax. Focus on your breathing; when your mind wanders, gently bring it back.",
+                // While a voice guides the session, the card shows what it's saying
+                text = caption?.takeIf { isRunning } ?: "Take a deep breath and relax. Focus on your breathing; when your mind wanders, gently bring it back.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = sky.onSky,
                 textAlign = TextAlign.Center,
@@ -406,6 +511,7 @@ fun MeditationPage(
                         header()
                         controls()
                         lengthChips()
+                        voiceChips()
                         tip()
                     }
                 }
@@ -427,6 +533,8 @@ fun MeditationPage(
                     controls()
                     Spacer(Modifier.height(24.dp))
                     lengthChips()
+                    Spacer(Modifier.height(24.dp))
+                    voiceChips()
                     Spacer(Modifier.height(24.dp))
                     tip()
                 }
