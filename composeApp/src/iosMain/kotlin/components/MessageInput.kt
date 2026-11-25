@@ -102,7 +102,7 @@ actual fun MessageInput(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Column {
             // Simple attached image indicator
@@ -129,9 +129,9 @@ actual fun MessageInput(
                     placeholder = { Text("Message Buddy…") },
                     shape = MaterialTheme.shapes.extraLarge,
                     colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                         focusedIndicatorColor = Color.Transparent,
                         unfocusedIndicatorColor = Color.Transparent,
                         disabledIndicatorColor = Color.Transparent,

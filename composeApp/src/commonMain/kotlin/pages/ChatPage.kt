@@ -387,6 +387,12 @@ private fun ChatEmptyState(
                 ) { cheered = true },
         )
         Spacer(Modifier.height(12.dp))
+        Text(
+            text = "YOUR AI WELLNESS COMPANION",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(4.dp))
         Text(day.greeting(), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
         Spacer(Modifier.height(6.dp))
         Text(
