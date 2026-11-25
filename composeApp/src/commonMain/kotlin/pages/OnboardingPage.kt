@@ -14,6 +14,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -81,6 +82,15 @@ import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.launch
 import utils.DEFAULT_DAILY_GOAL_MINUTES
 import utils.SettingsManager
+import utils.isAndroid
+import components.ui.GlassPageIndicator
+import components.ui.GlassTextButton
+import components.ui.IconSky
+import components.ui.PlatformSwitch
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import components.ui.systemBarsContentPadding
+import androidx.compose.ui.graphics.luminance
 
 const val OnboardingScreen = "Onboarding"
 
@@ -166,7 +176,7 @@ fun OnboardingPage(
     isSignedIn: Boolean,
     onFinish: (goalMinutes: Int, reminders: OnboardingReminders, exit: OnboardingExit) -> Unit,
 ) {
-    val intro = listOf(
+    val allIntro = listOf(
         IntroPage(
             icon = Icons.Filled.Spa,
             title = "Welcome to MyHealthBuddy",
@@ -196,6 +206,19 @@ fun OnboardingPage(
             content = { MaterialTheme.colorScheme.onPrimaryContainer },
         ),
     )
+    // iPhone and iPad: a shorter introduction (Apple's onboarding guidance: brief, nothing to memorise),
+    // with meditation and habits on one page. Android keeps its four pages.
+    val intro = if (isAndroid()) allIntro else listOf(
+        allIntro[0],
+        IntroPage(
+            icon = Icons.Outlined.SelfImprovement,
+            title = "Breathe and build habits",
+            body = "Guided meditations and short reflections for whenever you need a reset, plus simple habit tracking to keep your streak growing.",
+            container = { MaterialTheme.colorScheme.secondaryContainer },
+            content = { MaterialTheme.colorScheme.onSecondaryContainer },
+        ),
+        allIntro[3],
+    )
     val goalPage = intro.size
     val pageCount = intro.size + 2 // + the goal picker and the reminders
     val lastPage = pageCount - 1
@@ -205,12 +228,42 @@ fun OnboardingPage(
     val pagerState = rememberPagerState(pageCount = { pageCount })
     val scope = rememberCoroutineScope()
     var goalMinutes by remember { mutableIntStateOf(DEFAULT_DAILY_GOAL_MINUTES) }
+    // Start from what's already set, so seeing the introduction again (from About) changes nothing
+    // unless the person changes it. On first launch these are the defaults.
+    LaunchedEffect(Unit) {
+        runCatching { goalMinutes = SettingsManager.loadDailyGoalMinutes() }
+        runCatching {
+            val saved = service.DailyReminders.load()
+            morningReminder = saved.morningEnabled
+            eveningReminder = saved.eveningEnabled
+        }
+    }
 
     val compactHeight = LocalWindowSize.current.isCompactHeight
     val artSize = if (compactHeight) 112.dp else 200.dp
 
     fun goTo(page: Int) {
         scope.launch { pagerState.animateScrollToPage(page) }
+    }
+
+    // iPhone and iPad: native Liquid Glass over the app icon's sky. Android keeps the Material layout below.
+    if (!isAndroid()) {
+        GlassOnboarding(
+            intro = intro,
+            pagerState = pagerState,
+            goalPage = goalPage,
+            lastPage = lastPage,
+            goalMinutes = goalMinutes,
+            onGoalChange = { goalMinutes = it },
+            morningReminder = morningReminder,
+            onMorningChange = { morningReminder = it },
+            eveningReminder = eveningReminder,
+            onEveningChange = { eveningReminder = it },
+            isSignedIn = isSignedIn,
+            goTo = ::goTo,
+            onFinish = { exit -> onFinish(goalMinutes, reminders, exit) },
+        )
+        return
     }
 
     Box(
@@ -501,6 +554,365 @@ private fun PageDots(count: Int, current: Int, modifier: Modifier = Modifier) {
                         CircleShape,
                     ),
             )
+        }
+    }
+}
+
+
+// ---------------------------------------------------------------------------------------------
+// iOS: Liquid Glass onboarding (iPhone and iPad)
+// ---------------------------------------------------------------------------------------------
+
+@Composable
+private fun GlassOnboarding(
+    intro: List<IntroPage>,
+    pagerState: androidx.compose.foundation.pager.PagerState,
+    goalPage: Int,
+    lastPage: Int,
+    goalMinutes: Int,
+    onGoalChange: (Int) -> Unit,
+    morningReminder: Boolean,
+    onMorningChange: (Boolean) -> Unit,
+    eveningReminder: Boolean,
+    onEveningChange: (Boolean) -> Unit,
+    isSignedIn: Boolean,
+    goTo: (Int) -> Unit,
+    onFinish: (OnboardingExit) -> Unit,
+) {
+    val window = LocalWindowSize.current
+    // iPad in landscape and phones on their side: art and text side by side
+    val twoPane = window.useTwoPane
+    // iPad (either way up): more room, so larger art and type
+    val roomy = !window.isCompactWidth && !window.isCompactHeight
+    val artSize = when {
+        window.isCompactHeight -> 120.dp
+        roomy -> 280.dp
+        else -> 200.dp
+    }
+    val isNight = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val current = pagerState.currentPage
+    // One side margin for the top and bottom controls
+    val edge = 20.dp
+
+    Box(Modifier.fillMaxSize()) {
+        // Opening: the hills rise and the sun comes up when onboarding first appears, then the
+        // hills keep drifting very slowly
+        val reveal = remember { Animatable(0f) }
+        LaunchedEffect(Unit) { reveal.animateTo(1f, tween(2200, easing = LinearEasing)) }
+        val drift by rememberInfiniteTransition(label = "skyDrift").animateFloat(
+            initialValue = 0f,
+            targetValue = 2f * kotlin.math.PI.toFloat(),
+            animationSpec = infiniteRepeatable(tween(60_000, easing = LinearEasing)),
+            label = "skyDriftPhase",
+        )
+        // The sky runs under the status bar and home indicator; content stays clear of them
+        IconSky(
+            isNight = isNight,
+            modifier = Modifier.fillMaxSize(),
+            reveal = reveal.value,
+            phase = drift,
+        )
+        Column(Modifier.fillMaxSize().systemBarsContentPadding()) {
+            // Skip ends onboarding straight away with the defaults (a 10-minute goal, no reminders), so it's
+            // truly optional, per Apple's onboarding guidance. The goal and reminders can be changed later.
+            // Same side margin as the bottom bar, so Skip and Next line up on the trailing edge.
+            Box(
+                // Side by side: Skip lines up with the page's text column, like Next below it
+                modifier = (if (twoPane) Modifier.centeredMaxWidth(ContentWidth.Wide).fillMaxWidth().padding(horizontal = 40.dp)
+                    else Modifier.fillMaxWidth().padding(horizontal = edge)).height(56.dp),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                if (current < lastPage) {
+                    GlassTextButton("Skip", onClick = { onFinish(OnboardingExit.App) }, modifier = Modifier.width(76.dp).height(40.dp))
+                }
+            }
+
+            HorizontalPager(state = pagerState, modifier = Modifier.weight(1f).fillMaxWidth()) { page ->
+                when {
+                    page < intro.size -> GlassPageLayout(
+                        art = { scale -> SkyArt(intro[page].icon, artSize * scale) },
+                        title = intro[page].title,
+                        body = intro[page].body,
+                        twoPane = twoPane,
+                        roomy = roomy,
+                    )
+                    page == lastPage -> GlassPageLayout(
+                        art = { scale -> SkyArt(Icons.Outlined.NotificationsActive, artSize * 0.75f * scale) },
+                        title = "A gentle nudge?",
+                        body = "A daily reminder makes it easier to keep going. Pick any you'd like; you can change them later in Profile.",
+                        twoPane = twoPane,
+                        roomy = roomy,
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            SkyReminderOption(
+                                icon = Icons.Outlined.WbSunny,
+                                title = "Morning meditation",
+                                time = service.formatReminderTime(8, 0),
+                                checked = morningReminder,
+                                onCheckedChange = onMorningChange,
+                            )
+                            SkyReminderOption(
+                                icon = Icons.Outlined.Bedtime,
+                                title = "Evening check-in",
+                                time = service.formatReminderTime(20, 30),
+                                checked = eveningReminder,
+                                onCheckedChange = onEveningChange,
+                            )
+                        }
+                    }
+                    else -> GlassPageLayout(
+                        art = { scale -> SkyArt(Icons.Outlined.Flag, artSize * 0.75f * scale) },
+                        title = "Set a daily goal",
+                        body = "How many mindful minutes would you like each day? Start small: showing up matters more than how long.",
+                        twoPane = twoPane,
+                        roomy = roomy,
+                    ) {
+                        SkyGoalPicker(selected = goalMinutes, onSelect = onGoalChange)
+                    }
+                }
+            }
+
+            val dots: @Composable () -> Unit = {
+                GlassPageIndicator(count = lastPage + 1, current = current, onSelect = goTo)
+            }
+            // iPad: actions centred at reading width. Phones and iPhone Duo: the full width with the
+            // same side margin as Skip, so every control lines up on the same edges.
+            // Side by side (iPhone Duo open, phones on their side, iPad landscape): the bar spans the
+            // page's own content width, so Back sits under the art and Next under the text.
+            val barModifier = when {
+                twoPane -> Modifier.centeredMaxWidth(ContentWidth.Wide).fillMaxWidth().padding(horizontal = 40.dp)
+                roomy -> Modifier.centeredMaxWidth(ContentWidth.Form).fillMaxWidth().padding(horizontal = edge)
+                else -> Modifier.fillMaxWidth().padding(horizontal = edge)
+            }
+            // Side by side, the dots share the buttons' row so the page keeps its height.
+            // Otherwise they sit centred above the buttons.
+            val inlineDots = twoPane
+            if (!inlineDots) {
+                Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) { dots() }
+            }
+            Box(barModifier.padding(top = if (inlineDots) 8.dp else 0.dp, bottom = 16.dp)) {
+                if (current == lastPage) {
+                    val primary: @Composable (Modifier) -> Unit = { m ->
+                        GlassTextButton(
+                            title = if (isSignedIn) "Let's Begin" else "Get Started",
+                            onClick = { onFinish(if (isSignedIn) OnboardingExit.App else OnboardingExit.SignIn) },
+                            modifier = m.height(50.dp),
+                            prominent = true,
+                        )
+                    }
+                    val secondary: @Composable (Modifier) -> Unit = { m ->
+                        GlassTextButton(
+                            title = "Look Around First",
+                            onClick = { onFinish(OnboardingExit.App) },
+                            modifier = m.height(46.dp),
+                        )
+                    }
+                    if (inlineDots) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(Modifier.weight(1f)) { dots() }
+                            if (!isSignedIn) secondary(Modifier.width(170.dp))
+                            primary(Modifier.width(150.dp))
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            primary(Modifier.fillMaxWidth())
+                            if (!isSignedIn) secondary(Modifier.fillMaxWidth())
+                        }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        // Equal-width sides keep the dots exactly centred between Back and Next
+                        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                            if (current > 0) {
+                                GlassTextButton("Back", onClick = { goTo(current - 1) }, modifier = Modifier.width(96.dp).height(48.dp))
+                            }
+                        }
+                        if (inlineDots) dots()
+                        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                            GlassTextButton(
+                                "Next",
+                                onClick = { goTo(current + 1) },
+                                modifier = Modifier.width(112.dp).height(48.dp),
+                                prominent = true,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One onboarding page: stacked on phones and iPad portrait, side by side when wide and short. */
+@Composable
+private fun GlassPageLayout(
+    /** The page's art at the given scale (smaller on short screens) */
+    art: @Composable (scale: Float) -> Unit,
+    title: String,
+    body: String,
+    twoPane: Boolean,
+    roomy: Boolean,
+    extra: (@Composable () -> Unit)? = null,
+) {
+    val titleStyle = if (roomy) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineMedium
+    val bodyStyle = if (roomy) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge
+    if (twoPane) {
+        Row(
+            modifier = Modifier.centeredMaxWidth(ContentWidth.Wide).fillMaxSize().padding(horizontal = 40.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { art(1f) }
+            Spacer(Modifier.width(40.dp))
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                Text(title, style = titleStyle, color = Color.White, modifier = Modifier.semantics { heading() })
+                Spacer(Modifier.height(12.dp))
+                Text(body, style = bodyStyle, color = Color.White.copy(alpha = 0.88f))
+                if (extra != null) {
+                    Spacer(Modifier.height(24.dp))
+                    extra()
+                }
+            }
+        }
+    } else BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Short screens (iPhone Duo folded, small phones): fit the page instead of scrolling it.
+        // The native switches on the reminders page aren't clipped by Compose, so an overflowing
+        // page showed them on top of the buttons.
+        val short = !roomy && maxHeight < 560.dp
+        val showArt = !(short && extra != null && maxHeight < 470.dp)
+        val pageTitleStyle = if (short) MaterialTheme.typography.headlineSmall else titleStyle
+        val pageBodyStyle = if (short) MaterialTheme.typography.bodyMedium else bodyStyle
+        Column(
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = if (short) 20.dp else 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            if (showArt) {
+                art(if (short) 0.65f else 1f)
+                Spacer(Modifier.height(if (roomy) 48.dp else if (short) 12.dp else 32.dp))
+            }
+            Column(
+                modifier = Modifier.centeredMaxWidth(if (roomy) ContentWidth.Reading else ContentWidth.Form),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    title,
+                    style = pageTitleStyle,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Spacer(Modifier.height(if (short) 8.dp else 12.dp))
+                Text(body, style = pageBodyStyle, color = Color.White.copy(alpha = 0.88f), textAlign = TextAlign.Center)
+                if (extra != null) {
+                    Spacer(Modifier.height(if (short) 16.dp else 28.dp))
+                    extra()
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The page's symbol in a soft translucent disc that breathes like the meditation timer. Content,
+ * not a control, so it isn't Liquid Glass.
+ */
+@Composable
+private fun SkyArt(icon: ImageVector, size: Dp) {
+    val breath = rememberInfiniteTransition(label = "skyBreath")
+    val scale by breath.animateFloat(
+        initialValue = 0.9f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "skyBreathScale",
+    )
+    Box(modifier = Modifier.size(size), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .size(size)
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .background(Color.White.copy(alpha = 0.14f), CircleShape),
+        )
+        Surface(
+            shape = CircleShape,
+            color = Color.White.copy(alpha = 0.22f),
+            contentColor = Color.White,
+            modifier = Modifier.size(size * 0.68f),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(size * 0.28f))
+            }
+        }
+    }
+}
+
+/** Selected: solid white with the sky's purple text; not selected: a light translucent card. */
+private val SkyInk = Color(0xFF3B2F7A)
+
+@Composable
+private fun SkyGoalPicker(selected: Int, onSelect: (Int) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        GoalOptions.forEach { (minutes, label) ->
+            val isSelected = minutes == selected
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.18f),
+                contentColor = if (isSelected) SkyInk else Color.White,
+                modifier = Modifier
+                    .weight(1f)
+                    .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(minutes) }),
+            ) {
+                Column(
+                    modifier = Modifier.padding(vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("$minutes", style = MaterialTheme.typography.headlineSmall)
+                    Text("min", style = MaterialTheme.typography.labelMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SkyReminderOption(
+    icon: ImageVector,
+    title: String,
+    time: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = if (checked) Color.White else Color.White.copy(alpha = 0.18f),
+        contentColor = if (checked) SkyInk else Color.White,
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).heightIn(min = 48.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = null)
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(time, style = MaterialTheme.typography.bodyMedium)
+            }
+            // The native UISwitch: Liquid Glass on iOS 26+. Tapping the row or the switch toggles it.
+            PlatformSwitch(checked = checked, onCheckedChange = onCheckedChange)
         }
     }
 }

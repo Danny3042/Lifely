@@ -551,7 +551,8 @@ actual fun PlatformApp(
     // For those, the app stops padding itself, tells Swift to let the Compose view extend under the
     // bars, and hands the insets to the page so it can keep its controls clear of them.
     val currentEntry by navController.currentBackStackEntryAsState()
-    val edgeToEdge = currentEntry?.destination?.route == MEDITATION_PAGE_ROUTE
+    // (the meditation sky, and the onboarding sky)
+    val edgeToEdge = currentEntry?.destination?.route.let { it == MEDITATION_PAGE_ROUTE || it == OnboardingScreen }
     LaunchedEffect(edgeToEdge) {
         NSOperationQueue.mainQueue.addOperationWithBlock {
             NSNotificationCenter.defaultCenter.postNotificationName(

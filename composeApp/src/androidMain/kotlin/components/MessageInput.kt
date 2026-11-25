@@ -113,7 +113,7 @@ actual fun MessageInput(
             ) {
                 TextField(
                     value = userMessage,
-                    placeholder = { Text("Message Gemini…") },
+                    placeholder = { Text("Message Buddy…") },
                     shape = MaterialTheme.shapes.extraLarge,
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,

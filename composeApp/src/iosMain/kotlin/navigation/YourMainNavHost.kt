@@ -66,7 +66,9 @@ fun YourMainNavHost(
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
 
     LaunchedEffect(currentBackStackEntry) {
-        val currentRoute = currentBackStackEntry?.destination?.route ?: "HeroScreen"
+        // No destination yet (the start screen is still loading): report nothing. Assuming
+        // "HeroScreen" here showed the tab and navigation bars for a moment before onboarding.
+        val currentRoute = currentBackStackEntry?.destination?.route ?: return@LaunchedEffect
 
         // Define which routes are main tabs (these won't show back button)
         val mainTabRoutes = setOf(

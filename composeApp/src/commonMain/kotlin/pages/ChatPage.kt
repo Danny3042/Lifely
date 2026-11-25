@@ -57,9 +57,33 @@ import androidx.compose.ui.unit.dp
 import components.ChatBubbleItem
 import components.MessageInput
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Surface
+import components.buddy.BuddyActions
+import components.buddy.BuddyDay
+import components.buddy.greeting
+import components.buddy.noticing
+import components.buddy.suggestions
+import components.buddy.systemInstruction
+import components.ui.BreathingBuddy
+import components.ui.BuddyExpression
+import utils.DEFAULT_DAILY_GOAL_MINUTES
+import utils.MoodCheckInStore
 import model.ChatViewModel
 import service.GenerativeAiService
 import components.ModelChatMessage
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollDispatcher
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import tts.getTtsService
 import tts.TtsSettings
 import platform.registerComposeNewChatListener
@@ -67,9 +91,17 @@ import platform.registerComposeNewChatListener
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(
-    chatViewModel: ChatViewModel = remember { ChatViewModel(GenerativeAiService.instance) },
+    // Every message carries the Buddy's instructions with today's context (read fresh each time)
+    chatViewModel: ChatViewModel = remember {
+        ChatViewModel(GenerativeAiService.instance) { BuddyDay.now(BuddyGoal.minutes).systemInstruction() }
+    },
 ) {
     val chatUiState = chatViewModel.uiState
+    // What the Buddy knows about today: the goal and check-ins are loaded once, the rest is read live
+    LaunchedEffect(Unit) {
+        BuddyGoal.minutes = BuddyDay.loadGoal()
+        runCatching { if (MoodCheckInStore.checkIns.isEmpty()) MoodCheckInStore.load() }
+    }
 
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -83,6 +115,25 @@ fun ChatScreen(
     }
 
     val listState = rememberLazyListState()
+    // Automatic scrolls are reported through nested scrolling like a drag, so the native large title
+    // collapses with them. A plain programmatic scroll left the title sitting over the messages.
+    val scrollDispatcher = remember { NestedScrollDispatcher() }
+    suspend fun scrollToEnd() {
+        repeat(30) {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull() ?: return
+            val viewportEnd = info.viewportEndOffset - info.afterContentPadding
+            val distance = if (last.index == info.totalItemsCount - 1) {
+                (last.offset + last.size - viewportEnd).toFloat()
+            } else {
+                info.viewportSize.height * 0.8f
+            }
+            if (distance <= 1f) return
+            val consumed = listState.animateScrollBy(distance)
+            scrollDispatcher.dispatchPostScroll(Offset(0f, -consumed), Offset.Zero, NestedScrollSource.UserInput)
+            if (consumed < 1f) return
+        }
+    }
     var showHistory by remember { mutableStateOf(false) }
     if (showHistory) {
         ChatHistorySheet(
@@ -107,7 +158,7 @@ fun ChatScreen(
         val shouldAuto = lastVisibleIndex >= (lastIndex - 1)
         if (shouldAuto) {
             // scroll to the latest message
-            coroutineScope.launch { listState.animateScrollToItem(lastIndex) }
+            coroutineScope.launch { scrollToEnd() }
         }
 
         // Speak latest model message when TTS is enabled
@@ -115,9 +166,27 @@ fun ChatScreen(
         if (TtsSettings.enabled && lastMessage is ModelChatMessage.LoadedModelMessage) {
             // Use Gemini TTS where available
             try {
-                getTtsService().speak(lastMessage.text, useGemini = true)
+                getTtsService().speak(BuddyActions.clean(lastMessage.text), useGemini = true)
             } catch (_: Throwable) {}
         }
+    }
+
+    // When a reply finishes it can grow (its cards appear): bring its end into view if the
+    // conversation was being followed
+    val lastId = messages.lastOrNull()?.id
+    // A new (empty) chat is back at the top: let the native large title expand again
+    LaunchedEffect(messages.isEmpty()) {
+        if (messages.isEmpty()) scrollDispatcher.dispatchPostScroll(Offset.Zero, Offset(0f, 1f), NestedScrollSource.UserInput)
+    }
+    val lastWasLoading = remember { mutableStateOf(false) }
+    LaunchedEffect(lastId) {
+        // Only a reply finishing now (loading -> loaded), not a chat restored or reopened
+        val finishedNow = lastWasLoading.value && messages.lastOrNull() is ModelChatMessage.LoadedModelMessage
+        lastWasLoading.value = messages.lastOrNull() is ModelChatMessage.LoadingModelMessage
+        if (!finishedNow) return@LaunchedEffect
+        kotlinx.coroutines.delay(150)
+        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
+        if (lastVisible >= messages.lastIndex) scrollToEnd()
     }
 
     Scaffold(
@@ -132,6 +201,10 @@ fun ChatScreen(
                 .padding(paddingValues)
                 .fillMaxSize()
         ) {
+            // Re-read when the chat empties (a new chat) or a mood is logged, so the greeting stays current
+            val day = remember(messages.isEmpty(), BuddyGoal.minutes, MoodCheckInStore.checkIns.size) {
+                BuddyDay.now(BuddyGoal.minutes)
+            }
             val showSidebar = maxWidth >= 760.dp
             val sidebarWidth = if (maxWidth >= 1000.dp) 320.dp else 280.dp
             val sendMessage: (String, ByteArray?) -> Unit = { inputText, image ->
@@ -139,7 +212,7 @@ fun ChatScreen(
                 // After sending, attempt to scroll to latest (the LaunchedEffect above will also handle this).
                 coroutineScope.launch {
                     val last = chatUiState.messages.size
-                    if (last > 0) listState.animateScrollToItem(last - 1)
+                    if (last > 0) scrollToEnd()
                 }
             }
             val startNewChat: () -> Unit = {
@@ -152,32 +225,38 @@ fun ChatScreen(
                 Box(modifier = modifier) {
                     LazyColumn(
                         // Messages stay at a comfortable reading width on large screens
-                        modifier = Modifier.centeredMaxWidth(ContentWidth.Reading).fillMaxSize(),
+                        modifier = Modifier.centeredMaxWidth(ContentWidth.Reading).fillMaxSize()
+                            .nestedScroll(remember { object : NestedScrollConnection {} }, scrollDispatcher),
                         state = listState,
                         reverseLayout = false,
                         // Keep the last message clear of the input bar and the New chat button above it
                         contentPadding = PaddingValues(top = 8.dp + topBarOverlap(), bottom = 176.dp + bottomBarOverlap()),
                     ) {
-                        items(
+                        itemsIndexed(
                             items = chatUiState.messages,
-                            key = { it.id },
-                        ) { message ->
-                            ChatBubbleItem(message) { id, text ->
-                                // find the message and retry via viewModel
-                                // we assume failed messages are user messages and retry will resubmit
-                                // Note: no image support in retry here
-                                chatViewModel.retryMessage(id, text, null)
-                            }
+                            key = { _, message -> message.id },
+                        ) { index, message ->
+                            ChatBubbleItem(
+                                chatMessage = message,
+                                // Failed messages are user messages: retry resubmits the text (no image)
+                                onRetry = { id, text -> chatViewModel.retryMessage(id, text, null) },
+                                isLatest = index == chatUiState.messages.lastIndex,
+                                isNight = day.isNight,
+                                canSend = chatUiState.canSendMessage,
+                                onSendMessage = { text -> sendMessage(text, null) },
+                            )
                         }
                     }
                     if (messages.isEmpty()) {
                         ChatEmptyState(
+                            day = day,
                             onSuggestion = { prompt -> sendMessage(prompt, null) },
                             enabled = chatUiState.canSendMessage,
                             modifier = Modifier
                                 .align(Alignment.Center)
                                 .widthIn(max = ContentWidth.Reading)
-                                .padding(top = topBarOverlap(), bottom = 96.dp + bottomBarOverlap()),
+                                // Clear of the input and the Past chats / New chat buttons above it
+                                .padding(top = topBarOverlap(), bottom = 132.dp + bottomBarOverlap()),
                         )
                     }
                     Column(
@@ -265,47 +344,73 @@ fun ChatScreen(
      }
  }
 
-/** Starter prompts for an empty chat: one tap sends them. */
-private val chatSuggestions = listOf(
-    "Help me wind down for sleep",
-    "A 2-minute stress reset",
-    "Ideas for a morning routine",
-    "How do I stick to a new habit?",
-)
+/** The daily goal, for the Buddy's context (loaded when the chat opens) */
+private object BuddyGoal {
+    var minutes by mutableStateOf(DEFAULT_DAILY_GOAL_MINUTES)
+}
 
+/**
+ * An empty chat: the Buddy greets you with something that fits your day, shows what it knows
+ * (minutes today, streak, last mood) and offers starters picked for right now. Tap the Buddy to
+ * make it happy.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChatEmptyState(
+    day: BuddyDay,
     onSuggestion: (String) -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    var cheered by remember { mutableStateOf(false) }
+    LaunchedEffect(cheered) {
+        if (cheered) {
+            kotlinx.coroutines.delay(1_800)
+            cheered = false
+        }
+    }
     Column(
-        modifier = modifier.padding(horizontal = 32.dp),
+        modifier = modifier.verticalScroll(rememberScrollState()).padding(horizontal = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        IconBadge(
-            icon = Icons.Filled.AutoAwesome,
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            size = 72.dp,
-            shape = MaterialTheme.shapes.extraLarge,
+        BreathingBuddy(
+            breath = 0f,
+            isRunning = false,
+            isNight = day.isNight,
+            expression = if (cheered) BuddyExpression.Happy else BuddyExpression.Calm,
+            modifier = Modifier
+                .size(96.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClickLabel = "Say hello",
+                ) { cheered = true },
         )
-        Spacer(Modifier.height(16.dp))
-        Text("Ask Gemini", style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(12.dp))
+        Text(day.greeting(), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(6.dp))
         Text(
-            "Get tips on sleep, stress, habits and more. Attach a photo for extra context.",
+            day.noticing(),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(12.dp))
+        // What the Buddy knows about today, at a glance
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            chatSuggestions.forEach { prompt ->
+            DayPill(if (day.goalMet) "Goal reached" else "${day.minutesToday}/${day.goalMinutes} min today")
+            if (day.streakDays > 0) DayPill("${day.streakDays}-day streak")
+            day.lastMoodLabel?.let { DayPill("Feeling: ${it.lowercase()}") }
+        }
+        Spacer(Modifier.height(16.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            day.suggestions().forEach { prompt ->
                 SuggestionChip(
                     onClick = { onSuggestion(prompt) },
                     enabled = enabled,
@@ -313,5 +418,16 @@ private fun ChatEmptyState(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun DayPill(text: String) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+    ) {
+        Text(text, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
     }
 }

@@ -135,7 +135,7 @@ fun MeditationPage(
                 SessionNotifications.schedule(
                     id = MEDITATION_FINISHED_NOTIFICATION,
                     afterSeconds = seconds,
-                    title = "Meditation complete",
+                    title = "Meditation Complete",
                     body = "Your session has ended. Take a moment to notice how you feel.",
                 )
             }

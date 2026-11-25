@@ -50,6 +50,8 @@ import components.ui.PagePadding
 import components.ui.SectionHeader
 import components.ui.centeredMaxWidth
 import utils.isAndroid
+import androidx.compose.material3.TextButton
+import pages.OnboardingScreen
 
 const val AboutPageScreen = "About"
 
@@ -108,6 +110,13 @@ fun AboutPage(
                     iconContainer = MaterialTheme.colorScheme.primaryContainer,
                     iconContent = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
+                // Apple's onboarding guidance: if people skip the introduction, make it easy to find later
+                if (!isAndroid()) {
+                    TextButton(
+                        onClick = { navController.navigate(OnboardingScreen) { launchSingleTop = true } },
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    ) { Text("Show the Introduction Again") }
+                }
 
                 SectionHeader("Built with")
                 AboutGroup(

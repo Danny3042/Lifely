@@ -39,13 +39,17 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 
-class ChatViewModel(private val aiService: GenerativeAiService) {
+class ChatViewModel(
+    private val aiService: GenerativeAiService,
+    /** The Buddy's instructions with today's context; read before every message */
+    private val systemInstruction: (() -> String?)? = null,
+) {
     private val coroutineScope = MainScope()
 
     // make the chat session mutable so we can reset for a new conversation
     // Start with an empty history (same as "New chat"). Gemini 3+ models reject scripted/prefilled model turns.
     // Direct REST chat with low thinking (see GeminiChatSession for why not the SDK's Chat)
-    private var chat = aiService.startFastChat()
+    private var chat = aiService.startFastChat(systemInstruction)
 
     private val _uiState = MutableChatUiState()
     val uiState: ChatUiState = _uiState
@@ -130,7 +134,7 @@ class ChatViewModel(private val aiService: GenerativeAiService) {
             messages.forEach { _uiState.addMessage(it) }
             _uiState.canSendMessage = true
             chatId = id
-            chat = aiService.startFastChat().also { it.restoreHistory(turnsOf(messages)) }
+            chat = aiService.startFastChat(systemInstruction).also { it.restoreHistory(turnsOf(messages)) }
             saveScope.launch { runCatching { saveChatState(messages, id) } }
             refreshHistory()
         }
@@ -236,7 +240,7 @@ class ChatViewModel(private val aiService: GenerativeAiService) {
         saveScope.launch {
             try { saveChatState(emptyList(), newId) } catch (_: Throwable) {}
         }
-        chat = aiService.startFastChat()
+        chat = aiService.startFastChat(systemInstruction)
         refreshHistory()
     }
 

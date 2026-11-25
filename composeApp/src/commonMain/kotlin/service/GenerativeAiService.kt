@@ -26,7 +26,8 @@ class GenerativeAiService(
     }
 
     /** A chat that streams quickly (Gemini 3 thinking set to "low") with sensible timeouts. */
-    fun startFastChat(): GeminiChatSession = GeminiChatSession(GEMINI_API_KEY, MODEL_NAME, FALLBACK_MODEL_NAME)
+    fun startFastChat(systemInstruction: (() -> String?)? = null): GeminiChatSession =
+        GeminiChatSession(GEMINI_API_KEY, MODEL_NAME, FALLBACK_MODEL_NAME, systemInstruction = systemInstruction)
 
     suspend fun getSuggestions(results: List<String>): String? {
         if (!enabled) {

@@ -49,7 +49,7 @@ object DailyReminders {
                 id = MORNING_ID,
                 hour = s.morningHour,
                 minute = s.morningMinute,
-                title = "Start your day calmly",
+                title = "Start Your Day Calmly",
                 body = "A few minutes of meditation can set the tone for your day.",
             )
         } else {
@@ -60,7 +60,7 @@ object DailyReminders {
                 id = EVENING_ID,
                 hour = s.eveningHour,
                 minute = s.eveningMinute,
-                title = "Time to check in",
+                title = "Time to Check In",
                 body = "How was your day? Take a moment to notice how you're feeling.",
             )
         } else {

@@ -500,10 +500,14 @@ struct ContentView: View {
     @State private var authHandle: AuthStateDidChangeListenerHandle? = nil
     @State private var showChartsSheet: Bool = false
     @State private var isSignedIn: Bool = Auth.auth().currentUser != nil
+    // The bars start in their normal (shown) state: starting them hidden left the large title
+    // misplaced once they appeared. The launch flash is avoided by the tab host's opacity instead.
     @State private var composeHidesTabBar: Bool = false
     /// Compose asks for this on screens that draw under the bars (the meditation sky).
     @State private var composeEdgeToEdge: Bool = false
     @State private var composeHidesNavigationBar: Bool = false
+    /// Set once Compose has reported a route (the tab host stays invisible until then) (see the fallback in onAppear)
+    @State private var composeRouteSeen: Bool = false
     /// The pushed page's own title (from Compose); nil on a tab's main page
     @State private var composePageTitle: String? = nil
     /// Where the tab bar is, in the Home page's coordinates (for placing the add button)
@@ -670,6 +674,9 @@ struct ContentView: View {
 
             }
             .tint(Color.appTeal)
+            // Invisible until Compose names its first screen: on iPad the floating tab bar
+            // otherwise shows for a few frames before .toolbar(.hidden) applies on onboarding.
+            .opacity(composeRouteSeen ? 1 : 0)
             .animation(.easeInOut(duration: 0.2), value: composeHidesTabBar)
             // Name pushed pages in the bar ("Check in", "Notifications") instead of the tab
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ComposeRouteChanged"))) { note in
@@ -723,7 +730,25 @@ struct ContentView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ComposeRouteChanged"))) { note in
+            // First screen: apply its bar state in the same update that reveals the tab host,
+            // so onboarding never gets a frame with the bars on screen.
+            if !composeRouteSeen {
+                if let hideTab = note.userInfo?["shouldHideTab"] as? Bool { composeHidesTabBar = hideTab }
+                if let hideNav = note.userInfo?["shouldHideNavigationBar"] as? Bool { composeHidesNavigationBar = hideNav }
+            }
+            composeRouteSeen = true
+        }
         .onAppear {
+            // Last-resort safety net: only if Compose never reports a screen, show the bars anyway.
+            // (Kept long: a cold debug launch can take over 3 s, and firing early flashed Home before onboarding.)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                if !composeRouteSeen {
+                    composeRouteSeen = true
+                    composeHidesTabBar = false
+                    composeHidesNavigationBar = false
+                }
+            }
             // Set up ComposeBridge callbacks for SwiftUI coordination
             composeBridge.onTabSelectionChange = { index in
                 selectTabFromCompose(index)
@@ -1581,7 +1606,11 @@ private final class MirrorScrollDriver {
         if PlatformBridge.shared.topBarInset != top { PlatformBridge.shared.topBarInset = top }
         let target = CGPoint(x: scrollView.contentOffset.x, y: scrolled - restTop)
         if scrollView.contentOffset != target {
-            scrollView.setContentOffset(target, animated: false)
+            // A jump from below the collapsed bar to past its top (coming back from a scrolled sub
+            // page, or a tab tap) has to be animated: iOS only expands a collapsed large title on a
+            // scroll, and an instant jump left the content pulled down with the title dragged into it.
+            let jumpsPastTop = target.y < -inset - 1 && scrollView.contentOffset.y > -inset + 1
+            scrollView.setContentOffset(target, animated: jumpsPastTop)
         }
     }
 }

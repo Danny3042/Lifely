@@ -4,7 +4,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import platform.Foundation.NSDateComponents
 import platform.UserNotifications.UNAuthorizationOptionAlert
 import platform.UserNotifications.UNCalendarNotificationTrigger
-import platform.UserNotifications.UNAuthorizationOptionBadge
 import platform.UserNotifications.UNAuthorizationOptionSound
 import platform.UserNotifications.UNMutableNotificationContent
 import platform.UserNotifications.UNNotificationRequest
@@ -17,10 +16,21 @@ actual object SessionNotifications {
     private val center: UNUserNotificationCenter
         get() = UNUserNotificationCenter.currentNotificationCenter()
 
-    // iOS shows its permission prompt only the first time; after that this just reports the answer
+    /**
+     * Each notification's category (registered in iOSApp.swift): gives it generic text for when
+     * previews are hidden, and the evening check-in its quick mood buttons.
+     */
+    private fun categoryFor(id: String) = when (id) {
+        DailyReminders.MORNING_ID -> "MORNING_REMINDER"
+        DailyReminders.EVENING_ID -> "EVENING_CHECKIN"
+        else -> "MEDITATION_FINISHED"
+    }
+
+    // iOS shows its permission prompt only the first time; after that this just reports the answer.
+    // No badge: the app never shows one.
     actual suspend fun ensurePermission(): Boolean = suspendCancellableCoroutine { cont ->
         center.requestAuthorizationWithOptions(
-            UNAuthorizationOptionAlert or UNAuthorizationOptionSound or UNAuthorizationOptionBadge
+            UNAuthorizationOptionAlert or UNAuthorizationOptionSound
         ) { granted, _ ->
             if (cont.isActive) cont.resume(granted)
         }
@@ -33,6 +43,7 @@ actual object SessionNotifications {
             setTitle(title)
             setBody(body)
             setSound(UNNotificationSound.defaultSound())
+            setCategoryIdentifier(categoryFor(id))
         }
         val trigger = UNTimeIntervalNotificationTrigger.triggerWithTimeInterval(afterSeconds.toDouble(), repeats = false)
         center.addNotificationRequest(
@@ -47,6 +58,7 @@ actual object SessionNotifications {
             setTitle(title)
             setBody(body)
             setSound(UNNotificationSound.defaultSound())
+            setCategoryIdentifier(categoryFor(id))
         }
         val time = NSDateComponents().apply {
             setHour(hour.toLong())

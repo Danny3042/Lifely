@@ -29,12 +29,27 @@ import androidx.compose.ui.semantics.semantics
  * Wears a sprout leaf by day and a nightcap by night.
  */
 @Composable
-fun BreathingBuddy(breath: Float, isRunning: Boolean, isNight: Boolean, modifier: Modifier = Modifier) {
-    val idle by rememberInfiniteTransition(label = "buddyIdle").animateFloat(
+fun BreathingBuddy(
+    breath: Float,
+    isRunning: Boolean,
+    isNight: Boolean,
+    modifier: Modifier = Modifier,
+    /** The Buddy's face: calm (eyes closed, as when meditating) unless it's chatting */
+    expression: BuddyExpression = BuddyExpression.Calm,
+) {
+    val transition = rememberInfiniteTransition(label = "buddyIdle")
+    val idle by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(2_800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "idle",
+    )
+    // Drives the talking mouth, the thinking dots and the happy hop
+    val beat by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(if (expression == BuddyExpression.Talking) 260 else 900), RepeatMode.Reverse),
+        label = "beat",
     )
     val b = if (isRunning) breath else idle * 0.25f
 
@@ -43,10 +58,12 @@ fun BreathingBuddy(breath: Float, isRunning: Boolean, isNight: Boolean, modifier
     val ink = Color(0xFF1E2A44)
     val cheek = Color(0xFFFF8FA3).copy(alpha = 0.55f)
 
-    Canvas(modifier.semantics { contentDescription = if (isRunning) "Breathing buddy breathing with you" else "Breathing buddy" }) {
+    Canvas(modifier.semantics { contentDescription = if (isRunning) "Breathing buddy breathing with you" else "Buddy" }) {
         val w = size.width
         val h = size.height
-        val groundY = h * 0.95f
+        // A small happy hop
+        val hop = if (expression == BuddyExpression.Happy) h * 0.04f * beat else 0f
+        val groundY = h * 0.95f - hop
 
         // Shadow grows a touch as the body fills
         drawOval(
@@ -78,21 +95,64 @@ fun BreathingBuddy(breath: Float, isRunning: Boolean, isNight: Boolean, modifier
             size = Size(bodyW * 0.44f, bodyH * 0.36f),
         )
 
-        // Face: closed, content eyes, rosy cheeks, small smile
+        // Face: eyes, rosy cheeks and mouth, depending on the expression
         val eyeY = cy - bodyH * 0.1f
         val eyeDx = bodyW * 0.17f
         val eyeR = bodyW * 0.07f
         val faceStroke = Stroke(width = w * 0.025f, cap = StrokeCap.Round)
         listOf(-1f, 1f).forEach { side ->
-            drawArc(ink, 0f, 180f, false, Offset(cx + side * eyeDx - eyeR, eyeY - eyeR), Size(eyeR * 2, eyeR * 2), style = faceStroke)
+            val eye = Offset(cx + side * eyeDx, eyeY)
+            when (expression) {
+                // Closed, content eyes
+                BuddyExpression.Calm ->
+                    drawArc(ink, 0f, 180f, false, Offset(eye.x - eyeR, eye.y - eyeR), Size(eyeR * 2, eyeR * 2), style = faceStroke)
+                // Smiling eyes (^ ^)
+                BuddyExpression.Happy ->
+                    drawArc(ink, 180f, 180f, false, Offset(eye.x - eyeR, eye.y - eyeR * 0.4f), Size(eyeR * 2, eyeR * 2), style = faceStroke)
+                // Open eyes; looking up and to the side while thinking
+                BuddyExpression.Talking -> drawCircle(ink, eyeR * 0.75f, eye)
+                BuddyExpression.Thinking -> drawCircle(ink, eyeR * 0.75f, Offset(eye.x + eyeR * 0.45f, eye.y - eyeR * 0.5f))
+            }
             drawCircle(cheek, bodyW * 0.07f, Offset(cx + side * eyeDx * 1.55f, eyeY + bodyH * 0.13f))
         }
-        val mouthR = bodyW * (0.06f + 0.015f * b)
-        drawArc(ink, 20f, 140f, false, Offset(cx - mouthR, eyeY + bodyH * 0.02f), Size(mouthR * 2, mouthR * 2), style = faceStroke)
+        val mouthY = eyeY + bodyH * 0.02f
+        when (expression) {
+            BuddyExpression.Calm -> {
+                val mouthR = bodyW * (0.06f + 0.015f * b)
+                drawArc(ink, 20f, 140f, false, Offset(cx - mouthR, mouthY), Size(mouthR * 2, mouthR * 2), style = faceStroke)
+            }
+            BuddyExpression.Happy -> {
+                val mouthR = bodyW * 0.09f
+                drawArc(ink, 0f, 180f, true, Offset(cx - mouthR, mouthY), Size(mouthR * 2, mouthR * 2))
+            }
+            BuddyExpression.Talking -> {
+                val mw = bodyW * 0.12f
+                val mh = bodyW * (0.03f + 0.07f * beat)
+                drawOval(ink, topLeft = Offset(cx - mw / 2f, mouthY + bodyH * 0.06f - mh / 2f), size = Size(mw, mh))
+            }
+            BuddyExpression.Thinking -> {
+                // A small "hmm" mouth to one side
+                drawLine(ink, Offset(cx - bodyW * 0.02f, mouthY + bodyH * 0.07f), Offset(cx + bodyW * 0.07f, mouthY + bodyH * 0.06f), strokeWidth = w * 0.025f, cap = StrokeCap.Round)
+            }
+        }
+        if (expression == BuddyExpression.Thinking) {
+            // Thought dots rising beside the head, appearing one after another
+            listOf(0.0f, 0.33f, 0.66f).forEachIndexed { i, start ->
+                val a = ((beat - start) * 3f).coerceIn(0f, 1f)
+                drawCircle(
+                    ink.copy(alpha = 0.25f + 0.55f * a),
+                    radius = w * (0.025f + 0.012f * i),
+                    center = Offset(bodyLeft + bodyW * (0.98f + 0.08f * i), bodyTop - h * (0.02f + 0.07f * i)),
+                )
+            }
+        }
 
         if (isNight) drawNightcap(cx, bodyTop, bodyW) else drawSprout(cx, bodyTop, w, b)
     }
 }
+
+/** How the Buddy looks: calm when meditating; thinking, talking or happy in the chat. */
+enum class BuddyExpression { Calm, Thinking, Talking, Happy }
 
 private fun DrawScope.drawArm(shoulder: Offset, angle: Float, length: Float, color: Color) {
     rotate(degrees = angle, pivot = shoulder) {

@@ -8,6 +8,7 @@ import FirebaseMessaging
 import UserNotifications
 import AppTrackingTransparency
 import Combine
+import ComposeApp
 
 // Simple NativeRouter placed here so the type is available to the App entry point
 final class NativeRouter: ObservableObject {
@@ -156,8 +157,9 @@ struct iOSApp: App {
             // Note: We configure first, but delay Analytics events until after tracking permission
             FirebaseApp.configure()
 
-            // Let the app show its own notifications (e.g. "Meditation complete") while it's open too
+            // Handle the app's notifications while it's open, when tapped, and their quick actions
             UNUserNotificationCenter.current().delegate = self
+            AppNotifications.registerCategories()
             
             // Request AppTrackingTransparency permission before logging Analytics events
             // This ensures IDFA-related tracking only happens after user consent
@@ -207,13 +209,39 @@ struct iOSApp: App {
         
         
         
-        // A notification arriving while the app is open: show it as a banner with sound, as when closed
+        // A notification arriving while the app is open: keep it quiet (HIG). "Meditation Complete"
+        // isn't needed at all (the app is already showing the check-in); reminders just go to
+        // Notification Center, without a banner or sound.
         func userNotificationCenter(
             _ center: UNUserNotificationCenter,
             willPresent notification: UNNotification,
             withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
         ) {
-            completionHandler([.banner, .list, .sound])
+            if notification.request.content.categoryIdentifier == AppNotifications.finished {
+                completionHandler([])
+            } else {
+                completionHandler([.list])
+            }
+        }
+
+        // Tapping a notification opens the related screen; the evening reminder's mood buttons log
+        // a check-in without opening the app
+        func userNotificationCenter(
+            _ center: UNUserNotificationCenter,
+            didReceive response: UNNotificationResponse,
+            withCompletionHandler completionHandler: @escaping () -> Void
+        ) {
+            let category = response.notification.request.content.categoryIdentifier
+            let action = response.actionIdentifier
+            DispatchQueue.main.async {
+                if let valence = AppNotifications.valence(for: action) {
+                    AppNotifications.logMood(valence)
+                } else if action == UNNotificationDefaultActionIdentifier {
+                    let link = category == AppNotifications.morning ? "myhealthbuddy://meditate" : "myhealthbuddy://checkin"
+                    if let url = URL(string: link) { _ = WidgetLinks.handle(url) }
+                }
+                completionHandler()
+            }
         }
 
         private func requestTrackingPermission() {
@@ -276,5 +304,70 @@ enum AppAppearance {
         let defaults = UserDefaults.standard
         let useSystem = (defaults.object(forKey: "useSystemDefault") as? Bool) ?? true
         apply(dark: defaults.bool(forKey: "isDarkMode"), useSystem: useSystem)
+    }
+}
+
+
+/// The app's notification categories (SessionNotifications.ios.kt sets them on each notification).
+enum AppNotifications {
+    static let finished = "MEDITATION_FINISHED"
+    static let morning = "MORNING_REMINDER"
+    static let evening = "EVENING_CHECKIN"
+
+    private static let pleasant = "LOG_PLEASANT"
+    private static let neutral = "LOG_NEUTRAL"
+    private static let unpleasant = "LOG_UNPLEASANT"
+
+    static func registerCategories() {
+        // Quick check-in from the evening reminder: short title-case labels with symbols,
+        // nondestructive, and they don't open the app
+        func mood(_ id: String, _ title: String, _ symbol: String) -> UNNotificationAction {
+            if #available(iOS 15.0, *) {
+                return UNNotificationAction(identifier: id, title: title, options: [],
+                                            icon: UNNotificationActionIcon(systemImageName: symbol))
+            }
+            return UNNotificationAction(identifier: id, title: title, options: [])
+        }
+        let checkIn = UNNotificationCategory(
+            identifier: evening,
+            actions: [
+                mood(pleasant, "Pleasant", "sun.max.fill"),
+                mood(neutral, "Neutral", "circle.fill"),
+                mood(unpleasant, "Unpleasant", "cloud.rain.fill"),
+            ],
+            intentIdentifiers: [],
+            hiddenPreviewsBodyPlaceholder: "Reminder",
+            options: []
+        )
+        let morningReminder = UNNotificationCategory(
+            identifier: morning, actions: [], intentIdentifiers: [],
+            hiddenPreviewsBodyPlaceholder: "Reminder", options: []
+        )
+        let sessionEnded = UNNotificationCategory(
+            identifier: finished, actions: [], intentIdentifiers: [],
+            hiddenPreviewsBodyPlaceholder: "Session ended", options: []
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([checkIn, morningReminder, sessionEnded])
+    }
+
+    static func valence(for action: String) -> Int32? {
+        switch action {
+        case pleasant: return 2
+        case neutral: return 0
+        case unpleasant: return -2
+        default: return nil
+        }
+    }
+
+    /// Same as the Log Mood App Intent: saves the check-in and refreshes the widgets
+    static func logMood(_ valence: Int32) {
+        let store = MoodCheckInStore.shared
+        store.load()
+        store.add(checkIn: MoodCheckIn(
+            atEpochMillis: Int64(Date().timeIntervalSince1970 * 1000),
+            valence: valence,
+            feelings: [],
+            impacts: []
+        ), refreshWidgets: true)
     }
 }

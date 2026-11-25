@@ -44,9 +44,24 @@ import androidx.compose.material.icons.filled.Refresh
 import com.mikepenz.markdown.compose.Markdown
 import com.mikepenz.markdown.model.markdownColor
 import com.mikepenz.markdown.model.markdownTypography
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.width
+import components.buddy.BuddyActionCard
+import components.buddy.BuddyActions
+import components.ui.BreathingBuddy
+import components.ui.BuddyExpression
 
 @Composable
-fun ChatBubbleItem(chatMessage: ChatMessage, onRetry: ((id: String, text: String) -> Unit)? = null) {
+fun ChatBubbleItem(
+    chatMessage: ChatMessage,
+    onRetry: ((id: String, text: String) -> Unit)? = null,
+    /** The newest message: only its Buddy animates (thinking, talking, a happy hop when it's done) */
+    isLatest: Boolean = false,
+    isNight: Boolean = false,
+    canSend: Boolean = true,
+    /** Sends a message as the user (used by the mood card) */
+    onSendMessage: (String) -> Unit = {},
+) {
     val isModelMessage = chatMessage.isModelMessage() || chatMessage.isErrorMessage()
 
     val backgroundColor = when (chatMessage) {
@@ -70,14 +85,56 @@ fun ChatBubbleItem(chatMessage: ChatMessage, onRetry: ((id: String, text: String
 
     val horizontalAlignment = if (isModelMessage) Alignment.Start else Alignment.End
 
+    // A reply still arriving: collected here (collecting is what runs the request), so the Buddy
+    // can switch from thinking to talking as soon as the first words come in.
+    var streamed by remember(chatMessage.id) { mutableStateOf("") }
+    if (chatMessage is ModelChatMessage.LoadingModelMessage) {
+        LaunchedEffect(chatMessage.textStream) { chatMessage.textStream.collect { streamed += it } }
+    }
+    // A short happy hop when a reply finishes
+    var justFinished by remember(chatMessage.id) { mutableStateOf(false) }
+    if (chatMessage is ModelChatMessage.LoadedModelMessage && isLatest) {
+        LaunchedEffect(chatMessage.id) {
+            justFinished = true
+            kotlinx.coroutines.delay(2_400)
+            justFinished = false
+        }
+    }
+    val expression = when {
+        !isLatest -> BuddyExpression.Calm
+        chatMessage is ModelChatMessage.LoadingModelMessage ->
+            if (BuddyActions.clean(streamed).isBlank()) BuddyExpression.Thinking else BuddyExpression.Talking
+        chatMessage is ModelChatMessage.LoadedModelMessage && justFinished -> BuddyExpression.Happy
+        else -> BuddyExpression.Calm
+    }
+    // The reply text without its card tags, and the cards it asks for
+    val (replyText, actions) = when (chatMessage) {
+        is ModelChatMessage.LoadedModelMessage -> remember(chatMessage.text) { BuddyActions.parse(chatMessage.text) }
+        else -> "" to emptyList()
+    }
+
+    Row(
+        modifier = Modifier
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+    ) {
+    if (isModelMessage) {
+        BreathingBuddy(
+            breath = 0f,
+            isRunning = false,
+            isNight = isNight,
+            expression = expression,
+            modifier = Modifier.padding(top = 2.dp).size(40.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+    }
     Column(
         horizontalAlignment = horizontalAlignment,
-        modifier = Modifier
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .fillMaxWidth(),
+        modifier = Modifier.weight(1f),
     ) {
         Text(
-            text = if (chatMessage.isModelMessage()) "Gemini" else "You",
+            text = if (isModelMessage) "Buddy" else "You",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 4.dp),
@@ -100,7 +157,7 @@ fun ChatBubbleItem(chatMessage: ChatMessage, onRetry: ((id: String, text: String
                         // Formatted as it streams in. Collecting the stream here is what runs the
                         // request, so it's collected once, straight through (no per-word delay).
                         is ModelChatMessage.LoadingModelMessage -> StreamingReply(
-                            stream = chatMessage.textStream,
+                            text = BuddyActions.clean(streamed),
                             contentColor = contentColor,
                             modifier = Modifier.padding(16.dp),
                         )
@@ -122,7 +179,7 @@ fun ChatBubbleItem(chatMessage: ChatMessage, onRetry: ((id: String, text: String
 
                         // Gemini answers in Markdown (headings, bold, lists): show it formatted
                         is ModelChatMessage.LoadedModelMessage -> Markdown(
-                            content = chatMessage.text,
+                            content = replyText,
                             colors = markdownColor(text = contentColor),
                             typography = chatMarkdownTypography(),
                             modifier = Modifier.padding(16.dp),
@@ -154,6 +211,25 @@ fun ChatBubbleItem(chatMessage: ChatMessage, onRetry: ((id: String, text: String
                 }
             }
         }
+
+        // Cards the Buddy offered with this reply
+        if (actions.isNotEmpty()) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 8.dp).fillMaxWidth(0.92f),
+            ) {
+                actions.forEachIndexed { index, action ->
+                    BuddyActionCard(
+                        action = action,
+                        key = "${chatMessage.id}-$index",
+                        isNight = isNight,
+                        canSend = canSend,
+                        onSendMessage = onSendMessage,
+                    )
+                }
+            }
+        }
+    }
     }
 }
 
@@ -175,11 +251,7 @@ private fun chatMarkdownTypography() = markdownTypography(
 
 /** A reply still arriving: the text so far, formatted, with a pulsing dot while more is on its way. */
 @Composable
-private fun StreamingReply(stream: Flow<String>, contentColor: Color, modifier: Modifier = Modifier) {
-    var text by remember(stream) { mutableStateOf("") }
-    LaunchedEffect(stream) {
-        stream.collect { text += it }
-    }
+private fun StreamingReply(text: String, contentColor: Color, modifier: Modifier = Modifier) {
     Column(modifier = modifier.animateContentSize()) {
         if (text.isNotBlank()) {
             Markdown(

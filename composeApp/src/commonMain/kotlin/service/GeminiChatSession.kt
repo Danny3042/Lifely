@@ -44,6 +44,8 @@ class GeminiChatSession(
     /** Tried when [modelName] stays busy (503) or rate limited (429). Null for no fallback. */
     private val fallbackModelName: String? = null,
     private val thinkingLevel: String = "low",
+    /** Read before every request, so instructions that carry live context (today's stats) stay current. */
+    private val systemInstruction: (() -> String?)? = null,
 ) {
     // Completed turns only: a failed send isn't recorded, so it can simply be sent again.
     private val history = mutableListOf<JsonObject>()
@@ -86,7 +88,13 @@ class GeminiChatSession(
                 addJsonObject { put("text", prompt) }
             }
         }
+        val system = systemInstruction?.invoke()?.takeIf { it.isNotBlank() }
         val body = buildJsonObject {
+            if (system != null) {
+                putJsonObject("systemInstruction") {
+                    putJsonArray("parts") { addJsonObject { put("text", system) } }
+                }
+            }
             putJsonArray("contents") {
                 history.forEach { add(it) }
                 add(userTurn)
