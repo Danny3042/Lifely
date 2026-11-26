@@ -68,6 +68,7 @@ kotlin {
             implementation(libs.calf.filepicker)
             implementation(libs.androidx.glance.appwidget)
             implementation(libs.androidx.glance.material3)
+            implementation(libs.mlkit.genai.prompt)
             // Previously in the top-level dependencies {} block
             implementation(libs.firebase.common.ktx)
             implementation(libs.play.services.measurement.api)
@@ -83,6 +84,7 @@ kotlin {
             // Ktor
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.client.websockets)
             implementation(libs.ktor.serialization.kotlinx.json)
             // SQLDelight
             implementation(libs.sqldelight.coroutines)

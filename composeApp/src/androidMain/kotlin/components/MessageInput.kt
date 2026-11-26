@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Cancel
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarHostState
@@ -49,6 +50,7 @@ import keyboardUtil.hideKeyboard
 import keyboardUtil.onDoneHideKeyboardAction
 import tts.TtsSettings
 import tts.getTtsService
+import components.VoiceModeDialog
 import kotlinx.coroutines.launch
 import java.io.InputStream
 
@@ -63,6 +65,7 @@ actual fun MessageInput(
     var userMessage by rememberSaveable { mutableStateOf("") }
     var selectedImage by remember { mutableStateOf<ByteArray?>(null) }
     var selectedImageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    var showVoiceMode by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
 
@@ -86,6 +89,12 @@ actual fun MessageInput(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
     ) {
+        if (showVoiceMode) {
+            VoiceModeDialog(
+                onResult = { recognized -> userMessage = recognized; showVoiceMode = false },
+                onDismiss = { showVoiceMode = false },
+            )
+        }
         Column {
             selectedImageBitmap?.let { image ->
                 Box(Modifier.size(96.dp).padding(vertical = 4.dp, horizontal = 16.dp)) {
@@ -142,7 +151,10 @@ actual fun MessageInput(
                     },
                     trailingIcon = {
                         Row {
-                            // TTS toggle button (shows crossed icon when disabled)
+                        IconButton(onClick = { showVoiceMode = true }, enabled = enabled) {
+                            Icon(Icons.Default.Mic, contentDescription = "Speak to Buddy")
+                        }
+                        // TTS toggle button (shows crossed icon when disabled)
                             val localScope = rememberCoroutineScope()
                             IconButton(onClick = {
                                 TtsSettings.enabled = !TtsSettings.enabled

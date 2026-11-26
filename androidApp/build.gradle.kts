@@ -19,7 +19,11 @@ kotlin {
 android {
     // Must differ from :composeApp's namespace; the applicationId (what Play / Firebase see) is unchanged.
     namespace = "org.danielramzani.HealthCompose.app"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
+    compileSdk {
+        version = release(libs.versions.android.compileSdk.get().toInt()) {
+            minorApiLevel = 2
+        }
+    }
 
     defaultConfig {
         applicationId = "org.danielramzani.HealthCompose"

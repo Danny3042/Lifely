@@ -37,6 +37,7 @@ kotlinxDatetime = "0.7.1"
 ktor = "2.3.12"
 ktorClientDarwin = "2.3.12"
 materialIconsExtended = "1.7.3"
+mlkitGenaiPrompt = "1.0.0-beta5"
 multiplatformMarkdownRenderer = "0.10.0"
 navigationComposeVersion = "2.10.0-rc01"
 sqlDelight = "2.0.2"
@@ -104,8 +105,10 @@ ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
 firebase-common-ktx = { group = "com.google.firebase", name = "firebase-common-ktx", version.ref = "firebaseCommonKtx" }
 material-icons-extended = { module = "org.jetbrains.compose.material:material-icons-extended", version.ref = "materialIconsExtended" }
+mlkit-genai-prompt = { module = "com.google.mlkit:genai-prompt", version.ref = "mlkitGenaiPrompt" }
 mirzemehdi-kmpnotifier = { module = "io.github.mirzemehdi:kmpnotifier" }
 multiplatform-markdown-renderer = { module = "com.mikepenz:multiplatform-markdown-renderer", version.ref = "multiplatformMarkdownRenderer" }
 navigation-compose-v277 = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "jetbrainsNavigationCompose" }

@@ -22,7 +22,12 @@ class IosTtsService : TtsService {
             // Use a coroutine to call the suspend synth function
             scope.launch {
                 try {
-                    val base64 = synthesizeGoogleTtsBase64(apiKey, text, voice)
+                    val base64 = synthesizeGoogleTtsBase64(
+                        apiKey,
+                        text,
+                        voice ?: TtsSettings.selectedVoice.googleVoiceName,
+                        TtsSettings.selectedVoice.pitch,
+                    )
                     if (!base64.isNullOrBlank()) {
                         val bytes = Base64.decode(base64)
                         val id = "tts-${Random.nextLong().toString(36)}"

@@ -408,6 +408,7 @@ actual fun PlatformApp(
 
     // Also observe PlatformBridge.requestedRouteSignal (requests from Compose UI/native host)
     LaunchedEffect(Unit) {
+        val tabRoutes = setOf("HomePage", "HabitCoachingPage", "ChatScreen", "meditation", "profile", "Home", "Habits", "Chat", "Meditate", "Profile")
         snapshotFlow { PlatformBridge.requestedRouteSignal }.collectLatest {
             val route = PlatformBridge.requestedRoute
             if (!route.isNullOrEmpty()) {
@@ -438,6 +439,23 @@ actual fun PlatformApp(
                         }
 
                         // Clear the requestedRoute so it can be requested again later
+                        PlatformBridge.requestedRoute = null
+                    } else if (tabRoutes.contains(route)) {
+                        println("PlatformIos: Tab route requested via requestedRoute -> $route")
+                        val standardTab = when (route) {
+                            "Home" -> "HomePage"
+                            "Habits" -> "HabitCoachingPage"
+                            "Chat" -> "ChatScreen"
+                            "Meditate" -> "meditation"
+                            "Profile" -> "profile"
+                            else -> route
+                        }
+                        try {
+                            PlatformBridge.requestedTabName = standardTab
+                            PlatformBridge.requestedTabSignal = PlatformBridge.requestedTabSignal + 1
+                        } catch (_: Throwable) {
+                        }
+                        showTabHost()
                         PlatformBridge.requestedRoute = null
                     } else {
                         println("PlatformIos: route requested -> $route")
@@ -563,9 +581,9 @@ actual fun PlatformApp(
         }
     }
     val systemBars = PaddingValues.Absolute(
-        left = leftInset.dp,
+        left = maxOf(leftInset, PlatformBridge.barLeftInset).dp,
         top = topInset.dp,
-        right = rightInset.dp,
+        right = maxOf(rightInset, PlatformBridge.barRightInset).dp,
         bottom = bottomInset.dp
     )
     // Every page with the tab bar runs under it at the bottom (Swift extends the Compose view there),

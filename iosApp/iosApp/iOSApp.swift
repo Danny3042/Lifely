@@ -153,6 +153,12 @@ struct iOSApp: App {
             // Setup dark mode observer
             setupDarkModeObserver()
 
+            // Initialize audio, speech recognition, and live voice handlers
+            _ = LiveAudioHandler.shared
+            _ = LiveWebSocketHandler.shared
+            _ = TtsHandler.shared
+            _ = SpeechRecognitionHandler.shared
+
             // Configure Firebase immediately so Auth and other services work
             // Note: We configure first, but delay Analytics events until after tracking permission
             FirebaseApp.configure()

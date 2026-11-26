@@ -14,15 +14,22 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import service.GenerativeAiService
+import service.generateOnDeviceReply
+import service.generateOnDeviceReplyStream
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import utils.getUUIDString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
 import components.saveChatState
 import components.loadChatStateWithId
 import components.loadChatHistory
@@ -156,13 +163,74 @@ class ChatViewModel(
 
     fun sendMessage(prompt: String, imageBytes: ByteArray?) {
         val tempId = "temp-${getUUIDString()}"
+        val previousTurns = turnsOf(_uiState.messages)
         // Add pending user message immediately (optimistic UI)
         _uiState.addPendingUserMessage(prompt, tempId)
         if (imageBytes != null) attachmentStore[tempId] = imageBytes
 
         val completeText = StringBuilder()
 
-        val base = chat.sendMessageStream(prompt, imageBytes)
+        val base = kotlinx.coroutines.flow.flow {
+            if (canUseOnDeviceReply(prompt, imageBytes)) {
+                val localPrompt = buildOnDevicePrompt(prompt, previousTurns)
+                val localStream = try {
+                    generateOnDeviceReplyStream(localPrompt)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    null
+                }
+
+                if (localStream != null) {
+                    var receivedAnyChunk = false
+                    val localBuffer = StringBuilder()
+                    try {
+                        coroutineScope {
+                            val channel = Channel<String>(Channel.BUFFERED)
+                            val job = launch(Dispatchers.Default) {
+                                try {
+                                    localStream.collect { chunk -> channel.send(chunk) }
+                                    channel.close()
+                                } catch (e: Throwable) {
+                                    channel.close(e)
+                                }
+                            }
+
+                            // Wait for the very first token with a tight deadline.
+                            // If the local model is ready, it emits within 150-500ms.
+                            // If it doesn't emit within 1.2s, cancel and proceed to cloud streaming.
+                            val firstChunk = withTimeoutOrNull(LOCAL_FIRST_CHUNK_TIMEOUT_MS) {
+                                channel.receiveCatching().getOrNull()
+                            }
+
+                            if (!firstChunk.isNullOrEmpty()) {
+                                receivedAnyChunk = true
+                                localBuffer.append(firstChunk)
+                                emit(firstChunk)
+                                for (chunk in channel) {
+                                    if (chunk.isNotEmpty()) {
+                                        localBuffer.append(chunk)
+                                        emit(chunk)
+                                    }
+                                }
+                            } else {
+                                job.cancel()
+                            }
+                        }
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Throwable) {
+                        // Stream failed or closed with error; fall through to cloud if nothing was emitted
+                    }
+
+                    if (receivedAnyChunk && localBuffer.isNotBlank()) {
+                        chat.restoreHistory(previousTurns + (true to prompt) + (false to localBuffer.toString()))
+                        return@flow
+                    }
+                }
+            }
+            chat.sendMessageStream(prompt, imageBytes).collect { emit(it) }
+        }
 
         val modelMessage = ModelChatMessage.LoadingModelMessage(
             base
@@ -246,6 +314,36 @@ class ChatViewModel(
 
     fun onCleared() {
         coroutineScope.cancel()
+    }
+
+    private fun canUseOnDeviceReply(prompt: String, imageBytes: ByteArray?): Boolean {
+        val text = prompt.trim()
+        if (imageBytes != null || text.isEmpty() || text.length > 240 || text.split(Regex("\\s+")).size > 35) {
+            return false
+        }
+        val healthSensitiveTerms = listOf(
+            "symptom", "medicine", "medication", "medical", "doctor", "diagnos",
+            "treat", "pain", "injur", "disease", "blood", "heart", "pregnan", "surgery",
+            "dose", "prescription", "emergency", "suicid",
+        )
+        val lowerText = text.lowercase()
+        return healthSensitiveTerms.none(lowerText::contains)
+    }
+
+    private fun buildOnDevicePrompt(
+        prompt: String,
+        previousTurns: List<Pair<Boolean, String>>,
+    ): String {
+        val recentTurns = previousTurns.takeLast(4).joinToString("\n") { (isUser, text) ->
+            "${if (isUser) "User" else "Buddy"}: $text"
+        }
+        val context = recentTurns.takeIf { it.isNotBlank() }?.let { "Recent conversation:\n$it\n\n" }.orEmpty()
+        return "${context}Reply to this simple, non-medical request in one to three concise sentences. " +
+            "Do not give health advice or invent personal facts.\nUser: $prompt"
+    }
+
+    private companion object {
+        const val LOCAL_FIRST_CHUNK_TIMEOUT_MS = 1_200L
     }
 }
 

@@ -15,6 +15,9 @@ object PlatformBridge {
     var requestedRoute: String? by mutableStateOf(null)
     var requestedRouteSignal: Long by mutableStateOf(0L)
 
+    /** Request opening the live voice mode dialog (e.g. from Siri intent or deep link) */
+    var showLiveVoiceMode: Boolean by mutableStateOf(false)
+
     /** Siri / Shortcuts asked to start a meditation of this many minutes (the page clears it). */
     var meditationStartMinutes: Int? by mutableStateOf(null)
     /** Bumped when the Live Activity's Stop button is pressed. */

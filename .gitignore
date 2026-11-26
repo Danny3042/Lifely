@@ -29,3 +29,5 @@ composeApp/release/
 
 # Firebase config for the Android app (kept locally, not in the repo)
 androidApp/google-services.json
+/design/app-store/tools/compose.py
+/design/app-store/tools/creative.py

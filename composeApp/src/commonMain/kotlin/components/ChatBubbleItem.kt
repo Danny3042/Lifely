@@ -67,14 +67,14 @@ fun ChatBubbleItem(
     val backgroundColor = when (chatMessage) {
         is ModelChatMessage.ErrorMessage -> MaterialTheme.colorScheme.errorContainer
         is ModelChatMessage.LoadingModelMessage -> MaterialTheme.colorScheme.surfaceContainerLow
-        is ModelChatMessage.LoadedModelMessage -> Color.Transparent
-        is UserChatMessage -> MaterialTheme.colorScheme.tertiaryContainer
+        is ModelChatMessage.LoadedModelMessage -> MaterialTheme.colorScheme.surfaceContainerLowest
+        is UserChatMessage -> MaterialTheme.colorScheme.primary
     }
     val contentColor = when (chatMessage) {
         is ModelChatMessage.ErrorMessage -> MaterialTheme.colorScheme.onErrorContainer
         is ModelChatMessage.LoadingModelMessage, is ModelChatMessage.LoadedModelMessage ->
             MaterialTheme.colorScheme.onSurface
-        is UserChatMessage -> MaterialTheme.colorScheme.onTertiaryContainer
+        is UserChatMessage -> MaterialTheme.colorScheme.onPrimary
     }
 
     val bubbleShape = if (isModelMessage) {

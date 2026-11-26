@@ -25,9 +25,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import components.ui.ContentWidth
 import components.ui.centeredMaxWidth
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.ui.text.style.TextAlign
-import components.ui.IconBadge
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -35,10 +32,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.GraphicEq
+import components.VoiceModeDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -63,16 +61,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import components.buddy.BuddyActions
 import components.buddy.BuddyDay
-import components.buddy.greeting
-import components.buddy.noticing
 import components.buddy.suggestions
 import components.buddy.systemInstruction
 import components.ui.BreathingBuddy
 import components.ui.BuddyExpression
+import components.ui.SkyScene
 import utils.DEFAULT_DAILY_GOAL_MINUTES
 import utils.MoodCheckInStore
 import model.ChatViewModel
@@ -151,7 +151,8 @@ fun ChatScreen(
     // When messages change, auto-scroll only if the user is already near the bottom.
     LaunchedEffect(messages.size, TtsSettings.enabled) {
         if (messages.isEmpty()) return@LaunchedEffect
-        val lastIndex = messages.size - 1
+        val leadingItems = if (messages.isNotEmpty()) 1 else 0
+        val lastIndex = messages.size - 1 + leadingItems
         // Determine currently visible last item; if it's within 1 item of the end, auto-scroll.
         val visible = listState.layoutInfo.visibleItemsInfo
         val lastVisibleIndex = visible.lastOrNull()?.index ?: -1
@@ -166,7 +167,11 @@ fun ChatScreen(
         if (TtsSettings.enabled && lastMessage is ModelChatMessage.LoadedModelMessage) {
             // Use Gemini TTS where available
             try {
-                getTtsService().speak(BuddyActions.clean(lastMessage.text), useGemini = true)
+                getTtsService().speak(
+                    BuddyActions.clean(lastMessage.text),
+                    useGemini = true,
+                    voice = TtsSettings.selectedVoice.googleVoiceName,
+                )
             } catch (_: Throwable) {}
         }
     }
@@ -186,7 +191,7 @@ fun ChatScreen(
         if (!finishedNow) return@LaunchedEffect
         kotlinx.coroutines.delay(150)
         val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
-        if (lastVisible >= messages.lastIndex) scrollToEnd()
+        if (lastVisible >= messages.lastIndex + 1) scrollToEnd()
     }
 
     Scaffold(
@@ -232,6 +237,11 @@ fun ChatScreen(
                         // Keep the last message clear of the input bar and the New chat button above it
                         contentPadding = PaddingValues(top = 8.dp + topBarOverlap(), bottom = 176.dp + bottomBarOverlap()),
                     ) {
+                        if (chatUiState.messages.isNotEmpty()) {
+                            item(key = "day-thread-context") {
+                                DayThreadContext(day = day)
+                            }
+                        }
                         itemsIndexed(
                             items = chatUiState.messages,
                             key = { _, message -> message.id },
@@ -259,22 +269,43 @@ fun ChatScreen(
                                 .padding(top = topBarOverlap(), bottom = 132.dp + bottomBarOverlap()),
                         )
                     }
+                    var showLiveVoiceMode by remember { mutableStateOf(false) }
+                    LaunchedEffect(PlatformBridge.showLiveVoiceMode) {
+                        if (PlatformBridge.showLiveVoiceMode) {
+                            showLiveVoiceMode = true
+                            PlatformBridge.showLiveVoiceMode = false
+                        }
+                    }
+                    if (showLiveVoiceMode) {
+                        VoiceModeDialog(
+                            onResult = { prompt ->
+                                sendMessage(prompt, null)
+                                showLiveVoiceMode = false
+                            },
+                            onDismiss = { showLiveVoiceMode = false }
+                        )
+                    }
+
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
                             .widthIn(max = ContentWidth.Reading)
                     ) {
-                        // Past chats and "New chat" sit just above the input's trailing end, so they move
-                        // with the input on every screen size. Liquid Glass on iOS, small FABs on Android.
-                        // New chat is hidden while the chat is empty (it would do nothing); history shows
-                        // once there's something in it. With the sidebar, both live there instead.
+                        // Gemini Live, Past chats, and "New chat" sit just above the input's trailing end
                         val hasHistory = chatViewModel.savedChats.isNotEmpty()
-                        if (!showSidebar && (messages.isNotEmpty() || hasHistory)) {
+                        if (!showSidebar) {
                             Row(
                                 modifier = Modifier.align(Alignment.End).padding(end = 16.dp, bottom = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
+                                GlassIconButton(
+                                    iosSymbol = "waveform.circle.fill",
+                                    icon = Icons.Default.GraphicEq,
+                                    contentDescription = "Gemini Live",
+                                    onClick = { showLiveVoiceMode = true },
+                                    prominent = true,
+                                )
                                 if (hasHistory) {
                                     GlassIconButton(
                                         iosSymbol = "clock.arrow.circlepath",
@@ -371,50 +402,99 @@ private fun ChatEmptyState(
     }
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()).padding(horizontal = 28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = Alignment.Start,
     ) {
-        BreathingBuddy(
-            breath = 0f,
-            isRunning = false,
-            isNight = day.isNight,
-            expression = if (cheered) BuddyExpression.Happy else BuddyExpression.Calm,
+        Box(
             modifier = Modifier
-                .size(96.dp)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClickLabel = "Say hello",
-                ) { cheered = true },
-        )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = "YOUR AI WELLNESS COMPANION",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(day.greeting(), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            day.noticing(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(12.dp))
-        // What the Buddy knows about today, at a glance
+                .fillMaxWidth()
+                .height(168.dp)
+                .clip(RoundedCornerShape(30.dp)),
+        ) {
+            SkyScene(isNight = day.isNight, elapsed = day.hour / 24f)
+            Column(
+                modifier = Modifier.align(Alignment.TopStart).padding(20.dp),
+            ) {
+                Text(
+                    "Buddy",
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = if (day.isNight) Color.White else Color(0xFF123148),
+                )
+                Text(
+                    "Here with you this ${day.partOfDay}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (day.isNight) Color.White.copy(alpha = 0.88f) else Color(0xFF234A63),
+                )
+            }
+            BreathingBuddy(
+                breath = 0f,
+                isRunning = false,
+                isNight = day.isNight,
+                expression = if (cheered) BuddyExpression.Happy else BuddyExpression.Calm,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 22.dp, bottom = 10.dp)
+                    .size(76.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClickLabel = "Say hello",
+                    ) { cheered = true },
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("A LITTLE CONTEXT FOR TODAY", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(8.dp))
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             DayPill(if (day.goalMet) "Goal reached" else "${day.minutesToday}/${day.goalMinutes} min today")
             if (day.streakDays > 0) DayPill("${day.streakDays}-day streak")
             day.lastMoodLabel?.let { DayPill("Feeling: ${it.lowercase()}") }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(18.dp))
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            tonalElevation = 1.dp,
+        ) {
+            Column(Modifier.padding(18.dp)) {
+                Text("What feels most present?", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Pick a place to start, or tell Buddy in your own words.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    listOf("Work", "Sleep", "Money", "Family", "Health", "Something else").forEach { topic ->
+                        SuggestionChip(
+                            onClick = {
+                                val prompt = if (topic == "Something else") {
+                                    "I'd like to talk about something else."
+                                } else {
+                                    "I'd like to talk about $topic."
+                                }
+                                onSuggestion(prompt)
+                            },
+                            enabled = enabled,
+                            label = { Text(topic) },
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text("Or try one of these", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             day.suggestions().forEach { prompt ->
                 SuggestionChip(
@@ -424,6 +504,37 @@ private fun ChatEmptyState(
                 )
             }
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DayThreadContext(day: BuddyDay) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+    ) {
+        Text(
+            "TODAY WITH BUDDY",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text("A little context for today", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(8.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            DayPill(if (day.goalMet) "Goal reached" else "${day.minutesToday}/${day.goalMinutes} min")
+            if (day.streakDays > 0) DayPill("${day.streakDays}-day streak")
+            day.lastMoodLabel?.let { DayPill("Feeling: ${it.lowercase()}") }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Buddy can use your mindful minutes, mood and habits to make replies more relevant.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

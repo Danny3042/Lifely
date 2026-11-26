@@ -56,11 +56,11 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>HealthCompose does not require access to location services to provide location-based features when the app is in use.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>HealthCompose does not use microphone access.</string>
+	<string>MyHealthBuddy uses the microphone when you choose voice mode to transcribe what you say to Buddy.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>HealthCompose requires access to motion and fitness activity for tracking purposes.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>The app does not need speech recognition access.</string>
+	<string>MyHealthBuddy uses speech recognition in voice mode to turn your speech into a message for Buddy.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSUserTrackingUsageDescription</key>

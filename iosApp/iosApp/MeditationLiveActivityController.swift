@@ -109,6 +109,11 @@ enum WidgetLinks {
             PlatformBridge.shared.requestedRoute = "check_in"
         case "calendar":
             PlatformBridge.shared.requestedRoute = "check_in_calendar"
+        case "chat":
+            PlatformBridge.shared.requestedRoute = "ChatScreen"
+        case "voice", "geminilive", "gemini_live":
+            PlatformBridge.shared.requestedRoute = "ChatScreen"
+            PlatformBridge.shared.showLiveVoiceMode = true
         default:
             return true
         }

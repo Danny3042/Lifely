@@ -25,9 +25,27 @@ class GenerativeAiService(
         return visionModel.startChat(history)
     }
 
-    /** A chat that streams quickly (Gemini 3 thinking set to "low") with sensible timeouts. */
+    /** A chat that streams quickly (zero thinking delay) with short timeouts for real-time interaction. */
     fun startFastChat(systemInstruction: (() -> String?)? = null): GeminiChatSession =
-        GeminiChatSession(GEMINI_API_KEY, MODEL_NAME, FALLBACK_MODEL_NAME, systemInstruction = systemInstruction)
+        GeminiChatSession(
+            apiKey = GEMINI_API_KEY,
+            modelName = FAST_CHAT_MODEL,
+            fallbackModelName = FAST_CHAT_FALLBACK,
+            thinkingLevel = "low",
+            systemInstruction = systemInstruction,
+            firstReplyTimeoutMillis = 5_000L,
+        )
+
+    /** A session configured for deeper analysis (weekly reports, coaching tips) with thinking enabled and relaxed timeout. */
+    fun startDeepAnalysisSession(systemInstruction: (() -> String?)? = null): GeminiChatSession =
+        GeminiChatSession(
+            apiKey = GEMINI_API_KEY,
+            modelName = DEEP_ANALYSIS_MODEL,
+            fallbackModelName = FAST_CHAT_MODEL,
+            thinkingLevel = "low",
+            systemInstruction = systemInstruction,
+            firstReplyTimeoutMillis = 20_000L,
+        )
 
     suspend fun getSuggestions(results: List<String>): String? {
         if (!enabled) {
@@ -36,14 +54,11 @@ class GenerativeAiService(
             )
         }
 
-        // Gemini 3 models think before answering, so a reply can occasionally be slow enough to time
-        // out on a weak connection. One quiet retry fixes most of those.
-        // Same fast path as the chat: low thinking, our own timeouts (the SDK's 80 s socket timeout
-        // was being hit while Gemini 3 thought at its default "high" level).
+        // Deep analysis for weekly suggestions uses the reasoning tier with a relaxed timeout
         val prompt = "Based on the following results: ${results.joinToString(", ")}. Provide suggestions for the week."
-        return retryOnTimeout {
+        return retryOnTimeout(retries = 1) {
             val text = StringBuilder()
-            startFastChat().sendMessageStream(prompt).collect { text.append(it) }
+            startDeepAnalysisSession().sendMessageStream(prompt).collect { text.append(it) }
             text.toString()
         }.ifBlank { null }
     }
@@ -68,16 +83,22 @@ class GenerativeAiService(
         @Suppress("ktlint:standard:property-naming")
         // Use BuildKonfig (set at build time). Do not call JVM-specific APIs in commonMain.
         var GEMINI_API_KEY: String = BuildKonfig.GEMINI_API_KEY
-        // Runtime-configurable model name. You can change this at runtime via `setModelName("...")`.
-        // Gemini 4 Hydrogen: Google's fast everyday Gemini 4 model (Nov 2026); replied in ~2-4 s in
-        // testing, though new models are sometimes briefly "experiencing high demand" (HTTP 503), so
-        // GeminiChatSession retries and then falls back to FALLBACK_MODEL_NAME.
-        // (gemini-3.8-flash is listed for this API key but never answered: requests hung.)
-        // Gemini 3+ ignores temperature/top_p/top_k and rejects prefilled model turns, so don't add them.
-        var MODEL_NAME: String = "gemini-4-hydrogen"
 
-        /** Used when [MODEL_NAME] is busy or rate limited. gemini-3.5-flash is GA and answered in ~3 s. */
-        var FALLBACK_MODEL_NAME: String = "gemini-3.5-flash"
+        // Tier 1: Real-time interactive chat (low latency)
+        var FAST_CHAT_MODEL: String = "gemini-2.5-flash"
+        var FAST_CHAT_FALLBACK: String = "gemini-3.5-flash-lite"
+
+        // Tier 2: Deep reasoning for background analysis, suggestions, and coaching tips
+        var DEEP_ANALYSIS_MODEL: String = "gemini-3.5-flash-lite"
+
+        // Backwards compatibility properties
+        var MODEL_NAME: String
+            get() = FAST_CHAT_MODEL
+            set(value) { FAST_CHAT_MODEL = value }
+
+        var FALLBACK_MODEL_NAME: String
+            get() = FAST_CHAT_FALLBACK
+            set(value) { FAST_CHAT_FALLBACK = value }
 
         // Backing instance that can be recreated if model name is changed.
         private var _instance: GenerativeAiService? = null
@@ -97,7 +118,6 @@ class GenerativeAiService(
             val model = GenerativeModel(
                 modelName = MODEL_NAME,
                 apiKey = GEMINI_API_KEY,
-                // Generous limit: thinking models can take a while before the first words arrive.
                 requestOptions = RequestOptions(timeout = 3.minutes),
             )
             return GenerativeAiService(
@@ -145,4 +165,3 @@ fun friendlyGeminiError(error: Throwable): String = when {
     error is GeminiApiException && error.isBusy -> "Gemini is very busy right now. Please try again in a moment."
     else -> error.message?.takeIf { it.isNotBlank() } ?: "Something went wrong talking to Gemini. Please try again."
 }
-

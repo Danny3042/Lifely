@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Cancel
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -47,6 +48,7 @@ import platform.Foundation.NSOperationQueue
 import platform.posix.memcpy
 import tts.TtsSettings
 import tts.getTtsService
+import components.VoiceModeDialog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -77,6 +79,7 @@ actual fun MessageInput(
 ) {
     var userMessage by rememberSaveable { mutableStateOf("") }
     var selectedImage by remember { mutableStateOf<ByteArray?>(null) }
+    var showVoiceMode by remember { mutableStateOf(false) }
 
     // Observe ImagePicked notifications from Swift side
     DisposableEffect(Unit) {
@@ -104,6 +107,12 @@ actual fun MessageInput(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
     ) {
+        if (showVoiceMode) {
+            VoiceModeDialog(
+                onResult = { recognized -> userMessage = recognized; showVoiceMode = false },
+                onDismiss = { showVoiceMode = false },
+            )
+        }
         Column {
             // Simple attached image indicator
             selectedImage?.let {
@@ -158,6 +167,9 @@ actual fun MessageInput(
                     },
                     trailingIcon = {
                         Row {
+                            IconButton(onClick = { showVoiceMode = true }, enabled = enabled) {
+                                Icon(Icons.Default.Mic, contentDescription = "Speak to Buddy")
+                            }
                             val localScope = rememberCoroutineScope()
                             IconButton(onClick = {
                                 TtsSettings.enabled = !TtsSettings.enabled

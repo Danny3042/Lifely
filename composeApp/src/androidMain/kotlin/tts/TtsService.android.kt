@@ -18,6 +18,8 @@ class AndroidTtsService(private val context: Context) : TtsService {
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 tts?.language = Locale.getDefault()
+                tts?.setSpeechRate(TtsSettings.speechRate.toFloat())
+                tts?.setPitch((1.05 + TtsSettings.selectedVoice.pitch * 0.05).toFloat())
             }
         }
     }
@@ -27,7 +29,12 @@ class AndroidTtsService(private val context: Context) : TtsService {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val apiKey = org.danielramzani.HealthCompose.BuildKonfig.GEMINI_API_KEY
-                    val base64 = synthesizeGoogleTtsBase64(apiKey, text, voice)
+                    val base64 = synthesizeGoogleTtsBase64(
+                        apiKey,
+                        text,
+                        voice ?: TtsSettings.selectedVoice.googleVoiceName,
+                        TtsSettings.selectedVoice.pitch,
+                    )
                     if (!base64.isNullOrBlank()) {
                         val bytes = JavaBase64.getDecoder().decode(base64)
                         val id = "tts-${System.currentTimeMillis().toString(36)}"
@@ -49,10 +56,14 @@ class AndroidTtsService(private val context: Context) : TtsService {
                     // fallback
                 }
                 // fallback to local TTS
+                tts?.setSpeechRate(TtsSettings.speechRate.toFloat())
+                tts?.setPitch((1.05 + TtsSettings.selectedVoice.pitch * 0.05).toFloat())
                 tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts-${System.currentTimeMillis()}")
             }
             return
         }
+        tts?.setSpeechRate(TtsSettings.speechRate.toFloat())
+        tts?.setPitch((1.05 + TtsSettings.selectedVoice.pitch * 0.05).toFloat())
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts-${System.currentTimeMillis()}")
     }
 

@@ -20,7 +20,11 @@ private data class TtsInput(val text: String)
 private data class TtsVoice(val languageCode: String = "en-US", val name: String? = null)
 
 @Serializable
-private data class TtsAudioConfig(val audioEncoding: String = "MP3")
+private data class TtsAudioConfig(
+    val audioEncoding: String = "MP3",
+    val speakingRate: Double = TtsSettings.speechRate,
+    val pitch: Double = 0.0,
+)
 
 @Serializable
 private data class TtsRequest(val input: TtsInput, val voice: TtsVoice, val audioConfig: TtsAudioConfig)
@@ -28,7 +32,12 @@ private data class TtsRequest(val input: TtsInput, val voice: TtsVoice, val audi
 @Serializable
 private data class TtsResponse(val audioContent: String?)
 
-suspend fun synthesizeGoogleTtsBase64(apiKey: String, text: String, voice: String? = null): String? {
+suspend fun synthesizeGoogleTtsBase64(
+    apiKey: String,
+    text: String,
+    voice: String? = null,
+    pitch: Double = TtsSettings.selectedVoice.pitch,
+): String? {
     if (apiKey.isBlank()) return null
 
     return withContext(Dispatchers.Default) {
@@ -43,7 +52,7 @@ suspend fun synthesizeGoogleTtsBase64(apiKey: String, text: String, voice: Strin
             val req = TtsRequest(
                 input = TtsInput(text),
                 voice = TtsVoice(name = voice),
-                audioConfig = TtsAudioConfig()
+                audioConfig = TtsAudioConfig(pitch = pitch)
             )
 
             val resp = client.post(url) {

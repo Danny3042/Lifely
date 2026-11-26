@@ -2,7 +2,6 @@ package service
 
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.timeout
 import io.ktor.client.request.header
 import io.ktor.client.request.preparePost
 import io.ktor.client.request.setBody
@@ -14,6 +13,7 @@ import io.ktor.http.isSuccess
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.Json
@@ -46,6 +46,7 @@ class GeminiChatSession(
     private val thinkingLevel: String = "low",
     /** Read before every request, so instructions that carry live context (today's stats) stay current. */
     private val systemInstruction: (() -> String?)? = null,
+    private val firstReplyTimeoutMillis: Long = FIRST_REPLY_TIMEOUT_MS,
 ) {
     // Completed turns only: a failed send isn't recorded, so it can simply be sent again.
     private val history = mutableListOf<JsonObject>()
@@ -56,20 +57,24 @@ class GeminiChatSession(
      */
     fun restoreHistory(turns: List<Pair<Boolean, String>>) {
         history.clear()
-        turns.filter { it.second.isNotBlank() }.forEach { (isUser, text) ->
-            history += buildJsonObject {
-                put("role", if (isUser) "user" else "model")
-                putJsonArray("parts") { addJsonObject { put("text", text) } }
+        turns.filter { it.second.isNotBlank() }
+            .takeLast(MAX_HISTORY_MESSAGES)
+            .forEach { (isUser, text) ->
+                history += buildJsonObject {
+                    put("role", if (isUser) "user" else "model")
+                    putJsonArray("parts") { addJsonObject { put("text", text) } }
+                }
             }
-        }
     }
 
     /** Sends [prompt] (with an optional photo) and emits the reply's text as it streams in. */
+    @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
     fun sendMessageStream(
         prompt: String,
         image: ByteArray? = null,
         /** If set, Gemini replies with JSON matching this schema (Gemini's OpenAPI-style subset). */
         responseSchema: JsonObject? = null,
+        maxTokens: Int? = null,
     ): Flow<String> = flow {
         check(apiKey.isNotBlank()) {
             "GEMINI_API_KEY is not configured. Add 'gemini_api_key=YOUR_KEY' to local.properties and rebuild."
@@ -89,34 +94,40 @@ class GeminiChatSession(
             }
         }
         val system = systemInstruction?.invoke()?.takeIf { it.isNotBlank() }
-        val body = buildJsonObject {
+        fun buildBody(targetModel: String): String = buildJsonObject {
             if (system != null) {
                 putJsonObject("systemInstruction") {
                     putJsonArray("parts") { addJsonObject { put("text", system) } }
                 }
             }
             putJsonArray("contents") {
-                history.forEach { add(it) }
+                history.takeLast(MAX_HISTORY_MESSAGES).forEach { add(it) }
                 add(userTurn)
             }
             putJsonObject("generationConfig") {
-                putJsonObject("thinkingConfig") { put("thinkingLevel", thinkingLevel) }
+                putJsonObject("thinkingConfig") {
+                    if (targetModel.contains("2.5") || targetModel.contains("2.0")) {
+                        put("thinkingBudget", 0)
+                    } else {
+                        put("thinkingLevel", thinkingLevel)
+                    }
+                }
+                val tokenBudget = maxTokens ?: if (responseSchema != null) 2048 else DEFAULT_MAX_OUTPUT_TOKENS
+                put("maxOutputTokens", tokenBudget)
                 if (responseSchema != null) {
                     put("responseMimeType", "application/json")
                     put("responseSchema", responseSchema)
                 }
             }
-        }
+        }.toString()
 
         val answer = StringBuilder()
         var signature: String? = null
 
-        // Busy (503) or rate limited (429) before any text arrives: wait and retry, then try the
-        // fallback model. If the main model sends nothing for FIRST_REPLY_TIMEOUT_MS (it can sit
-        // thinking for minutes), go straight to the fallback rather than waiting it out.
-        // Once text has been shown, errors are passed on as they are.
+        // Make one short retry for transient overload, then fail over. Bound first response from
+        // both models so a slow fallback cannot leave the chat waiting indefinitely.
         val fallback = fallbackModelName?.takeIf { it != modelName }
-        val attempts = listOf(modelName to 0L, modelName to 1_500L, modelName to 3_000L) +
+        val attempts = listOf(modelName to 0L, modelName to BUSY_RETRY_DELAY_MS) +
             listOfNotNull(fallback?.let { it to 0L })
         var index = 0
         while (index < attempts.size) {
@@ -126,9 +137,12 @@ class GeminiChatSession(
             try {
                 streamOnce(
                     model = model,
-                    body = body.toString(),
-                    // Only the main model gets a first-reply deadline; the fallback is the last resort
-                    firstReplyTimeoutMillis = if (fallback != null && !isFallback) FIRST_REPLY_TIMEOUT_MS else null,
+                    body = buildBody(model),
+                    firstReplyTimeoutMillis = if (isFallback) {
+                        FALLBACK_FIRST_REPLY_TIMEOUT_MS
+                    } else {
+                        firstReplyTimeoutMillis
+                    },
                 ) { text, sig ->
                     sig?.let { signature = it }
                     if (text.isNotEmpty()) {
@@ -159,6 +173,7 @@ class GeminiChatSession(
                     signature?.let { put("thoughtSignature", it) }
                 }
             }
+            while (history.size > MAX_HISTORY_MESSAGES) history.removeAt(0)
         }
     }
 
@@ -176,18 +191,26 @@ class GeminiChatSession(
             header("x-goog-api-key", apiKey)
             contentType(ContentType.Application.Json)
             setBody(body)
-            // Silence on the connection for this long (the model thinking without sending anything)
-            // ends the request. Once text flows, chunks arrive far more often than this.
-            if (firstReplyTimeoutMillis != null) {
-                timeout { socketTimeoutMillis = firstReplyTimeoutMillis }
-            }
         }.execute { response ->
             if (!response.status.isSuccess()) {
                 throw GeminiApiException(response.status.value, apiErrorMessage(response.bodyAsText()))
             }
             val channel = response.bodyAsChannel()
             while (true) {
-                val line = channel.readUTF8Line(Int.MAX_VALUE) ?: break
+                val line = if (!gotText && firstReplyTimeoutMillis != null) {
+                    val remainingMillis = firstReplyTimeoutMillis - started.elapsedNow().inWholeMilliseconds
+                    if (remainingMillis <= 0) throw FirstReplyTimeout(model)
+                    val pendingLine = withTimeoutOrNull(remainingMillis) {
+                        channel.readUTF8Line(Int.MAX_VALUE)
+                    }
+                    if (pendingLine == null) {
+                        if (!gotText) throw FirstReplyTimeout(model)
+                        break
+                    }
+                    pendingLine
+                } else {
+                    channel.readUTF8Line(Int.MAX_VALUE)
+                } ?: break
                 if (!line.startsWith("data:")) continue
                 val chunk = runCatching { json.parseToJsonElement(line.removePrefix("data:").trim()).jsonObject }
                     .getOrNull() ?: continue
@@ -204,12 +227,6 @@ class GeminiChatSession(
                     if (text.isNotEmpty()) gotText = true
                     onChunk(text, sig)
                 }
-                // Data is arriving but still no answer (e.g. only thought signatures): same deadline
-                if (!gotText && firstReplyTimeoutMillis != null &&
-                    started.elapsedNow().inWholeMilliseconds > firstReplyTimeoutMillis
-                ) {
-                    throw FirstReplyTimeout(model)
-                }
             }
         }
     }
@@ -218,10 +235,13 @@ class GeminiChatSession(
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
         /**
-         * How long the main model may take to start answering before the fallback is asked instead.
-         * gemini-4-hydrogen sometimes thinks for minutes; gemini-3.5-flash answers in a few seconds.
+         * How long either model may stay silent before failing over or showing an error.
          */
-        const val FIRST_REPLY_TIMEOUT_MS = 25_000L
+        const val FIRST_REPLY_TIMEOUT_MS = 5_000L
+        private const val FALLBACK_FIRST_REPLY_TIMEOUT_MS = 5_000L
+        private const val BUSY_RETRY_DELAY_MS = 500L
+        private const val MAX_HISTORY_MESSAGES = 12
+        private const val DEFAULT_MAX_OUTPUT_TOKENS = 768
         private val json = Json { ignoreUnknownKeys = true }
 
         // Shared client. Socket timeout = longest gap allowed between bytes; request timeout = whole reply.

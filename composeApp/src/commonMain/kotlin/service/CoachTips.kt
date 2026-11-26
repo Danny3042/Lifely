@@ -56,8 +56,8 @@ suspend fun generateCoachTip(subject: String, topic: CoachTopic): CoachTip {
 
     val raw = retryOnTimeout {
         val text = StringBuilder()
-        GenerativeAiService.instance.startFastChat()
-            .sendMessageStream(prompt, responseSchema = COACH_TIP_SCHEMA)
+        GenerativeAiService.instance.startDeepAnalysisSession()
+            .sendMessageStream(prompt, responseSchema = COACH_TIP_SCHEMA, maxTokens = 2048)
             .collect { text.append(it) }
         text.toString()
     }
@@ -69,17 +69,23 @@ private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 internal fun parseCoachTip(raw: String): CoachTip? = runCatching {
     // Tolerate a stray ```json fence even though JSON mode shouldn't add one
     val cleaned = raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
-    val o = json.parseToJsonElement(cleaned).jsonObject
+    val jsonStr = if (cleaned.contains("{") && cleaned.contains("}")) {
+        cleaned.substring(cleaned.indexOf("{"), cleaned.lastIndexOf("}") + 1)
+    } else {
+        cleaned
+    }
+    val o = json.parseToJsonElement(jsonStr).jsonObject
     fun s(key: String) = o[key]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
     val steps = (o["steps"] as? JsonArray).orEmpty().mapNotNull { e ->
         val step = e.jsonObject
         val title = step["title"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
         if (title.isEmpty()) null else CoachTipStep(title, step["detail"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty())
     }
+    val minutes = o["minutes"]?.jsonPrimitive?.intOrNull ?: o["minutes"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
     CoachTip(
         title = s("title"),
         summary = s("summary"),
-        minutes = o["minutes"]?.jsonPrimitive?.intOrNull?.takeIf { it > 0 },
+        minutes = minutes?.takeIf { it > 0 },
         difficulty = s("difficulty"),
         frequency = s("frequency"),
         steps = steps,
