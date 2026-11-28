@@ -48,6 +48,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.width
 import components.buddy.BuddyActionCard
 import components.buddy.BuddyActions
+import components.buddy.BuddyDay
+import components.buddy.BuddyFeedbackRow
+import components.buddy.reasonFor
 import components.ui.BreathingBuddy
 import components.ui.BuddyExpression
 
@@ -61,6 +64,8 @@ fun ChatBubbleItem(
     canSend: Boolean = true,
     /** Sends a message as the user (used by the mood card) */
     onSendMessage: (String) -> Unit = {},
+    /** Today as the Buddy sees it: used for "Why this?" on cards and the feedback sheet */
+    day: BuddyDay? = null,
 ) {
     val isModelMessage = chatMessage.isModelMessage() || chatMessage.isErrorMessage()
 
@@ -225,9 +230,22 @@ fun ChatBubbleItem(
                         isNight = isNight,
                         canSend = canSend,
                         onSendMessage = onSendMessage,
+                        reason = day?.reasonFor(action),
                     )
                 }
             }
+        }
+
+        // Thumbs and "Why did Buddy say this?" under a finished reply
+        if (chatMessage is ModelChatMessage.LoadedModelMessage) {
+            BuddyFeedbackRow(
+                messageId = chatMessage.id,
+                isLatest = isLatest,
+                day = day,
+                canSend = canSend,
+                onSendMessage = onSendMessage,
+                modifier = Modifier.padding(top = 2.dp),
+            )
         }
     }
     }

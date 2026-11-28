@@ -51,16 +51,16 @@
 	<string>MyHealthBuddy reads your steps, sleep, exercise, active energy and mindful minutes so you can see your day next to your meditations and mood check-ins.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>MyHealthBuddy saves each meditation you finish to the Apple Health app as Mindful Minutes, so all your mindfulness is in one place.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>HealthCompose does not access your location.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>HealthCompose does not require access to location services to provide location-based features when the app is in use.</string>
+	<string>MyHealthBuddy uses your approximate location to check the local weather, so Buddy and your meditations can match it. It's never stored or shared.</string>
+	<key>NSLocationDefaultAccuracyReduced</key>
+	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>MyHealthBuddy uses the microphone when you choose voice mode to transcribe what you say to Buddy.</string>
+	<string>MyHealthBuddy uses the microphone when you talk to Buddy in voice mode or dictate a message.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>HealthCompose requires access to motion and fitness activity for tracking purposes.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>MyHealthBuddy uses speech recognition in voice mode to turn your speech into a message for Buddy.</string>
+	<string>MyHealthBuddy uses speech recognition to turn what you say into text when you dictate a message or talk to Buddy.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSUserTrackingUsageDescription</key>

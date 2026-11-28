@@ -158,6 +158,8 @@ struct iOSApp: App {
             _ = LiveWebSocketHandler.shared
             _ = TtsHandler.shared
             _ = SpeechRecognitionHandler.shared
+            _ = OnDeviceAIHandler.shared
+            _ = WeatherHandler.shared
 
             // Configure Firebase immediately so Auth and other services work
             // Note: We configure first, but delay Analytics events until after tracking permission

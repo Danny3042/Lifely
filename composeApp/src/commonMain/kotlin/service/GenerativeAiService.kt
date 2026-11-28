@@ -33,7 +33,7 @@ class GenerativeAiService(
             fallbackModelName = FAST_CHAT_FALLBACK,
             thinkingLevel = "low",
             systemInstruction = systemInstruction,
-            firstReplyTimeoutMillis = 5_000L,
+            firstReplyTimeoutMillis = 10_000L,
         )
 
     /** A session configured for deeper analysis (weekly reports, coaching tips) with thinking enabled and relaxed timeout. */

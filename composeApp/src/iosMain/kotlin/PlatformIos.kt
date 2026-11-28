@@ -681,6 +681,7 @@ actual fun PlatformApp(
 internal fun iosPageTitle(route: String): String? = when (route) {
     "About" -> "About"
     "Notification" -> "Notifications"
+    "Permissions" -> "Permissions"
     "Account" -> "Account"
     "DarkModeSettingsScreen" -> "Appearance"
     "completed_habits" -> "Completed habits"

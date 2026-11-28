@@ -22,6 +22,7 @@ import kotlinx.coroutines.sync.withLock
 import service.GenerativeAiService
 import service.generateOnDeviceReply
 import service.generateOnDeviceReplyStream
+import service.prewarmOnDeviceModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import utils.getUUIDString
@@ -73,6 +74,8 @@ class ChatViewModel(
     private val saveScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     init {
+        prewarmOnDeviceModel()
+
         // restore persisted state
         saveScope.launch {
             val (msgs, savedId) = loadChatStateWithId()
@@ -198,9 +201,14 @@ class ChatViewModel(
 
                             // Wait for the very first token with a tight deadline.
                             // If the local model is ready, it emits within 150-500ms.
-                            // If it doesn't emit within 1.2s, cancel and proceed to cloud streaming.
+                            // If it doesn't emit within 2.5s, cancel and proceed to cloud streaming.
+                            var localError: Throwable? = null
+                            var timedOut = true
                             val firstChunk = withTimeoutOrNull(LOCAL_FIRST_CHUNK_TIMEOUT_MS) {
-                                channel.receiveCatching().getOrNull()
+                                val result = channel.receiveCatching()
+                                timedOut = false
+                                localError = result.exceptionOrNull()
+                                result.getOrNull()
                             }
 
                             if (!firstChunk.isNullOrEmpty()) {
@@ -214,6 +222,8 @@ class ChatViewModel(
                                     }
                                 }
                             } else {
+                                if (timedOut) println("OnDeviceAI: no first token within ${LOCAL_FIRST_CHUNK_TIMEOUT_MS}ms, using cloud")
+                                else println("OnDeviceAI: on-device unavailable (${localError?.message ?: "stream ended empty"}), using cloud")
                                 job.cancel()
                             }
                         }
@@ -224,10 +234,15 @@ class ChatViewModel(
                     }
 
                     if (receivedAnyChunk && localBuffer.isNotBlank()) {
+                        println("OnDeviceAI: replied on-device (${localBuffer.length} chars)")
                         chat.restoreHistory(previousTurns + (true to prompt) + (false to localBuffer.toString()))
                         return@flow
                     }
+                } else {
+                    println("OnDeviceAI: on-device model not ready, using cloud")
                 }
+            } else {
+                println("OnDeviceAI: prompt routed to cloud (filtered)")
             }
             chat.sendMessageStream(prompt, imageBytes).collect { emit(it) }
         }
@@ -321,13 +336,15 @@ class ChatViewModel(
         if (imageBytes != null || text.isEmpty() || text.length > 240 || text.split(Regex("\\s+")).size > 35) {
             return false
         }
-        val healthSensitiveTerms = listOf(
-            "symptom", "medicine", "medication", "medical", "doctor", "diagnos",
-            "treat", "pain", "injur", "disease", "blood", "heart", "pregnan", "surgery",
-            "dose", "prescription", "emergency", "suicid",
-        )
+        // The on-device model is only for light, non-emotional, non-health small talk. Anything
+        // health-related, emotional or crisis-like must go to the cloud path.
         val lowerText = text.lowercase()
-        return healthSensitiveTerms.none(lowerText::contains)
+        if (lowerText.startsWith("check-in:")) return false
+        if (emotionalTermRegex.containsMatchIn(lowerText)) return false
+        if (alwaysCloudPhrases.any(lowerText::contains)) return false
+        if (healthTermRegex.containsMatchIn(lowerText)) return false
+        if (lowerText.split(wordSplitRegex).any { it in exactHealthWords }) return false
+        return true
     }
 
     private fun buildOnDevicePrompt(
@@ -343,7 +360,35 @@ class ChatViewModel(
     }
 
     private companion object {
-        const val LOCAL_FIRST_CHUNK_TIMEOUT_MS = 1_200L
+        const val LOCAL_FIRST_CHUNK_TIMEOUT_MS = 2_500L
+
+        // Crisis / urgent phrases (substring match) that must always use the cloud path.
+        val alwaysCloudPhrases = listOf(
+            "suicid", "kill myself", "end my life", "end it all", "self harm", "self-harm",
+            "hurt myself", "want to die", "overdose", "hopeless", "can't breathe", "cant breathe",
+            "chest pain", "chest hurts", "unconscious", "seizure", "bleeding", "stroke",
+            "allerg", "emergency", "abuse",
+        )
+
+        // Health terms matched as word prefixes (e.g. "diagnos" matches "diagnosis").
+        val healthTerms = listOf(
+            "symptom", "medicine", "medication", "medical", "doctor", "diagnos", "disease",
+            "injur", "pregnan", "surgery", "dose", "dosage", "prescription", "pill", "fever",
+            "blood", "heart attack", "treatment", "therapy", "anxiety", "depress", "panic",
+        )
+        val healthTermRegex = Regex("\\b(" + healthTerms.joinToString("|") + ")")
+
+        val emotionalTerms = listOf(
+            "feel", "feeling", "mood", "unpleasant", "sad", "upset", "low", "down", "stress", "anxious",
+            "worr", "lonely", "overwhelm", "angry", "scared", "afraid", "tired", "exhaust", "cry", "grief",
+            "griev", "lost", "struggl", "cope", "coping", "can't sleep", "cant sleep", "insomnia", "breakup",
+            "argument", "therap",
+        )
+        val emotionalTermRegex = Regex("\\b(" + emotionalTerms.joinToString("|") + ")")
+
+        // Short words that only count when they are a whole word ("ill" must not match "will").
+        val exactHealthWords = setOf("ill", "pain", "sick", "hurt", "hurts")
+        val wordSplitRegex = Regex("[^a-z']+")
     }
 }
 

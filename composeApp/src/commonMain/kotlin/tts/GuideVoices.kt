@@ -26,7 +26,9 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import org.danielramzani.HealthCompose.BuildKonfig
 import platform.FileIO
+import service.weather.WeatherKind
 import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 /** A voice that can guide a meditation: a friendly name, its character, and the Gemini voice behind it. */
 data class GuideVoice(val id: String, val name: String, val character: String, val geminiVoice: String)
@@ -43,6 +45,9 @@ object GuideVoices {
         GuideVoice("river", "River", "Breathy", "Enceladus"),
         GuideVoice("cedar", "Cedar", "Smooth", "Algieba"),
     )
+
+    /** The default delivery: slow and gentle, for meditation guidance. */
+    const val MEDITATION_DIRECTION = "Read this slowly, softly and calmly, like a gentle meditation guide, leaving small pauses:"
 
     private const val CHOICE_FILE = "guide_voice.txt"
 
@@ -79,19 +84,26 @@ object GuideVoices {
      * The audio file (relative to the app's files) for [text] in [voice], generating and saving it
      * the first time. Null if it couldn't be made (no key, offline, API error).
      */
-    suspend fun audioFor(voice: GuideVoice, text: String): String? = withContext(Dispatchers.Default) {
-        val id = "guide-${voice.id}-${text.hashCode().toUInt().toString(16)}"
+    suspend fun audioFor(
+        voice: GuideVoice,
+        text: String,
+        direction: String = MEDITATION_DIRECTION,
+    ): String? = withContext(Dispatchers.Default) {
+        // Keep meditation file names as they were, so already-cached audio is reused
+        val key = if (direction == MEDITATION_DIRECTION) text else direction + "\n" + text
+        val id = "guide-${voice.id}-${key.hashCode().toUInt().toString(16)}"
         val filename = "attachments/$id.wav"
         if (runCatching { FileIO.readAttachment(filename) }.getOrNull()?.isNotEmpty() == true) return@withContext filename
-        val wav = synthesize(voice, text) ?: return@withContext null
+        val wav = synthesize(voice, text, direction) ?: return@withContext null
         runCatching { FileIO.saveAttachment(id, wav, "wav") }.getOrNull()
     }
 
-    private suspend fun synthesize(voice: GuideVoice, text: String): ByteArray? {
+    @OptIn(ExperimentalEncodingApi::class)
+    private suspend fun synthesize(voice: GuideVoice, text: String, direction: String): ByteArray? {
         val apiKey = BuildKonfig.GEMINI_API_KEY
         if (apiKey.isBlank()) return null
         // Natural-language direction for the delivery; the TTS model reads only the line itself
-        val prompt = "Read this slowly, softly and calmly, like a gentle meditation guide, leaving small pauses:\n$text"
+        val prompt = "$direction\n$text"
         val body = buildJsonObject {
             putJsonArray("contents") { addJsonObject { putJsonArray("parts") { addJsonObject { put("text", prompt) } } } }
             putJsonObject("generationConfig") {
@@ -160,9 +172,19 @@ data class GuideCue(val atSecond: Int, val text: String)
  * through the middle, a halfway note on longer sessions, and a soft close just before the end.
  * Fixed wording, so each line is generated once per voice and then reused.
  */
-fun guideScript(totalSeconds: Int): List<GuideCue> {
+fun guideScript(totalSeconds: Int, weather: WeatherKind? = null): List<GuideCue> {
     val cues = mutableListOf<GuideCue>()
-    cues += GuideCue(0, "Welcome. Find a comfortable position, and let your eyes close, or rest your gaze softly. Take a slow breath in, and let it go.")
+    // A handful of welcome variants (each is generated once per voice), chosen by the weather when it's known
+    val welcome = when (weather) {
+        null -> "Welcome. Find a comfortable position, and let your eyes close, or rest your gaze softly. Take a slow breath in, and let it go."
+        WeatherKind.Drizzle, WeatherKind.Rain, WeatherKind.HeavyRain, WeatherKind.Thunder ->
+            "Welcome. Find a comfortable position, and let your eyes close. Listen to the rain for a moment, and let it slow you down. Take a slow breath in, and let it go."
+        WeatherKind.Snow ->
+            "Welcome. Find a comfortable position, and let your eyes close. Snow makes everything quiet. Let that quiet settle you. Take a slow breath in, and let it go."
+        else ->
+            "Welcome. Find a comfortable position, and let your eyes close. Wherever you are, let the quiet outside settle you. Take a slow breath in, and let it go."
+    }
+    cues += GuideCue(0, welcome)
     val closeAt = (totalSeconds - 15).coerceAtLeast(20)
     if (totalSeconds >= 90) cues += GuideCue(25, "Let your breathing settle into its own rhythm. There's nothing you need to do right now.")
     val reminders = listOf(

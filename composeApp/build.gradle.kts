@@ -143,6 +143,11 @@ buildkonfig {
             localProperties["gemini_api_key"]?.toString() ?: "",
         )
         buildConfigField(
+            FieldSpec.Type.STRING,
+            "WEATHER_PROXY_URL",
+            localProperties["weather_proxy_url"]?.toString() ?: "",
+        )
+        buildConfigField(
             FieldSpec.Type.BOOLEAN,
             "DEV_MODE",
             localProperties["dev_mode"]?.toString() ?: "false",

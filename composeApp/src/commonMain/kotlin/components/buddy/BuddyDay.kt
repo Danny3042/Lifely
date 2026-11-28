@@ -1,6 +1,11 @@
 package components.buddy
 
 import kotlinx.datetime.TimeZone
+import service.GeminiLiveSession
+import service.weather.BuddyWeather
+import service.weather.WeatherKind
+import service.weather.WeatherNow
+import kotlin.math.roundToInt
 import kotlinx.datetime.toLocalDateTime
 import utils.DEFAULT_DAILY_GOAL_MINUTES
 import utils.HabitRepository
@@ -24,6 +29,8 @@ data class BuddyDay(
     val lastMoodValence: Int?,
     val lastMoodFeelings: List<String>,
     val habits: List<String>,
+    /** Local weather, only when the user has chosen to share it; null otherwise. */
+    val weather: WeatherNow? = null,
 ) {
     val isNight: Boolean get() = hour >= 21 || hour < 5
     val partOfDay: String
@@ -53,6 +60,7 @@ data class BuddyDay(
                 lastMoodValence = recent?.valence,
                 lastMoodFeelings = recent?.feelings.orEmpty(),
                 habits = HabitRepository.activeHabits.toList(),
+                weather = if (BuddyPrivacy.shareWeather) BuddyWeather.current else null,
             )
         }
 
@@ -60,6 +68,16 @@ data class BuddyDay(
             runCatching { SettingsManager.loadDailyGoalMinutes() }.getOrDefault(DEFAULT_DAILY_GOAL_MINUTES)
     }
 }
+
+private val WeatherNow.isWet: Boolean
+    get() = kind == WeatherKind.Drizzle || kind == WeatherKind.Rain || kind == WeatherKind.HeavyRain || kind == WeatherKind.Thunder
+
+private val WeatherNow.goodForWalk: Boolean
+    get() = isDaylight && (kind == WeatherKind.Clear || kind == WeatherKind.PartlyCloudy) && temperatureC in 6.0..29.0
+
+/** "light rain, 8°C, dark outside" for prompts. */
+private fun WeatherNow.promptText(): String =
+    "${description.lowercase()}, ${temperatureC.roundToInt()}°C, ${if (isDaylight) "light outside" else "dark outside"}"
 
 /** A friendly opening line for the empty chat. */
 fun BuddyDay.greeting(): String = when (partOfDay) {
@@ -76,6 +94,7 @@ fun BuddyDay.noticing(): String = when {
     goalMet && streakDays >= 2 -> "You've hit your goal and you're on a $streakDays-day streak. Lovely work."
     goalMet -> "You've already reached today's $goalMinutes minutes. How are you feeling?"
     minutesToday > 0 -> "$minutesToday of $goalMinutes mindful minutes so far today. What's on your mind?"
+    weather?.isWet == true && isNight -> "It's raining where you are. A good night to slow down together."
     isNight -> "It's late. I can help you wind down whenever you're ready."
     streakDays >= 2 -> "You're on a $streakDays-day streak. Shall we keep it going?"
     else -> "I'm here for stress, sleep, habits, or just a chat."
@@ -87,8 +106,9 @@ fun BuddyDay.suggestions(): List<String> = buildList {
         val word = lastMoodFeelings.firstOrNull()?.lowercase() ?: lastMoodLabel!!.lowercase()
         add("I'm still feeling $word")
     }
-    if (isNight) add("Help me wind down for sleep")
+    if (isNight) add(if (weather?.isWet == true) "Help me wind down to the rain" else "Help me wind down for sleep")
     add("How am I doing today?")
+    if (weather?.goodForWalk == true) add("Ideas for a short walk outside")
     if (!goalMet) {
         val left = (goalMinutes - minutesToday).coerceAtLeast(1)
         add("Help me fit in $left more minutes today")
@@ -99,6 +119,25 @@ fun BuddyDay.suggestions(): List<String> = buildList {
     if (habits.isEmpty()) add("Suggest a small habit to start")
     if (streakDays >= 2) add("How do I keep my streak going?")
 }.distinct().take(3)
+
+/** A short, honest reason a card was offered, built only from what this day supports and what Buddy may see. */
+fun BuddyDay.reasonFor(action: BuddyAction): String = when (action) {
+    is BuddyAction.Breathe -> when {
+        BuddyPrivacy.shareMinutes && isNight && minutesToday == 0 -> "It's late and you haven't meditated today."
+        BuddyPrivacy.shareMood && lastMoodFeelings.any { it.equals("stressed", ignoreCase = true) } -> "You mentioned feeling stressed."
+        BuddyPrivacy.shareMood && lastMoodValence != null && lastMoodValence <= -1 ->
+            "You checked in feeling ${lastMoodLabel!!.lowercase()} earlier."
+        BuddyPrivacy.shareWeather && weather?.isWet == true && isNight -> "It's raining outside, a good time to slow down."
+        else -> "A quick reset can help right now."
+    }
+    is BuddyAction.Meditate -> when {
+        BuddyPrivacy.shareMinutes && !goalMet -> "You're ${(goalMinutes - minutesToday).coerceAtLeast(1)} min from today's goal."
+        BuddyPrivacy.shareMinutes && streakDays >= 1 -> "Keeps your $streakDays-day streak going."
+        else -> "A short pause can help you reset."
+    }
+    is BuddyAction.AddHabit -> "Small habits are easier to keep."
+    BuddyAction.LogMood -> "A quick check-in helps Buddy understand."
+}
 
 /**
  * The Buddy's standing instructions for Gemini: who it is, how to talk, what it knows about
@@ -112,13 +151,23 @@ fun BuddyDay.systemInstruction(): String = buildString {
     appendLine()
     appendLine("Their day so far (from the app):")
     appendLine("- It's $partOfDay (hour $hour).")
-    appendLine("- Mindful minutes today: $minutesToday of a $goalMinutes-minute daily goal.")
-    appendLine("- Meditation streak: $streakDays day(s).")
-    lastMoodLabel?.let { label ->
-        val feelings = if (lastMoodFeelings.isNotEmpty()) " (${lastMoodFeelings.joinToString()})" else ""
-        appendLine("- Latest mood check-in: $label$feelings.")
-    } ?: appendLine("- No recent mood check-in.")
-    if (habits.isNotEmpty()) appendLine("- Habits they're building: ${habits.take(6).joinToString()}.")
+    if (BuddyPrivacy.shareMinutes) {
+        appendLine("- Mindful minutes today: $minutesToday of a $goalMinutes-minute daily goal.")
+        appendLine("- Meditation streak: $streakDays day(s).")
+    }
+    if (BuddyPrivacy.shareMood) {
+        lastMoodLabel?.let { label ->
+            val feelings = if (lastMoodFeelings.isNotEmpty()) " (${lastMoodFeelings.joinToString()})" else ""
+            appendLine("- Latest mood check-in: $label$feelings.")
+        } ?: appendLine("- No recent mood check-in.")
+    }
+    if (BuddyPrivacy.shareHabits && habits.isNotEmpty()) appendLine("- Habits they're building: ${habits.take(6).joinToString()}.")
+    weather?.let {
+        appendLine("- Weather where they are right now: ${it.promptText()}. Mention it only when it's relevant (e.g. suggesting a walk or a wind-down).")
+    }
+    if (!BuddyPrivacy.shareMinutes || !BuddyPrivacy.shareMood || !BuddyPrivacy.shareHabits) {
+        appendLine("- They've chosen not to share some details of their day, so don't guess at them.")
+    }
     appendLine()
     appendLine("The app can turn special tags into interactive cards under your reply. When one would genuinely help, put at most two tags at the very end of your reply, each on its own line:")
     appendLine("[[breathe:SECONDS]] a guided breathing exercise right in the chat (30 to 180 seconds)")
@@ -126,4 +175,18 @@ fun BuddyDay.systemInstruction(): String = buildString {
     appendLine("[[habit:NAME]] offers to add a habit to their list (a short name, under 40 characters)")
     appendLine("[[mood]] asks them to log how they feel right now")
     appendLine("Refer to the card naturally (for example \"tap below when you're ready\") but never show or explain the tag syntax.")
+}
+
+/**
+ * Instruction for the live voice chat: the Buddy persona plus a line of today's context
+ * (only what the user lets Buddy see), phrased for speech.
+ */
+fun BuddyDay.voiceInstruction(base: String = GeminiLiveSession.DEFAULT_INSTRUCTION): String {
+    val parts = buildList {
+        add("it's $partOfDay")
+        weather?.let { add("${it.description.lowercase()} outside, ${it.temperatureC.roundToInt()}°C${if (it.isDaylight) "" else ", dark out"}") }
+        if (BuddyPrivacy.shareMinutes) add("they've done $minutesToday of $goalMinutes mindful minutes today")
+        if (BuddyPrivacy.shareMood) lastMoodLabel?.let { add("latest mood check-in: ${it.lowercase()}") }
+    }
+    return "$base Context: ${parts.joinToString(", ")}. Use it only when relevant; don't recite it."
 }

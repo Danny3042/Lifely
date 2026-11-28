@@ -40,6 +40,8 @@ import sub_pages.MEDITATION_PAGE_ROUTE
 import sub_pages.MeditationPage
 import sub_pages.NotificationPage
 import sub_pages.NotificationPageScreen
+import sub_pages.PermissionsPage
+import sub_pages.PermissionsPageScreen
 import sub_pages.AccountPage
 import sub_pages.AccountPageScreen
 import sub_pages.REFLECTION_PAGE_ROUTE
@@ -169,6 +171,7 @@ fun YourMainNavHost(
 
             composable(AboutPageScreen) { AboutPage(navController, versionNumber = appVersionName()) }
             composable(NotificationPageScreen) { NotificationPage(navController) }
+            composable(PermissionsPageScreen) { PermissionsPage(navController) }
             composable(AccountPageScreen) { AccountPage(navController) }
             composable(DarkModeSettingsPageScreen) {
                 DarkModeSettingsPage(

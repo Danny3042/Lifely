@@ -10,7 +10,9 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
@@ -187,46 +189,60 @@ class GeminiChatSession(
     ) {
         val started = TimeSource.Monotonic.markNow()
         var gotText = false
-        client.preparePost("$BASE_URL/$model:streamGenerateContent?alt=sse") {
-            header("x-goog-api-key", apiKey)
-            contentType(ContentType.Application.Json)
-            setBody(body)
-        }.execute { response ->
-            if (!response.status.isSuccess()) {
-                throw GeminiApiException(response.status.value, apiErrorMessage(response.bodyAsText()))
-            }
-            val channel = response.bodyAsChannel()
-            while (true) {
-                val line = if (!gotText && firstReplyTimeoutMillis != null) {
-                    val remainingMillis = firstReplyTimeoutMillis - started.elapsedNow().inWholeMilliseconds
-                    if (remainingMillis <= 0) throw FirstReplyTimeout(model)
-                    val pendingLine = withTimeoutOrNull(remainingMillis) {
-                        channel.readUTF8Line(Int.MAX_VALUE)
-                    }
-                    if (pendingLine == null) {
-                        if (!gotText) throw FirstReplyTimeout(model)
-                        break
-                    }
-                    pendingLine
-                } else {
-                    channel.readUTF8Line(Int.MAX_VALUE)
-                } ?: break
-                if (!line.startsWith("data:")) continue
-                val chunk = runCatching { json.parseToJsonElement(line.removePrefix("data:").trim()).jsonObject }
-                    .getOrNull() ?: continue
-                val parts = chunk["candidates"]?.jsonArray?.firstOrNull()?.jsonObject
-                    ?.get("content")?.jsonObject?.get("parts")?.jsonArray ?: continue
-                for (part in parts) {
-                    val p = part.jsonObject
-                    val sig = p["thoughtSignature"]?.jsonPrimitive?.contentOrNull
-                    if (p["thought"]?.jsonPrimitive?.booleanOrNull == true) {
-                        if (sig != null) onChunk("", sig)
-                        continue
-                    }
-                    val text = p["text"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                    if (text.isNotEmpty()) gotText = true
-                    onChunk(text, sig)
+        coroutineScope {
+            // Covers the whole request (connecting, headers, first words), not just reading lines.
+            // Thrown from this child, FirstReplyTimeout comes out of coroutineScope as itself.
+            val watchdog = firstReplyTimeoutMillis?.let { limit ->
+                launch {
+                    delay(limit)
+                    if (!gotText) throw FirstReplyTimeout(model)
                 }
+            }
+            try {
+                client.preparePost("$BASE_URL/$model:streamGenerateContent?alt=sse") {
+                    header("x-goog-api-key", apiKey)
+                    contentType(ContentType.Application.Json)
+                    setBody(body)
+                }.execute { response ->
+                    if (!response.status.isSuccess()) {
+                        throw GeminiApiException(response.status.value, apiErrorMessage(response.bodyAsText()))
+                    }
+                    val channel = response.bodyAsChannel()
+                    while (true) {
+                        val line = if (!gotText && firstReplyTimeoutMillis != null) {
+                            val remainingMillis = firstReplyTimeoutMillis - started.elapsedNow().inWholeMilliseconds
+                            if (remainingMillis <= 0) throw FirstReplyTimeout(model)
+                            val pendingLine = withTimeoutOrNull(remainingMillis) {
+                                channel.readUTF8Line(Int.MAX_VALUE)
+                            }
+                            if (pendingLine == null) {
+                                if (!gotText) throw FirstReplyTimeout(model)
+                                break
+                            }
+                            pendingLine
+                        } else {
+                            channel.readUTF8Line(Int.MAX_VALUE)
+                        } ?: break
+                        if (!line.startsWith("data:")) continue
+                        val chunk = runCatching { json.parseToJsonElement(line.removePrefix("data:").trim()).jsonObject }
+                            .getOrNull() ?: continue
+                        val parts = chunk["candidates"]?.jsonArray?.firstOrNull()?.jsonObject
+                            ?.get("content")?.jsonObject?.get("parts")?.jsonArray ?: continue
+                        for (part in parts) {
+                            val p = part.jsonObject
+                            val sig = p["thoughtSignature"]?.jsonPrimitive?.contentOrNull
+                            if (p["thought"]?.jsonPrimitive?.booleanOrNull == true) {
+                                if (sig != null) onChunk("", sig)
+                                continue
+                            }
+                            val text = p["text"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                            if (text.isNotEmpty()) gotText = true
+                            onChunk(text, sig)
+                        }
+                    }
+                }
+            } finally {
+                watchdog?.cancel()
             }
         }
     }
@@ -237,8 +253,8 @@ class GeminiChatSession(
         /**
          * How long either model may stay silent before failing over or showing an error.
          */
-        const val FIRST_REPLY_TIMEOUT_MS = 5_000L
-        private const val FALLBACK_FIRST_REPLY_TIMEOUT_MS = 5_000L
+        const val FIRST_REPLY_TIMEOUT_MS = 10_000L
+        private const val FALLBACK_FIRST_REPLY_TIMEOUT_MS = 10_000L
         private const val BUSY_RETRY_DELAY_MS = 500L
         private const val MAX_HISTORY_MESSAGES = 12
         private const val DEFAULT_MAX_OUTPUT_TOKENS = 768

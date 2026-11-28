@@ -80,11 +80,15 @@ import kotlinx.coroutines.launch
 import sub_pages.AboutPageScreen
 import sub_pages.DarkModeSettingsPageScreen
 import sub_pages.NotificationPageScreen
+import sub_pages.PermissionsPage
+import sub_pages.PermissionsPageScreen
+import androidx.compose.material.icons.outlined.Security
 import utils.deleteUser
 
 /** The settings that open from the Profile page: on their own screen on phones, beside the list on large screens. */
 private enum class ProfileSection(val title: String, val subtitle: String, val icon: ImageVector, val route: String) {
     Notifications("Notifications", "Reminders and alerts", Icons.Outlined.Notifications, NotificationPageScreen),
+    Permissions("Permissions", "Microphone, location, health and more", Icons.Outlined.Security, PermissionsPageScreen),
     Appearance("Appearance", "Light, dark or system", Icons.Outlined.DarkMode, DarkModeSettingsPageScreen),
     About("About", "Version and credits", Icons.Outlined.Info, AboutPageScreen),
     Account("Account", "Sign out or delete your account", Icons.Outlined.ManageAccounts, AccountPageScreen),
@@ -137,6 +141,7 @@ fun ProfilePage(navController: NavController) {
                     Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                         when (selected) {
                             ProfileSection.Notifications -> NotificationPage(navController, embedded = true)
+                            ProfileSection.Permissions -> PermissionsPage(navController, embedded = true)
                             ProfileSection.Appearance -> appearance?.let {
                                 DarkModeSettingsPage(
                                     isDarkMode = it.isDarkMode,

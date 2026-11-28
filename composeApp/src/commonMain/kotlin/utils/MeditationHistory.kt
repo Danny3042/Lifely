@@ -75,6 +75,13 @@ object MeditationHistory {
         return records.filter { dateOf(it) == today }.sumOf { it.minutes }
     }
 
+    /** Today's finished meditations, earliest first. */
+    fun todayRecords(): List<SessionRecord> {
+        ensureLoaded()
+        val today = today()
+        return records.filter { dateOf(it) == today }.sortedBy { it.atEpochMillis }
+    }
+
     fun todaySessions(): Int {
         ensureLoaded()
         val today = today()

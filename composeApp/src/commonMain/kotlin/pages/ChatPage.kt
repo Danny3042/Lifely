@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -67,6 +68,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import components.buddy.BuddyActions
+import components.buddy.BuddyPrivacy
+import components.buddy.GuidedCheckInSheet
+import components.buddy.NowRow
+import components.buddy.TalkToPersonRed
+import components.buddy.TalkToPersonSheet
+import components.buddy.TodayTimelineHeader
+import androidx.compose.material.icons.outlined.Phone
+import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
 import components.buddy.BuddyDay
 import components.buddy.suggestions
 import components.buddy.systemInstruction
@@ -87,6 +97,9 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import tts.getTtsService
 import tts.TtsSettings
 import platform.registerComposeNewChatListener
+import service.weather.BuddyWeather
+import service.weather.pillText
+import service.weather.rememberWeatherOptIn
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -99,6 +112,9 @@ fun ChatScreen(
     val chatUiState = chatViewModel.uiState
     // What the Buddy knows about today: the goal and check-ins are loaded once, the rest is read live
     LaunchedEffect(Unit) {
+        BuddyPrivacy.load()
+        // Local weather, only if the user turned it on (does nothing otherwise)
+        launch { BuddyWeather.refresh() }
         BuddyGoal.minutes = BuddyDay.loadGoal()
         runCatching { if (MoodCheckInStore.checkIns.isEmpty()) MoodCheckInStore.load() }
     }
@@ -148,22 +164,27 @@ fun ChatScreen(
     }
     // removed unused showNewMessageChip state (not used currently)
     val messages = chatUiState.messages
+    // After a finished reply the thread ends with a "Now" row of ways to carry on
+    val showNowRow = messages.lastOrNull() is ModelChatMessage.LoadedModelMessage && chatUiState.canSendMessage
     // When messages change, auto-scroll only if the user is already near the bottom.
     LaunchedEffect(messages.size, TtsSettings.enabled) {
         if (messages.isEmpty()) return@LaunchedEffect
         val leadingItems = if (messages.isNotEmpty()) 1 else 0
+        val trailingItems = if (showNowRow) 1 else 0
         val lastIndex = messages.size - 1 + leadingItems
+        // The list's true last item (the "Now" row counts when it's showing)
+        val listLastIndex = lastIndex + trailingItems
         // Determine currently visible last item; if it's within 1 item of the end, auto-scroll.
         val visible = listState.layoutInfo.visibleItemsInfo
         val lastVisibleIndex = visible.lastOrNull()?.index ?: -1
-        val shouldAuto = lastVisibleIndex >= (lastIndex - 1)
+        val shouldAuto = lastVisibleIndex >= (listLastIndex - 1)
         if (shouldAuto) {
             // scroll to the latest message
             coroutineScope.launch { scrollToEnd() }
         }
 
         // Speak latest model message when TTS is enabled
-        val lastMessage = messages.getOrNull(lastIndex)
+        val lastMessage = messages.lastOrNull()
         if (TtsSettings.enabled && lastMessage is ModelChatMessage.LoadedModelMessage) {
             // Use Gemini TTS where available
             try {
@@ -194,6 +215,14 @@ fun ChatScreen(
         if (lastVisible >= messages.lastIndex + 1) scrollToEnd()
     }
 
+    // The Now row appears once a reply is done: keep it in view if the conversation was being followed
+    LaunchedEffect(showNowRow) {
+        if (!showNowRow) return@LaunchedEffect
+        kotlinx.coroutines.delay(200)
+        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
+        if (lastVisible >= messages.lastIndex + 1) scrollToEnd()
+    }
+
     Scaffold(
         contentWindowInsets = platformScaffoldInsets(),
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -207,7 +236,7 @@ fun ChatScreen(
                 .fillMaxSize()
         ) {
             // Re-read when the chat empties (a new chat) or a mood is logged, so the greeting stays current
-            val day = remember(messages.isEmpty(), BuddyGoal.minutes, MoodCheckInStore.checkIns.size) {
+            val day = remember(messages.isEmpty(), BuddyGoal.minutes, MoodCheckInStore.checkIns.size, BuddyWeather.current) {
                 BuddyDay.now(BuddyGoal.minutes)
             }
             val showSidebar = maxWidth >= 760.dp
@@ -239,7 +268,7 @@ fun ChatScreen(
                     ) {
                         if (chatUiState.messages.isNotEmpty()) {
                             item(key = "day-thread-context") {
-                                DayThreadContext(day = day)
+                                TodayTimelineHeader()
                             }
                         }
                         itemsIndexed(
@@ -254,13 +283,34 @@ fun ChatScreen(
                                 isNight = day.isNight,
                                 canSend = chatUiState.canSendMessage,
                                 onSendMessage = { text -> sendMessage(text, null) },
+                                day = day,
                             )
                         }
+                        if (showNowRow) {
+                            item(key = "now-row") {
+                                NowRow(day = day, onSend = { text -> sendMessage(text, null) })
+                            }
+                        }
                     }
+                    var showCheckIn by remember { mutableStateOf(false) }
+                    var showTalkToPerson by remember { mutableStateOf(false) }
+                    if (showCheckIn) {
+                        GuidedCheckInSheet(
+                            onDismiss = { showCheckIn = false },
+                            onComplete = { summary ->
+                                showCheckIn = false
+                                sendMessage(summary, null)
+                            },
+                            onTypeInstead = { showCheckIn = false },
+                        )
+                    }
+                    if (showTalkToPerson) TalkToPersonSheet(onDismiss = { showTalkToPerson = false })
                     if (messages.isEmpty()) {
                         ChatEmptyState(
                             day = day,
                             onSuggestion = { prompt -> sendMessage(prompt, null) },
+                            onStartCheckIn = { showCheckIn = true },
+                            onTalkToPerson = { showTalkToPerson = true },
                             enabled = chatUiState.canSendMessage,
                             modifier = Modifier
                                 .align(Alignment.Center)
@@ -292,9 +342,10 @@ fun ChatScreen(
                             .fillMaxWidth()
                             .widthIn(max = ContentWidth.Reading)
                     ) {
-                        // Gemini Live, Past chats, and "New chat" sit just above the input's trailing end
+                        // Voice mode, Past chats, and "New chat" sit just above the input's trailing end.
+                        // With the sidebar, Past chats and New chat live there, so only voice mode stays.
                         val hasHistory = chatViewModel.savedChats.isNotEmpty()
-                        if (!showSidebar) {
+                        run {
                             Row(
                                 modifier = Modifier.align(Alignment.End).padding(end = 16.dp, bottom = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -302,11 +353,11 @@ fun ChatScreen(
                                 GlassIconButton(
                                     iosSymbol = "waveform.circle.fill",
                                     icon = Icons.Default.GraphicEq,
-                                    contentDescription = "Gemini Live",
+                                    contentDescription = "Voice mode with Buddy",
                                     onClick = { showLiveVoiceMode = true },
                                     prominent = true,
                                 )
-                                if (hasHistory) {
+                                if (!showSidebar && hasHistory) {
                                     GlassIconButton(
                                         iosSymbol = "clock.arrow.circlepath",
                                         icon = Icons.Outlined.History,
@@ -315,7 +366,7 @@ fun ChatScreen(
                                         prominent = false,
                                     )
                                 }
-                                if (messages.isNotEmpty()) {
+                                if (!showSidebar && messages.isNotEmpty()) {
                                     GlassIconButton(
                                         iosSymbol = "plus",
                                         icon = Icons.Filled.Add,
@@ -390,6 +441,8 @@ private object BuddyGoal {
 private fun ChatEmptyState(
     day: BuddyDay,
     onSuggestion: (String) -> Unit,
+    onStartCheckIn: () -> Unit,
+    onTalkToPerson: () -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -448,10 +501,14 @@ private fun ChatEmptyState(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            DayPill(if (day.goalMet) "Goal reached" else "${day.minutesToday}/${day.goalMinutes} min today")
-            if (day.streakDays > 0) DayPill("${day.streakDays}-day streak")
-            day.lastMoodLabel?.let { DayPill("Feeling: ${it.lowercase()}") }
+            if (BuddyPrivacy.shareMinutes) {
+                DayPill(if (day.goalMet) "Goal reached" else "${day.minutesToday}/${day.goalMinutes} min today")
+                if (day.streakDays > 0) DayPill("${day.streakDays}-day streak")
+            }
+            if (BuddyPrivacy.shareMood) day.lastMoodLabel?.let { DayPill("Feeling: ${it.lowercase()}") }
+            if (BuddyPrivacy.shareWeather) day.weather?.let { DayPill(it.pillText()) }
         }
+        WeatherOptInCard()
         Spacer(Modifier.height(18.dp))
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -468,6 +525,12 @@ private fun ChatEmptyState(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = onStartCheckIn,
+                    enabled = enabled,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) { Text("Start a 1-minute check-in") }
                 Spacer(Modifier.height(10.dp))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -504,37 +567,11 @@ private fun ChatEmptyState(
                 )
             }
         }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun DayThreadContext(day: BuddyDay) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-    ) {
-        Text(
-            "TODAY WITH BUDDY",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text("A little context for today", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            DayPill(if (day.goalMet) "Goal reached" else "${day.minutesToday}/${day.goalMinutes} min")
-            if (day.streakDays > 0) DayPill("${day.streakDays}-day streak")
-            day.lastMoodLabel?.let { DayPill("Feeling: ${it.lowercase()}") }
+        TextButton(onClick = onTalkToPerson, modifier = Modifier.heightIn(min = 44.dp)) {
+            Icon(Icons.Outlined.Phone, contentDescription = null, tint = TalkToPersonRed, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Talk to a person", color = TalkToPersonRed)
         }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Buddy can use your mindful minutes, mood and habits to make replies more relevant.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -546,5 +583,50 @@ private fun DayPill(text: String) {
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
     ) {
         Text(text, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+    }
+}
+
+private const val WEATHER_PROMPT_FILE = "weather_prompt_dismissed.txt"
+
+/** One-time offer to turn on local weather. Gone once it's on, or once "Not now" is tapped. */
+@Composable
+private fun WeatherOptInCard() {
+    var dismissed by remember {
+        mutableStateOf(runCatching { platform.readTextFile(WEATHER_PROMPT_FILE).trim() == "1" }.getOrDefault(false))
+    }
+    var denied by remember { mutableStateOf(false) }
+    val enable = rememberWeatherOptIn(onDenied = { denied = true })
+    if (BuddyPrivacy.shareWeather || dismissed) return
+    fun dismiss() {
+        dismissed = true
+        runCatching { platform.writeTextFile(WEATHER_PROMPT_FILE, "1") }
+    }
+    Spacer(Modifier.height(12.dp))
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        tonalElevation = 1.dp,
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text("Match Buddy to your weather?", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Uses your approximate location to check the weather. Never stored.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (denied) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Location is off for MyHealthBuddy. You can turn it on in Settings.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { denied = false; enable() }, modifier = Modifier.heightIn(min = 44.dp)) { Text("Turn on") }
+                TextButton(onClick = { dismiss() }, modifier = Modifier.heightIn(min = 44.dp)) { Text("Not now") }
+            }
+        }
     }
 }

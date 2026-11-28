@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.SelfImprovement
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.Button
@@ -73,12 +74,35 @@ fun BuddyActionCard(
     canSend: Boolean,
     onSendMessage: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** Why Buddy offered this card; shown under it as "Why this?" */
+    reason: String? = null,
 ) {
-    when (action) {
-        is BuddyAction.Breathe -> BreatheCard(action.seconds, key, isNight, modifier)
-        is BuddyAction.Meditate -> MeditateCard(action.minutes, modifier)
-        is BuddyAction.AddHabit -> HabitCard(action.name, modifier)
-        BuddyAction.LogMood -> MoodCard(key, canSend, onSendMessage, modifier)
+    Column(modifier = modifier.fillMaxWidth()) {
+        when (action) {
+            is BuddyAction.Breathe -> BreatheCard(action.seconds, key, isNight, Modifier)
+            is BuddyAction.Meditate -> MeditateCard(action.minutes, Modifier)
+            is BuddyAction.AddHabit -> HabitCard(action.name, Modifier)
+            BuddyAction.LogMood -> MoodCard(key, canSend, onSendMessage, Modifier)
+        }
+        if (reason != null) {
+            Row(
+                modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Icon(
+                    Icons.Outlined.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp).size(14.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "Why this? $reason",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 

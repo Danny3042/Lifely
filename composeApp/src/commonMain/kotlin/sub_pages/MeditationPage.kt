@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import utils.SettingsManager
 import service.SessionNotifications
@@ -60,7 +61,28 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
+import tts.AmbientSound
+import tts.AmbientSounds
 import tts.GuideAudio
+import service.weather.BuddyWeather
+import service.weather.WeatherAttributionLink
+import service.weather.WeatherKind
+import components.ui.PagePadding
+import components.ui.bottomBarOverlap
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material.icons.filled.Air
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.NightsStay
+import androidx.compose.material.icons.filled.Opacity
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material.icons.filled.Waves
 import tts.GuideVoice
 import tts.GuideVoices
 import tts.guideScript
@@ -75,7 +97,7 @@ import kotlinx.datetime.toLocalDateTime
 // Must not be (or start with) "meditation": that's the Meditate tab's route, and the iOS host
 // matches tab routes by prefix, so sharing it made this page count as a tab with no back button.
 const val MEDITATION_PAGE_ROUTE = "meditate_timer"
-@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun MeditationPage(
     onBack: (() -> Unit)? = null,
@@ -103,6 +125,8 @@ fun MeditationPage(
     val runningNow by rememberUpdatedState(isRunning)
     DisposableEffect(Unit) {
         onDispose {
+            // The ambience fades out on its own after the page has gone (it also covers a finished session)
+            AmbientSound.fadeOut(1500)
             if (runningNow) {
                 GuideAudio.stop()
                 SessionNotifications.cancel(MEDITATION_FINISHED_NOTIFICATION)
@@ -127,6 +151,38 @@ fun MeditationPage(
         if (stopSignal != initialStopSignal && isRunning) stopSession()
     }
     var showEditDialog by remember { mutableStateOf(false) }
+    var showSheet by remember { mutableStateOf(false) }
+
+    // Weather (only when the person shares it): shapes the sky, the wording and the suggested sound
+    LaunchedEffect(Unit) { BuddyWeather.refresh() }
+    val weather = BuddyWeather.current
+    val suggestedSound = AmbientSounds.suggestionFor(weather)
+    // Until you choose something yourself, the sound that suits the weather is preselected
+    val soundId = if (AmbientSounds.hasChosen) AmbientSounds.selectedId else suggestedSound
+    var ambienceMuted by remember { mutableStateOf(false) }
+    val ambientScope = rememberCoroutineScope()
+    var previewJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    // Premium candidate: mixing several sounds, or more than the basic set, would go here.
+    // The ambient sound fades in when a session starts (and out if it's muted)...
+    LaunchedEffect(isRunning, soundId, ambienceMuted) {
+        if (!isRunning) return@LaunchedEffect
+        previewJob?.cancel()
+        if (soundId == null || ambienceMuted) {
+            AmbientSound.fadeOut(800)
+        } else {
+            val wav = AmbientSounds.load(soundId)
+            if (wav != null) AmbientSound.play(soundId, wav, AmbientSounds.volume)
+        }
+    }
+    // ...and fades out when the session ends, stops or pauses
+    LaunchedEffect(isRunning) {
+        if (!isRunning) AmbientSound.fadeOut(2000)
+    }
+    // The volume slider is live
+    LaunchedEffect(AmbientSounds.volume) {
+        if (AmbientSound.playingId != null) AmbientSound.setVolume(AmbientSounds.volume)
+    }
 
 
     LaunchedEffect(isRunning) {
@@ -199,7 +255,7 @@ fun MeditationPage(
         val total = totalTime
         val elapsedNow = total - timeLeft
         val startedAt = Clock.System.now().toEpochMilliseconds() - elapsedNow * 1000L
-        val cues = guideScript(total).filter { it.atSecond >= elapsedNow - 1 }
+        val cues = guideScript(total, BuddyWeather.current?.kind).filter { it.atSecond >= elapsedNow - 1 }
         val gate = Semaphore(3)
         val files = cues.map { cue -> async { gate.withPermit { GuideVoices.audioFor(voice, cue.text) } } }
         try {
@@ -260,15 +316,18 @@ fun MeditationPage(
 
     val windowSize = LocalWindowSize.current
     val sideBySide = windowSize.useTwoPane
-    // Shrink the ring when height is tight (landscape phones) so everything fits
-    val ringSize = if (windowSize.isCompactHeight) (windowSize.height - 72.dp).coerceIn(160.dp, 280.dp) else 280.dp
 
     val header: @Composable () -> Unit = {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("Meditate", style = MaterialTheme.typography.headlineLarge, color = sky.onSky)
             AnimatedContent(
                 targetState = when {
-                    !isRunning -> if (isNight) "Settle in under the stars" else "Find a sunny, comfortable spot"
+                    !isRunning -> when (weather?.kind) {
+                        WeatherKind.Drizzle, WeatherKind.Rain, WeatherKind.HeavyRain, WeatherKind.Thunder -> "Rain outside. Settle in and listen."
+                        WeatherKind.Snow -> "Snow outside. Get cosy."
+                        WeatherKind.Windy -> "Windy out there. Find a still spot inside."
+                        else -> if (isNight) "Settle in under the stars" else "Find a sunny, comfortable spot"
+                    }
                     breathingIn -> "Breathe in…"
                     else -> "…and breathe out"
                 },
@@ -280,7 +339,7 @@ fun MeditationPage(
         }
     }
 
-    val ring: @Composable () -> Unit = {
+    val ring: @Composable (Dp) -> Unit = { ringSize ->
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(ringSize)) {
             // Soft glow that swells as you breathe in and settles as you breathe out
             Box(
@@ -361,107 +420,47 @@ fun MeditationPage(
                 )
             }
 
-            FilledTonalIconButton(
-                onClick = { showEditDialog = true },
-                modifier = Modifier.size(64.dp),
-                colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = sky.glass, contentColor = sky.onSky),
-            ) {
-                Icon(Icons.Default.Timer, contentDescription = "Set duration", modifier = Modifier.size(28.dp))
-            }
-        }
-    }
-
-    // The usual lengths, one tap each (hidden while a session runs). The timer button covers the rest.
-    val lengthChips: @Composable () -> Unit = {
-        AnimatedVisibility(visible = !isRunning, enter = fadeIn(), exit = fadeOut()) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                QUICK_LENGTHS.forEach { mins ->
-                    val selected = totalTime == mins * 60
-                    FilterChip(
-                        selected = selected,
-                        onClick = {
-                            stopSession()
-                            totalTime = mins * 60
-                            timeLeft = totalTime
-                            savePreferredMinutes(mins)
-                        },
-                        label = { Text("$mins min", style = MaterialTheme.typography.labelLarge) },
-                        modifier = Modifier.heightIn(min = 40.dp),
-                        shape = CircleShape,
-                        border = null,
-                        colors = FilterChipDefaults.filterChipColors(
-                            containerColor = sky.glass,
-                            labelColor = sky.onSky,
-                            selectedContainerColor = sky.accent,
-                            selectedLabelColor = sky.onAccent,
-                        ),
+            if (isRunning && soundId != null) {
+                // Mute or unmute the ambient sound mid-session
+                FilledTonalIconButton(
+                    onClick = { ambienceMuted = !ambienceMuted },
+                    modifier = Modifier.size(64.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = sky.glass, contentColor = sky.onSky),
+                ) {
+                    Icon(
+                        if (ambienceMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                        contentDescription = if (ambienceMuted) "Unmute ${AmbientSounds.name(soundId)}" else "Mute ${AmbientSounds.name(soundId)}",
+                        modifier = Modifier.size(28.dp),
                     )
                 }
+            } else {
+                FilledTonalIconButton(
+                    onClick = { showEditDialog = true },
+                    modifier = Modifier.size(64.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = sky.glass, contentColor = sky.onSky),
+                ) {
+                    Icon(Icons.Default.Timer, contentDescription = "Set duration", modifier = Modifier.size(28.dp))
+                }
             }
         }
     }
 
-    // The AI voice that guides the session (or none). Picking one plays a short hello in it.
-    val voiceChips: @Composable () -> Unit = {
+    // One tappable summary of the session (length, sound, guide); it opens the "Your session" sheet.
+    val summaryRow: @Composable () -> Unit = {
         AnimatedVisibility(visible = !isRunning, enter = fadeIn(), exit = fadeOut()) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Guide voice", style = MaterialTheme.typography.titleSmall, color = sky.onSky)
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    (listOf<GuideVoice?>(null) + GuideVoices.all).forEach { voice ->
-                        val selected = GuideVoices.selectedId == voice?.id
-                        FilterChip(
-                            selected = selected,
-                            onClick = {
-                                GuideVoices.select(voice?.id)
-                                GuideAudio.stop()
-                                voiceProblem = false
-                                if (voice != null) {
-                                    previewing = voice.id
-                                    guideScope.launch {
-                                        val file = GuideVoices.audioFor(voice, GuideVoices.sampleLine(voice))
-                                        if (previewing == voice.id) {
-                                            previewing = null
-                                            if (file != null) GuideAudio.play(file) else voiceProblem = true
-                                        }
-                                    }
-                                } else {
-                                    previewing = null
-                                }
-                            },
-                            label = { Text(voice?.name ?: "Off", style = MaterialTheme.typography.labelLarge) },
-                            leadingIcon = if (previewing != null && previewing == voice?.id) {
-                                { CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = sky.onAccent) }
-                            } else null,
-                            modifier = Modifier.heightIn(min = 40.dp),
-                            shape = CircleShape,
-                            border = null,
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = sky.glass,
-                                labelColor = sky.onSky,
-                                selectedContainerColor = sky.accent,
-                                selectedLabelColor = sky.onAccent,
-                            ),
-                        )
-                    }
-                }
-                Text(
-                    when {
-                        voiceProblem -> "Couldn't load that voice. Check your connection and try again."
-                        GuideVoices.selected != null -> "${GuideVoices.selected!!.character} voice guides your session"
-                        else -> "Silent session"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = sky.onSky.copy(alpha = 0.8f),
-                    textAlign = TextAlign.Center,
-                )
+            Row(
+                modifier = Modifier
+                    .height(48.dp)
+                    .clip(CircleShape)
+                    .background(sky.glass)
+                    .clickable { showSheet = true }
+                    .padding(horizontal = 18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                SummaryPart(Icons.Default.Timer, "${totalTime / 60} min", sky.onSky)
+                SummaryPart(soundIcon(soundId), AmbientSounds.name(soundId), sky.onSky)
+                SummaryPart(Icons.Default.RecordVoiceOver, GuideVoices.selected?.name ?: "No guide", sky.onSky)
             }
         }
     }
@@ -483,14 +482,173 @@ fun MeditationPage(
         }
     }
 
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest = {
+                showSheet = false
+                previewJob?.cancel()
+                if (!isRunning) AmbientSound.fadeOut(600)
+            },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = PagePadding)
+                    .padding(bottom = 24.dp + bottomBarOverlap()),
+                verticalArrangement = Arrangement.spacedBy(22.dp),
+            ) {
+                Text("Your session", style = MaterialTheme.typography.headlineSmall)
+
+                // 1) Length
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Length", style = MaterialTheme.typography.titleSmall)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        QUICK_LENGTHS.forEach { mins ->
+                            FilterChip(
+                                selected = totalTime == mins * 60,
+                                onClick = {
+                                    stopSession()
+                                    totalTime = mins * 60
+                                    timeLeft = totalTime
+                                    savePreferredMinutes(mins)
+                                },
+                                label = { Text("$mins min", style = MaterialTheme.typography.labelLarge) },
+                                modifier = Modifier.heightIn(min = 40.dp),
+                                shape = CircleShape,
+                            )
+                        }
+                    }
+                }
+
+                // 2) Sound
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Sound", style = MaterialTheme.typography.titleSmall)
+                    val options = listOf<String?>(null) + AmbientSounds.all.map { it.id }
+                    FlowRow(
+                        maxItemsInEachRow = 4,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        options.forEach { id ->
+                            SoundTile(
+                                icon = soundIcon(id),
+                                label = AmbientSounds.name(id).let { if (id == null) "None" else it },
+                                selected = soundId == id,
+                                suggested = id != null && id == suggestedSound,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    AmbientSounds.select(id)
+                                    previewJob?.cancel()
+                                    if (id == null) {
+                                        if (!isRunning) AmbientSound.fadeOut(500)
+                                    } else if (!isRunning) {
+                                        // A short taste of it, so you can hear what you're picking
+                                        previewJob = ambientScope.launch {
+                                            val wav = AmbientSounds.load(id) ?: return@launch
+                                            AmbientSound.play(id, wav, AmbientSounds.volume)
+                                            delay(3_000)
+                                            if (AmbientSound.playingId == id) AmbientSound.fadeOut(1_000)
+                                        }
+                                    }
+                                },
+                            )
+                        }
+                        // An empty slot so the last row's tiles stay the same size as the others
+                        Spacer(Modifier.weight(1f))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Icon(Icons.Default.VolumeUp, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Slider(
+                            value = AmbientSounds.volume,
+                            onValueChange = { AmbientSounds.updateVolume(it) },
+                            onValueChangeFinished = { AmbientSounds.saveVolume() },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    if (weather != null) {
+                        if (suggestedSound != null) {
+                            Text(
+                                "Suggested for now: ${AmbientSounds.name(suggestedSound)}. ${AmbientSounds.reasonFor(weather)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        WeatherAttributionLink(weather)
+                    }
+                }
+
+                // 3) Guide voice. Premium candidate: extra voices beyond the first few.
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Guide voice", style = MaterialTheme.typography.titleSmall)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        (listOf<GuideVoice?>(null) + GuideVoices.all).forEach { voice ->
+                            FilterChip(
+                                selected = GuideVoices.selectedId == voice?.id,
+                                onClick = {
+                                    GuideVoices.select(voice?.id)
+                                    GuideAudio.stop()
+                                    voiceProblem = false
+                                    if (voice != null) {
+                                        previewing = voice.id
+                                        guideScope.launch {
+                                            val file = GuideVoices.audioFor(voice, GuideVoices.sampleLine(voice))
+                                            if (previewing == voice.id) {
+                                                previewing = null
+                                                if (file != null) GuideAudio.play(file) else voiceProblem = true
+                                            }
+                                        }
+                                    } else {
+                                        previewing = null
+                                    }
+                                },
+                                label = { Text(voice?.name ?: "Off", style = MaterialTheme.typography.labelLarge) },
+                                leadingIcon = if (previewing != null && previewing == voice?.id) {
+                                    { CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) }
+                                } else null,
+                                modifier = Modifier.heightIn(min = 40.dp),
+                                shape = CircleShape,
+                            )
+                        }
+                    }
+                    Text(
+                        when {
+                            voiceProblem -> "Couldn't load that voice. Check your connection and try again."
+                            GuideVoices.selected != null -> "${GuideVoices.selected!!.character} voice guides your session"
+                            else -> "Silent session"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                // 4) Done
+                Button(onClick = {
+                    showSheet = false
+                    previewJob?.cancel()
+                    if (!isRunning) AmbientSound.fadeOut(600)
+                }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Done") }
+            }
+        }
+    }
+
     Surface(modifier = Modifier.fillMaxSize(), color = sky.skyMid, contentColor = sky.onSky) {
         Box(modifier = Modifier.fillMaxSize()) {
             // The sky fills the whole screen, under the status, navigation and tab bars...
-            SkyScene(isNight = isNight, elapsed = elapsed)
+            SkyScene(isNight = isNight, elapsed = elapsed, weather = weather?.kind)
           // ...while the timer and controls stay clear of them.
-          Box(modifier = Modifier.fillMaxSize().systemBarsContentPadding()) {
+          BoxWithConstraints(modifier = Modifier.fillMaxSize().systemBarsContentPadding()) {
             if (sideBySide) {
                 // Landscape / tablet: timer on the left, title, controls and tip on the right
+                val ringSize = minOf(maxWidth / 2 - 48.dp, maxHeight - 32.dp, 300.dp).coerceAtLeast(160.dp)
                 Row(
                     modifier = Modifier
                         .centeredMaxWidth(ContentWidth.Dashboard)
@@ -499,23 +657,25 @@ fun MeditationPage(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(32.dp),
                 ) {
-                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) { ring() }
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) { ring(ringSize) }
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .widthIn(max = ContentWidth.Form)
                             .verticalScroll(rememberScrollState()),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         header()
                         controls()
-                        lengthChips()
-                        voiceChips()
+                        summaryRow()
                         tip()
                     }
                 }
             } else {
+                // Everything you need to start a session fits on one screen; the tip sits below the fold.
+                val reserved = 290.dp + (if (showBackArrow) 48.dp else 0.dp)
+                val ringSize = minOf(maxWidth - 48.dp, maxHeight - reserved, 300.dp).coerceAtLeast(160.dp)
                 Column(
                     modifier = Modifier
                         .centeredMaxWidth(ContentWidth.Reading)
@@ -525,16 +685,14 @@ fun MeditationPage(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     if (showBackArrow) Spacer(Modifier.height(48.dp))
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(4.dp))
                     header()
-                    Spacer(Modifier.height(40.dp))
-                    ring()
-                    Spacer(Modifier.height(40.dp))
+                    Spacer(Modifier.height(16.dp))
+                    ring(ringSize)
+                    Spacer(Modifier.height(16.dp))
                     controls()
-                    Spacer(Modifier.height(24.dp))
-                    lengthChips()
-                    Spacer(Modifier.height(24.dp))
-                    voiceChips()
+                    Spacer(Modifier.height(14.dp))
+                    summaryRow()
                     Spacer(Modifier.height(24.dp))
                     tip()
                 }
@@ -552,6 +710,55 @@ fun MeditationPage(
         }
     }
 }
+
+private fun soundIcon(id: String?): ImageVector = when (id) {
+    "rain" -> Icons.Default.WaterDrop
+    "wind" -> Icons.Default.Air
+    "waves" -> Icons.Default.Waves
+    "stream" -> Icons.Default.Opacity
+    "fire" -> Icons.Default.LocalFireDepartment
+    "night" -> Icons.Default.NightsStay
+    else -> Icons.Default.Block
+}
+
+@Composable
+private fun SummaryPart(icon: ImageVector, text: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
+        Text(text, style = MaterialTheme.typography.labelLarge, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** A sound in the picker: icon over name, with a small "Suggested" note when it suits the weather. */
+@Composable
+private fun SoundTile(
+    icon: ImageVector,
+    label: String,
+    selected: Boolean,
+    suggested: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val container = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+    val content = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    Column(
+        modifier = modifier
+            .heightIn(min = 76.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .background(container)
+            .clickable(onClick = onClick)
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(icon, contentDescription = null, tint = content)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = content, maxLines = 1)
+        if (suggested) {
+            Text("Suggested for now", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 2, textAlign = TextAlign.Center)
+        }
+    }
+}
+
 /** One-tap session lengths on the meditation page */
 private val QUICK_LENGTHS = listOf(1, 3, 5, 10, 15, 20)
 private const val PREFERRED_LENGTH_FILE = "meditation_length.txt"

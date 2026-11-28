@@ -37,6 +37,8 @@ class MainActivity : ComponentActivity() {
 
         val permissionUtil by permissionUtil()
         permissionUtil.askNotificationPermission()
+        // Remember it was asked, so Permissions can tell "never asked" from "said no"
+        platform.PermissionAsked.mark(platform.AppPermission.Notifications)
 
         NotifierManager.initialize(
             configuration = NotificationPlatformConfiguration.Android(

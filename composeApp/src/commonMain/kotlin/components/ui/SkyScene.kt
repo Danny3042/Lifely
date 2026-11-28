@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import service.weather.WeatherKind
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.min
@@ -89,12 +90,16 @@ val NightSky = SkyPalette(
 
 private class Speck(val x: Float, val y: Float, val size: Float, val phase: Float, val speed: Float)
 
+/** A falling particle: x, start height and fall speed (whole loops per 60 s clock, so the loop is seamless). */
+private class Fall(val x: Float, val y: Float, val size: Float, val phase: Float, val loops: Int)
+
 /**
  * An animated sky: a sunny day with clouds and birds, or a starry night with a moon, shooting stars
  * and fireflies. The sun or moon travels from left to right across the sky as [elapsed] goes 0 → 1.
+ * [weather], when known, adds rain, snow, cloud cover, fog or a windier drift on top (kept subtle).
  */
 @Composable
-fun SkyScene(isNight: Boolean, elapsed: Float, modifier: Modifier = Modifier) {
+fun SkyScene(isNight: Boolean, elapsed: Float, modifier: Modifier = Modifier, weather: WeatherKind? = null) {
     val palette = if (isNight) NightSky else DaySky
     val time = rememberInfiniteTransition(label = "sky")
     // One slow 60 s loop drives clouds, birds, stars, fireflies and shooting stars.
@@ -120,6 +125,35 @@ fun SkyScene(isNight: Boolean, elapsed: Float, modifier: Modifier = Modifier) {
         val r = Random(7)
         List(8) { Speck(r.nextFloat(), 0.8f + r.nextFloat() * 0.17f, 1f + r.nextFloat() * 0.8f, r.nextFloat() * 6.28f, 3f + r.nextFloat() * 4f) }
     }
+
+    val drops = remember {
+        val r = Random(11)
+        List(150) { Fall(r.nextFloat(), r.nextFloat(), 0.6f + r.nextFloat() * 0.8f, r.nextFloat(), 70 + r.nextInt(50)) }
+    }
+    val flakes = remember {
+        val r = Random(23)
+        List(70) { Fall(r.nextFloat(), r.nextFloat(), 0.7f + r.nextFloat() * 1.3f, r.nextFloat() * 6.28f, 4 + r.nextInt(5)) }
+    }
+    val dropCount = when (weather) {
+        WeatherKind.Drizzle -> 40
+        WeatherKind.Rain -> 90
+        WeatherKind.HeavyRain, WeatherKind.Thunder -> 150
+        else -> 0
+    }
+    val overcastClouds = when (weather) {
+        WeatherKind.PartlyCloudy -> 2
+        WeatherKind.Cloudy, WeatherKind.Drizzle, WeatherKind.Rain, WeatherKind.HeavyRain, WeatherKind.Thunder -> 5
+        WeatherKind.Fog, WeatherKind.Windy -> 3
+        else -> 0
+    }
+    // How much of the sun or moon shows through the cover
+    val haze = when (weather) {
+        WeatherKind.Cloudy, WeatherKind.Drizzle, WeatherKind.Rain, WeatherKind.HeavyRain, WeatherKind.Thunder -> 0.55f
+        WeatherKind.Fog -> 0.4f
+        WeatherKind.PartlyCloudy -> 0.15f
+        else -> 0f
+    }
+    val cloudSpeed = if (weather == WeatherKind.Windy) 3 else 1
 
     Canvas(modifier.fillMaxSize()) {
         val w = size.width
@@ -153,13 +187,75 @@ fun SkyScene(isNight: Boolean, elapsed: Float, modifier: Modifier = Modifier) {
             drawMoon(center, radius, palette)
         } else {
             drawSun(center, radius, clock, palette)
-            drawClouds(clock, w, h)
-            drawBirds(clock, w, h)
+        }
+        if (haze > 0f) {
+            drawCircle(
+                Brush.radialGradient(listOf(palette.skyMid.copy(alpha = haze), Color.Transparent), center, glowRadius),
+                radius = glowRadius,
+                center = center,
+            )
+        }
+        if (!isNight) {
+            drawClouds(clock, w, h, cloudSpeed)
+            if (weather == null || weather == WeatherKind.Clear || weather == WeatherKind.PartlyCloudy) drawBirds(clock, w, h)
+        }
+        if (overcastClouds > 0) {
+            val cover = if (isNight) Color(0xFF3B4075).copy(alpha = 0.75f) else Color(0xFFD5DCE6).copy(alpha = 0.85f)
+            drawOvercast(clock, w, h, cover, overcastClouds, cloudSpeed)
         }
 
         drawHill(palette.hillFar, horizon - h * 0.02f, h * 0.035f, 1.3f, 0.6f)
         drawHill(palette.hillMid, horizon + h * 0.045f, h * 0.03f, 1.8f, 2.1f)
         drawHill(palette.hillNear, horizon + h * 0.11f, h * 0.025f, 1.1f, 4.0f)
+
+        if (weather == WeatherKind.Fog) {
+            val fog = if (isNight) Color(0xFF8E93C8) else Color(0xFFEFF3F7)
+            val top = horizon - h * 0.14f
+            drawRect(
+                Brush.verticalGradient(
+                    listOf(Color.Transparent, fog.copy(alpha = 0.5f + 0.08f * pulse), fog.copy(alpha = 0.35f), Color.Transparent),
+                    startY = top,
+                    endY = horizon + h * 0.2f,
+                ),
+                topLeft = Offset(0f, top),
+                size = androidx.compose.ui.geometry.Size(w, horizon + h * 0.2f - top),
+            )
+        }
+
+        if (dropCount > 0) {
+            val streak = if (isNight) Color(0xFFCFCBFF) else Color(0xFF2D5574)
+            val alpha = if (weather == WeatherKind.Drizzle) 0.22f else 0.32f
+            val len = unit * (if (weather == WeatherKind.Drizzle) 0.025f else 0.045f)
+            val width = (if (weather == WeatherKind.HeavyRain || weather == WeatherKind.Thunder) 1.6f else 1.2f) * density
+            for (i in 0 until dropCount) {
+                val d = drops[i]
+                val y = ((d.y + clock * d.loops) % 1f) * (h + len) - len
+                val x = d.x * w + (y / h) * len * 0.5f
+                drawLine(
+                    streak.copy(alpha = alpha * d.size.coerceAtMost(1f)),
+                    start = Offset(x, y),
+                    end = Offset(x - len * 0.18f, y + len * d.size),
+                    strokeWidth = width,
+                    cap = StrokeCap.Round,
+                )
+            }
+        }
+        if (weather == WeatherKind.Thunder) {
+            // A soft flash every ~10 s, on every other beat
+            val beat = clock * 6f
+            val phase = beat % 1f
+            if (beat.toInt() % 2 == 0 && phase < 0.05f) {
+                drawRect(Color.White.copy(alpha = 0.16f * (1f - phase / 0.05f)))
+            }
+        }
+        if (weather == WeatherKind.Snow) {
+            val flake = if (isNight) Color.White.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.95f)
+            flakes.forEach { f ->
+                val y = ((f.y + clock * f.loops) % 1f) * (h + 20f) - 10f
+                val x = f.x * w + sin(clock * 2f * PI.toFloat() * f.loops + f.phase) * 12f * density
+                drawCircle(flake, radius = f.size * 1.6f * density, center = Offset(x, y))
+            }
+        }
 
         if (isNight) {
             fireflies.forEach { f ->
@@ -199,7 +295,31 @@ private fun DrawScope.drawMoon(center: Offset, radius: Float, palette: SkyPalett
     drawCircle(crater, radius * 0.1f, Offset(center.x + radius * 0.05f, center.y + radius * 0.45f))
 }
 
-private fun DrawScope.drawClouds(clock: Float, w: Float, h: Float) {
+private fun DrawScope.drawCloudBlob(c: Offset, s: Float, color: Color) {
+    drawCircle(color, s, c)
+    drawCircle(color, s * 0.8f, Offset(c.x - s * 1.0f, c.y + s * 0.25f))
+    drawCircle(color, s * 0.85f, Offset(c.x + s * 1.05f, c.y + s * 0.2f))
+    drawCircle(color, s * 0.65f, Offset(c.x + s * 0.4f, c.y - s * 0.55f))
+}
+
+/** A bigger, greyer layer of cloud for overcast skies; [speedMul] must be a whole number to keep the loop seamless. */
+private fun DrawScope.drawOvercast(clock: Float, w: Float, h: Float, color: Color, count: Int, speedMul: Int) {
+    val clouds = listOf(
+        floatArrayOf(0.10f, 0.10f, 1.5f, 1f),
+        floatArrayOf(0.40f, 0.20f, 1.8f, 2f),
+        floatArrayOf(0.70f, 0.07f, 1.4f, 1f),
+        floatArrayOf(0.90f, 0.28f, 1.6f, 2f),
+        floatArrayOf(0.25f, 0.34f, 1.3f, 1f),
+    )
+    val span = w * 1.6f
+    for (i in 0 until count.coerceAtMost(clouds.size)) {
+        val (start, y, scale, speed) = clouds[i]
+        val x = ((start + clock * speed * speedMul) % 1f) * span - w * 0.3f
+        drawCloudBlob(Offset(x, h * y), min(w, h) * 0.09f * scale, color)
+    }
+}
+
+private fun DrawScope.drawClouds(clock: Float, w: Float, h: Float, speedMul: Int = 1) {
     // (start position, height, scale, speed): each cloud drifts right and wraps round.
     val clouds = listOf(
         floatArrayOf(0.0f, 0.12f, 1.0f, 2f),
@@ -208,7 +328,7 @@ private fun DrawScope.drawClouds(clock: Float, w: Float, h: Float) {
     )
     val span = w * 1.4f
     clouds.forEach { (start, y, scale, speed) ->
-        val x = ((start + clock * speed) % 1f) * span - w * 0.2f
+        val x = ((start + clock * speed * speedMul) % 1f) * span - w * 0.2f
         val s = min(w, h) * 0.09f * scale
         val white = Color.White.copy(alpha = 0.85f)
         val c = Offset(x, h * y)
